@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -16,14 +17,24 @@ return new class extends Migration
             if (!Schema::hasColumn('inventory', 'id_item')) {
                 $table->unsignedBigInteger('id_item')->nullable()->after('id_variant');
             }
-            
-            // Add foreign key for items only if it doesn't exist
-            try {
+        });
+        
+        // Check if foreign key exists before adding
+        $foreignKeyExists = DB::select("
+            SELECT CONSTRAINT_NAME 
+            FROM information_schema.KEY_COLUMN_USAGE 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'inventory' 
+            AND CONSTRAINT_NAME = 'inventory_id_item_foreign'
+        ");
+        
+        if (empty($foreignKeyExists)) {
+            Schema::table('inventory', function (Blueprint $table) {
                 $table->foreign('id_item')->references('id_item')->on('items')->onDelete('cascade');
-            } catch (Exception $e) {
-                // Foreign key might already exist
-            }
-            
+            });
+        }
+        
+        Schema::table('inventory', function (Blueprint $table) {
             // Check if the unique constraint exists before dropping
             try {
                 $table->dropUnique('inventory_id_product_id_variant_unique');
