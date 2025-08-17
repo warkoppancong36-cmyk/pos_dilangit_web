@@ -24,14 +24,17 @@ return new class extends Migration
 
         // Indexes for purchase_items table - untuk query harga pembelian
         Schema::table('purchase_items', function (Blueprint $table) {
-            // Index untuk query berdasarkan item_id (sering digunakan untuk get latest/average price)
-            $table->index('item_id', 'idx_purchase_items_item_id');
+            // NOTE: Using current table structure (id_product, id_variant, etc.)
+            // Will need to update these indexes after structure migration is completed
+            
+            // Index untuk query berdasarkan id_product (current structure)
+            $table->index('id_product', 'idx_purchase_items_id_product');
             
             // Index untuk query berdasarkan created_at (untuk get latest purchase)
             $table->index('created_at', 'idx_purchase_items_created_at');
             
-            // Composite index untuk query item + tanggal
-            $table->index(['item_id', 'created_at'], 'idx_purchase_items_item_date');
+            // Composite index untuk query product + tanggal
+            $table->index(['id_product', 'created_at'], 'idx_purchase_items_product_date');
             
             // Index untuk unit_cost (untuk performance saat calculate average)
             $table->index('unit_cost', 'idx_purchase_items_unit_cost');
