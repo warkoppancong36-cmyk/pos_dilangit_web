@@ -12,26 +12,53 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('inventory', function (Blueprint $table) {
-            // Add column for Items
-            $table->unsignedBigInteger('id_item')->nullable()->after('id_variant');
+            // Add column for Items only if it doesn't exist
+            if (!Schema::hasColumn('inventory', 'id_item')) {
+                $table->unsignedBigInteger('id_item')->nullable()->after('id_variant');
+            }
             
-            // Add foreign key for items
-            $table->foreign('id_item')->references('id_item')->on('items')->onDelete('cascade');
+            // Add foreign key for items only if it doesn't exist
+            try {
+                $table->foreign('id_item')->references('id_item')->on('items')->onDelete('cascade');
+            } catch (Exception $e) {
+                // Foreign key might already exist
+            }
             
-            // Modify unique constraint to include id_item
-            $table->dropUnique('inventory_id_product_id_variant_unique');
+            // Check if the unique constraint exists before dropping
+            try {
+                $table->dropUnique('inventory_id_product_id_variant_unique');
+            } catch (Exception $e) {
+                // Unique constraint might already be dropped
+            }
             
-            // Create index for id_item
-            $table->index(['id_item']);
+            // Create index for id_item only if it doesn't exist
+            try {
+                $table->index(['id_item']);
+            } catch (Exception $e) {
+                // Index might already exist
+            }
         });
         
         // Update the unique constraint to handle all three types
         Schema::table('inventory', function (Blueprint $table) {
-            // We need a custom constraint that ensures only one of the three IDs is set per row
-            // For now, we'll add separate unique constraints
-            $table->unique(['id_product'], 'inventory_id_product_unique');
-            $table->unique(['id_variant'], 'inventory_id_variant_unique'); 
-            $table->unique(['id_item'], 'inventory_id_item_unique');
+            // Add separate unique constraints only if they don't exist
+            try {
+                $table->unique(['id_product'], 'inventory_id_product_unique');
+            } catch (Exception $e) {
+                // Unique constraint might already exist
+            }
+            
+            try {
+                $table->unique(['id_variant'], 'inventory_id_variant_unique');
+            } catch (Exception $e) {
+                // Unique constraint might already exist
+            }
+            
+            try {
+                $table->unique(['id_item'], 'inventory_id_item_unique');
+            } catch (Exception $e) {
+                // Unique constraint might already exist
+            }
         });
     }
 
