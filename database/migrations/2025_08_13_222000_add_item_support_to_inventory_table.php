@@ -35,12 +35,8 @@ return new class extends Migration
         }
         
         Schema::table('inventory', function (Blueprint $table) {
-            // Check if the unique constraint exists before dropping
-            try {
-                $table->dropUnique('inventory_id_product_id_variant_unique');
-            } catch (Exception $e) {
-                // Unique constraint might already be dropped
-            }
+            // SKIP dropping the unique constraint since it's needed by foreign keys
+            // We'll keep the existing constraint and add new ones
             
             // Create index for id_item only if it doesn't exist
             try {
