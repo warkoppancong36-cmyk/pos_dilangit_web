@@ -101,7 +101,7 @@
               @click="canAddToCart(product) ? addToCart(product) : null"
             >
               <div class="product-image">
-                                <div class="product-image-wrapper">
+                <div class="product-image-wrapper">
                   <VImg
                     v-if="product.image && !imageErrors[product.id_product]"
                     :src="product.image"
@@ -273,23 +273,27 @@
           <!-- Empty Cart -->
           <div v-else class="empty-cart">
             <VIcon size="48" color="grey-400">tabler-shopping-cart</VIcon>
-            <p class="empty-cart-text">Keranjang masih kosong</p>
+            <h4>Keranjang Kosong</h4>
+            <p>Pilih produk untuk mulai berbelanja</p>
           </div>
         </div>
 
         <!-- Cart Summary -->
         <div v-if="cartItems.length > 0" class="cart-summary">
           <!-- Summary Details -->
-          <div class="summary-details">
-            <div class="summary-row">
-              <span>Subtotal:</span>
-              <span>{{ formatCurrency(subtotal) }}</span>
-            </div>
-            
-            <div class="summary-row total">
-              <span>Total:</span>
-              <span>{{ formatCurrency(subtotal) }}</span>
-            </div>
+          <div class="summary-row">
+            <span class="summary-label">Subtotal</span>
+            <span class="summary-value">{{ formatCurrency(subtotal) }}</span>
+          </div>
+          
+          <div class="summary-row">
+            <span class="summary-label">Items</span>
+            <span class="summary-value">{{ cartCount }}</span>
+          </div>
+          
+          <div class="summary-row">
+            <span class="summary-label summary-total">Total</span>
+            <span class="summary-value summary-total">{{ formatCurrency(subtotal) }}</span>
           </div>
 
           <!-- Checkout Button -->
@@ -301,7 +305,7 @@
             @click="openPaymentDialog"
           >
             <VIcon start>tabler-credit-card</VIcon>
-            Bayar {{ formatCurrency(subtotal) }}
+            Bayar Sekarang
           </VBtn>
         </div>
       </div>
@@ -538,6 +542,12 @@ const getStockColor = (stock: number) => {
   return 'success'
 }
 
+const getStockBadgeClass = (stock: number) => {
+  if (stock === 0) return 'stock-low'
+  if (stock < 10) return 'stock-medium'
+  return 'stock-high'
+}
+
 const getCartQuantity = (productId: number) => {
   const item = cartItems.value.find(item => item.id_product === productId)
   return item ? item.quantity : 0
@@ -599,12 +609,6 @@ const openCashDrawer = () => {
 
 const viewTransactionHistory = () => {
   transactionHistoryDialog.value = true
-}
-
-const getStockBadgeClass = (stock: number) => {
-  if (stock === 0) return 'stock-out'
-  if (stock < 10) return 'stock-low'
-  return 'stock-good'
 }
 
 const formatCurrency = (amount: number): string => {
