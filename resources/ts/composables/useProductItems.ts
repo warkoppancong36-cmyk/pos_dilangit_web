@@ -148,6 +148,14 @@ const fetchProductItemsList = async () => {
         totalItems.value = response.data.total || 0
         currentPage.value = response.data.current_page || 1
       }
+      
+      // Debug: Log product items data
+      console.log('🔗 ProductItems loaded:', productItemsList.value.length)
+      if (productItemsList.value.length > 0) {
+        console.log('🔗 First ProductItem:', productItemsList.value[0])
+        console.log('🆔 ProductItem product_ids needed:', [...new Set(productItemsList.value.map(pi => pi.product_id))])
+        console.log('🆔 ProductItem item_ids needed:', [...new Set(productItemsList.value.map(pi => pi.item_id))])
+      }
     }
   }
   catch (error: any) {
@@ -161,16 +169,21 @@ const fetchProductItemsList = async () => {
 
 const fetchProducts = async () => {
   try {
-    const response = await ProductsApi.getAll({ active: true })
+    // Remove active filter to get ALL products
+    const response = await ProductsApi.getAll({})
 
     console.log('🔍 fetchProducts response:', response)
 
-    if (response.success && response.data)
+    if (response.success && response.data) {
       products.value = Array.isArray(response.data) ? response.data : []
-    else
+      
+      // Debug: Log all product IDs
+      console.log('📦 Products loaded:', products.value.length)
+      console.log('🆔 Product IDs available:', products.value.map(p => p.id_product || p.id))
+    }
+    else {
       products.value = []
-
-    console.log('📦 Products loaded:', products.value.length)
+    }
   }
   catch (error) {
     console.error('❌ Error fetching products:', error)
@@ -183,7 +196,8 @@ const fetchItems = async () => {
     console.log('🔄 Starting fetchItems...')
     console.log('🔐 Auth token exists:', !!useCookie('accessToken').value)
 
-    const response = await ItemsApi.getAll({ active: true })
+    // Remove active filter and get ALL items without pagination
+    const response = await ItemsApi.getAll({ per_page: 1000 })
 
     console.log('🔍 fetchItems response:', response)
     console.log('🔍 fetchItems response.success:', response.success)
@@ -196,6 +210,7 @@ const fetchItems = async () => {
       console.log('✅ Items set to:', items.value)
       console.log('✅ Items count:', items.value.length)
       console.log('✅ First item:', items.value[0])
+      console.log('🆔 Item IDs available:', items.value.map(i => i.id_item || i.id))
     }
     else {
       items.value = []
