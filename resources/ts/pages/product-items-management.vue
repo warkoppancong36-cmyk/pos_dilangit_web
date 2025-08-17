@@ -70,10 +70,15 @@ const handleViewHpp = (product: any) => {
   router.push('/hpp-management')
 }
 
-onMounted(() => {
-  fetchProductItemsList()
-  fetchProducts()
-  fetchItems()
+onMounted(async () => {
+  // Load products and items first
+  await Promise.all([
+    fetchProducts(),
+    fetchItems()
+  ])
+  
+  // Then load product items after products and items are available
+  await fetchProductItemsList()
 })
 </script>
 

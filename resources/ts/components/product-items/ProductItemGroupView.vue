@@ -50,11 +50,18 @@ const handleCapacityClick = (product: any) => {
 
 // Group product items by product
 const groupedProductItems = computed<ProductGroup[]>(() => {
+  console.log('🔍 Grouping product items...')
+  console.log('📦 Available products:', props.products.length)
+  console.log('🧰 Available items:', props.items.length)
+  console.log('🔗 Product items to group:', props.productItems.length)
+  
   const groups: { [key: number]: ProductGroup } = {}
 
   props.productItems.forEach(productItem => {
     const productId = productItem.product_id
     const product = props.products.find(p => p.id_product === productId)
+    
+    console.log(`Looking for product ID ${productId}:`, product ? `Found: ${product.name}` : 'NOT FOUND')
 
     if (!groups[productId]) {
       groups[productId] = {
@@ -65,6 +72,7 @@ const groupedProductItems = computed<ProductGroup[]>(() => {
 
     // Add item details to product item
     const item = props.items.find(i => i.id_item === productItem.item_id)
+    console.log(`Looking for item ID ${productItem.item_id}:`, item ? `Found: ${item.name}` : 'NOT FOUND')
 
     groups[productId].items.push({
       ...productItem,
@@ -72,7 +80,9 @@ const groupedProductItems = computed<ProductGroup[]>(() => {
     })
   })
 
-  return Object.values(groups)
+  const result = Object.values(groups)
+  console.log('✅ Final grouped result:', result)
+  return result
 })
 
 // Utility functions
