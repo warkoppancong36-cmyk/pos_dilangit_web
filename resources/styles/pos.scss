@@ -1,0 +1,580 @@
+/* POS Specific Styles */
+
+/* Main POS Container */
+.pos-container {
+  height: 100vh;
+  overflow: hidden;
+  background-color: #f8f9fa;
+}
+
+/* Header Section */
+.pos-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+}
+
+.pos-header .v-card-text {
+  color: white;
+}
+
+.pos-header h3 {
+  color: white;
+  margin: 0;
+}
+
+.pos-header p {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Main Content */
+.pos-main-content {
+  height: calc(100vh - 120px);
+  gap: 16px;
+}
+
+.product-section,
+.cart-section {
+  height: 100%;
+}
+
+/* Product Grid */
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.product-grid::-webkit-scrollbar {
+  width: 6px;
+}
+
+.product-grid::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.product-grid::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 10px;
+}
+
+.product-grid::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Product Card */
+.product-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  position: relative;
+}
+
+.product-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 1;
+}
+
+.product-card:hover {
+  border-color: #667eea;
+  box-shadow: 0 8px 30px rgba(102, 126, 234, 0.2);
+  transform: translateY(-4px);
+}
+
+.product-card:hover::before {
+  opacity: 1;
+}
+
+.product-card:active {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.product-image {
+  height: 120px;
+  overflow: hidden;
+  border-radius: 12px 12px 0 0;
+  position: relative;
+  z-index: 2;
+}
+
+.product-image .v-img {
+  transition: transform 0.3s ease;
+}
+
+.product-card:hover .product-image .v-img {
+  transform: scale(1.05);
+}
+
+.product-info {
+  position: relative;
+  z-index: 2;
+  background: white;
+}
+
+.product-info h6 {
+  color: #2c3e50;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.product-info .text-caption {
+  color: #7f8c8d;
+}
+
+.product-info .text-h6 {
+  color: #667eea;
+  font-weight: 700;
+}
+
+/* Cart Section */
+.cart-content {
+  height: calc(100vh - 300px);
+  display: flex;
+  flex-direction: column;
+}
+
+.cart-items {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.cart-items::-webkit-scrollbar {
+  width: 4px;
+}
+
+.cart-items::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.cart-items::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 10px;
+}
+
+.cart-item {
+  border-bottom: 1px solid #eee;
+  transition: background-color 0.2s ease;
+  position: relative;
+}
+
+.cart-item:hover {
+  background-color: #f8f9fa;
+}
+
+.cart-item:last-child {
+  border-bottom: none;
+}
+
+.cart-item h6 {
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.cart-item .text-caption {
+  color: #7f8c8d;
+}
+
+.cart-item .text-subtitle-1 {
+  color: #27ae60;
+  font-weight: 700;
+}
+
+/* Quantity Controls */
+.quantity-controls {
+  min-width: 120px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.quantity-controls .v-btn {
+  min-width: 28px;
+  width: 28px;
+  height: 28px;
+}
+
+.quantity-controls span {
+  min-width: 40px;
+  text-align: center;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+/* Cart Summary */
+.cart-summary {
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border-top: 2px solid #667eea;
+  position: relative;
+}
+
+.cart-summary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 4px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 0 0 4px 4px;
+}
+
+/* Payment Button */
+.cart-summary .v-btn {
+  background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+  border: none;
+  box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
+  transition: all 0.3s ease;
+}
+
+.cart-summary .v-btn:hover {
+  box-shadow: 0 6px 20px rgba(39, 174, 96, 0.4);
+  transform: translateY(-2px);
+}
+
+.cart-summary .v-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 10px rgba(39, 174, 96, 0.4);
+}
+
+/* Empty States */
+.text-center.pa-8 {
+  color: #7f8c8d;
+}
+
+.text-center.pa-8 .v-icon {
+  opacity: 0.5;
+  margin-bottom: 16px;
+}
+
+.text-center.pa-8 .text-h6 {
+  color: #34495e;
+  margin-bottom: 8px;
+}
+
+.text-center.pa-8 .text-body-2 {
+  color: #95a5a6;
+}
+
+/* Payment Dialog Styles */
+.payment-method-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.payment-method-card {
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  background: white;
+  overflow: hidden;
+}
+
+.payment-method-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.payment-method-card:hover {
+  border-color: #667eea;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15);
+}
+
+.payment-method-card:hover::before {
+  opacity: 1;
+}
+
+.payment-method-card.selected {
+  border-color: #667eea;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.2);
+}
+
+.payment-method-card .method-radio {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
+
+.payment-method-card .method-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 20px;
+  position: relative;
+  z-index: 1;
+}
+
+.payment-method-card .v-icon {
+  color: #667eea;
+  margin-bottom: 8px;
+}
+
+.payment-method-card span {
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+/* Quick Amount Buttons */
+.quick-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.quick-amounts .v-btn {
+  border-radius: 20px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.quick-amounts .v-btn:hover {
+  background-color: #667eea;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+/* Order Summary in Payment Dialog */
+.order-summary {
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.order-summary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.order-summary h6 {
+  color: #2c3e50;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+/* Responsive Design */
+@media (max-width: 960px) {
+  .pos-main-content {
+    height: auto;
+  }
+  
+  .product-section,
+  .cart-section {
+    height: auto;
+  }
+  
+  .product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    max-height: 400px;
+  }
+  
+  .cart-content {
+    height: 300px;
+  }
+  
+  .payment-method-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .pos-container {
+    height: auto;
+    min-height: 100vh;
+  }
+  
+  .pos-header .v-card-text {
+    flex-direction: column;
+    text-align: center;
+    gap: 16px;
+  }
+  
+  .product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+  }
+  
+  .product-card {
+    border-radius: 8px;
+  }
+  
+  .product-info {
+    padding: 12px;
+  }
+  
+  .product-info h6 {
+    font-size: 0.875rem;
+    line-height: 1.2;
+  }
+  
+  .cart-item {
+    padding: 12px 16px;
+  }
+  
+  .quantity-controls {
+    min-width: 100px;
+  }
+  
+  .quick-amounts {
+    justify-content: center;
+  }
+  
+  .payment-method-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .payment-method-card {
+    padding: 12px;
+  }
+}
+
+/* Animation Classes */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.product-card {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.cart-item {
+  animation: fadeInUp 0.2s ease-out;
+}
+
+/* Success States */
+.text-success {
+  color: #27ae60 !important;
+}
+
+.border-success {
+  border-color: #27ae60 !important;
+}
+
+/* Loading States */
+.v-progress-circular {
+  color: #667eea;
+}
+
+/* Custom Input Styles */
+.v-text-field .v-field__input {
+  font-weight: 600;
+}
+
+.v-text-field--variant-outlined .v-field__outline {
+  border-color: rgba(102, 126, 234, 0.3);
+}
+
+.v-text-field--variant-outlined.v-field--focused .v-field__outline {
+  border-color: #667eea;
+  border-width: 2px;
+}
+
+/* Custom Select Styles */
+.v-select .v-field__input {
+  font-weight: 600;
+}
+
+.v-select--variant-outlined .v-field__outline {
+  border-color: rgba(102, 126, 234, 0.3);
+}
+
+.v-select--variant-outlined.v-field--focused .v-field__outline {
+  border-color: #667eea;
+  border-width: 2px;
+}
+
+/* Print Styles */
+@media print {
+  .pos-container {
+    background: white;
+  }
+  
+  .pos-header,
+  .v-card-actions,
+  .v-btn {
+    display: none !important;
+  }
+  
+  .order-summary {
+    border: 1px solid #000;
+    background: white;
+  }
+  
+  .v-dialog {
+    box-shadow: none;
+    border: 1px solid #000;
+  }
+}

@@ -1,0 +1,336 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Variant;
+use App\Models\Product;
+use App\Traits\ApiResponseTrait;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
+
+class VariantController extends Controller
+{
+    use ApiResponseTrait;
+    public function index(Request $request): JsonResponse
+    {
+        try {
+            $query = Variant::query()
+                ->with(['product', 'creator', 'updater', 'inventory']);
+
+            // Filter by product
+            if ($request->filled('product_id')) {
+                $query->byProduct($request->product_id);
+            }
+
+            // Search functionality
+            if ($request->filled('search')) {
+                $query->search($request->search);
+            }
+
+            // Filter by status
+            if ($request->filled('status')) {
+                if ($request->status === 'active') {
+                    $query->active();
+                } elseif ($request->status === 'inactive') {
+                    $query->inactive();
+                }
+            }
+
+            // Filter by variant values
+            if ($request->filled('variant_filters')) {
+                $filters = json_decode($request->variant_filters, true);
+                foreach ($filters as $key => $value) {
+                    if ($value) {
+                        $query->byVariantValue($key, $value);
+                    }
+                }
+            }
+
+            // Filter by stock status
+            if ($request->filled('stock_status')) {
+                if ($request->stock_status === 'low_stock') {
+                    $query->lowStock();
+                }
+            }
+
+            // Sorting
+            $sortBy = $request->get('sort_by', 'created_at');
+            $sortOrder = $request->get('sort_order', 'desc');
+            
+            if ($sortBy === 'product_name') {
+                $query->join('products', 'variants.id_product', '=', 'products.id_product')
+                      ->orderBy('products.name', $sortOrder)
+                      ->select('variants.*');
+            } else {
+                $query->orderBy($sortBy, $sortOrder);
+            }
+
+            // Pagination
+            $perPage = $request->get('per_page', 15);
+            $variants = $query->paginate($perPage);
+
+            return $this->paginatedResponse($variants, 'Variants retrieved successfully');
+        } catch (\Exception $e) {
+            return $this->serverErrorResponse('Failed to retrieve variants: ' . $e->getMessage());
+        }
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'id_product' => 'required|exists:products,id_product',
+            'name' => 'required|string|max:255',
+            'variant_values' => 'required|array',
+            'price' => 'required|numeric|min:0',
+            'cost_price' => 'nullable|numeric|min:0',
+            'sku' => 'nullable|string|max:100|unique:variants,sku',
+            'barcode' => 'nullable|string|max:100|unique:variants,barcode',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->validationErrorResponse($validator->errors());
+        }
+
+        DB::beginTransaction();
+        try {
+            $variant = Variant::create([
+                'id_product' => $request->id_product,
+                'name' => $request->name,
+                'variant_values' => $request->variant_values,
+                'price' => $request->price,
+                'cost_price' => $request->cost_price,
+                'sku' => $request->sku,
+                'barcode' => $request->barcode,
+                'image' => $request->image,
+                'active' => $request->get('active', true),
+                'created_by' => Auth::id(),
+            ]);
+
+            // Auto-generate SKU if not provided
+            if (!$variant->sku) {
+                $variant->sku = $variant->generateSku();
+                $variant->save();
+            }
+
+            // Create inventory record
+            $variant->inventory()->create([
+                'id_product' => $request->id_product,
+                'current_stock' => 0,
+                'reserved_stock' => 0,
+                'reorder_level' => $request->get('reorder_level', 10),
+                'max_stock_level' => $request->get('max_stock_level'),
+                'average_cost' => $request->cost_price ?? 0,
+                'created_by' => Auth::id(),
+            ]);
+
+            $variant->load(['product', 'creator', 'updater', 'inventory']);
+
+            DB::commit();
+
+            return $this->createdResponse($variant, 'Variant created successfully');
+        } catch (\Exception $e) {
+            DB::rollback();
+            return $this->serverErrorResponse('Failed to create variant: ' . $e->getMessage());
+        }
+    }
+
+    public function show(Variant $variant): JsonResponse
+    {
+        try {
+            $variant->load(['product', 'creator', 'updater', 'deleter', 'inventory']);
+
+            return $this->successResponse($variant, 'Variant retrieved successfully');
+        } catch (\Exception $e) {
+            return $this->serverErrorResponse('Failed to retrieve variant: ' . $e->getMessage());
+        }
+    }
+
+    public function update(Request $request, Variant $variant): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
+            'variant_values' => 'required|array',
+            'price' => 'required|numeric|min:0',
+            'cost_price' => 'nullable|numeric|min:0',
+            'sku' => 'nullable|string|max:100|unique:variants,sku,' . $variant->id_variant . ',id_variant',
+            'barcode' => 'nullable|string|max:100|unique:variants,barcode,' . $variant->id_variant . ',id_variant',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->validationErrorResponse($validator->errors());
+        }
+
+        try {
+            $variant->update([
+                'name' => $request->name,
+                'variant_values' => $request->variant_values,
+                'price' => $request->price,
+                'cost_price' => $request->cost_price,
+                'sku' => $request->sku,
+                'barcode' => $request->barcode,
+                'image' => $request->image,
+                'active' => $request->get('active', $variant->active),
+                'updated_by' => Auth::id(),
+            ]);
+
+            $variant->load(['product', 'creator', 'updater', 'inventory']);
+
+            return $this->successResponse($variant, 'Variant updated successfully');
+        } catch (\Exception $e) {
+            return $this->serverErrorResponse('Failed to update variant: ' . $e->getMessage());
+        }
+    }
+
+    public function destroy(Variant $variant): JsonResponse
+    {
+        try {
+            $variant->update(['deleted_by' => Auth::id()]);
+            $variant->delete();
+
+            return $this->deletedResponse('Variant deleted successfully');
+        } catch (\Exception $e) {
+            return $this->serverErrorResponse('Failed to delete variant: ' . $e->getMessage());
+        }
+    }
+
+    public function bulkCreate(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'id_product' => 'required|exists:products,id_product',
+            'base_price' => 'required|numeric|min:0',
+            'base_cost_price' => 'nullable|numeric|min:0',
+            'attributes' => 'required|array',
+            'attributes.*.name' => 'required|string',
+            'attributes.*.values' => 'required|array',
+            'price_adjustments' => 'nullable|array',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->validationErrorResponse($validator->errors());
+        }
+
+        DB::beginTransaction();
+        try {
+            $product = Product::find($request->id_product);
+            $attributes = $request->attributes;
+            $basePrice = $request->base_price;
+            $baseCostPrice = $request->base_cost_price;
+            $priceAdjustments = $request->get('price_adjustments', []);
+
+            // Generate all combinations
+            $combinations = $this->generateCombinations($attributes);
+            $createdVariants = [];
+
+            foreach ($combinations as $combination) {
+                $variantName = $product->name . ' - ' . implode(' ', array_values($combination));
+                
+                // Calculate price with adjustments
+                $price = $basePrice;
+                $costPrice = $baseCostPrice;
+                
+                foreach ($combination as $attrName => $attrValue) {
+                    $adjustmentKey = $attrName . '.' . $attrValue;
+                    if (isset($priceAdjustments[$adjustmentKey])) {
+                        $price += $priceAdjustments[$adjustmentKey]['price'] ?? 0;
+                        $costPrice += $priceAdjustments[$adjustmentKey]['cost_price'] ?? 0;
+                    }
+                }
+
+                $variant = Variant::create([
+                    'id_product' => $request->id_product,
+                    'name' => $variantName,
+                    'variant_values' => $combination,
+                    'price' => $price,
+                    'cost_price' => $costPrice,
+                    'active' => true,
+                    'created_by' => Auth::id(),
+                ]);
+
+                // Generate SKU
+                $variant->sku = $variant->generateSku();
+                $variant->save();
+
+                // Create inventory record
+                $variant->inventory()->create([
+                    'id_product' => $request->id_product,
+                    'current_stock' => 0,
+                    'reserved_stock' => 0,
+                    'reorder_level' => 10,
+                    'average_cost' => $costPrice ?? 0,
+                    'created_by' => Auth::id(),
+                ]);
+
+                $createdVariants[] = $variant;
+            }
+
+            DB::commit();
+
+            return $this->createdResponse($createdVariants, count($createdVariants) . ' variants created successfully');
+        } catch (\Exception $e) {
+            DB::rollback();
+            return $this->serverErrorResponse('Failed to create variants: ' . $e->getMessage());
+        }
+    }
+
+    public function stats(): JsonResponse
+    {
+        try {
+            $stats = [
+                'total_variants' => Variant::count(),
+                'active_variants' => Variant::active()->count(),
+                'inactive_variants' => Variant::inactive()->count(),
+                'low_stock_variants' => Variant::lowStock()->count(),
+                'total_products_with_variants' => Variant::distinct('id_product')->count(),
+                'average_price' => Variant::active()->avg('price'),
+                'highest_price' => Variant::active()->max('price'),
+                'lowest_price' => Variant::active()->min('price'),
+            ];
+
+            return $this->successResponse($stats, 'Variant statistics retrieved successfully');
+        } catch (\Exception $e) {
+            return $this->serverErrorResponse('Failed to retrieve variant statistics: ' . $e->getMessage());
+        }
+    }
+
+    public function getVariantAttributes(): JsonResponse
+    {
+        try {
+            $attributes = Variant::active()
+                ->pluck('variant_values')
+                ->flatten(1)
+                ->groupBy(function ($value, $key) {
+                    return $key;
+                })
+                ->map(function ($values) {
+                    return $values->unique()->values();
+                });
+
+            return $this->successResponse($attributes, 'Variant attributes retrieved successfully');
+        } catch (\Exception $e) {
+            return $this->serverErrorResponse('Failed to retrieve variant attributes: ' . $e->getMessage());
+        }
+    }
+
+    private function generateCombinations($attributes): array
+    {
+        $combinations = [[]];
+
+        foreach ($attributes as $attribute) {
+            $newCombinations = [];
+            foreach ($combinations as $combination) {
+                foreach ($attribute['values'] as $value) {
+                    $newCombination = $combination;
+                    $newCombination[$attribute['name']] = $value;
+                    $newCombinations[] = $newCombination;
+                }
+            }
+            $combinations = $newCombinations;
+        }
+
+        return $combinations;
+    }
+}

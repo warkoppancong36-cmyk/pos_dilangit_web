@@ -1,0 +1,585 @@
+<template>
+  <div class="variants-management">
+    <!-- Page Header -->
+    <VRow class="mb-4">
+      <VCol cols="12">
+        <div class="d-flex align-center justify-space-between">
+          <div>
+            <h1 class="text-h4 font-weight-bold coffee-title">
+              Kelola Variant
+            </h1>
+            <p class="text-body-1 text-medium-emphasis coffee-subtitle">
+              Kelola variant produk untuk coffee shop Anda
+            </p>
+          </div>
+          <VBtn
+            v-if="canCreateEdit"
+            @click="openCreateDialog"
+            variant="flat"
+            color="primary"
+            prepend-icon="tabler-plus"
+            class="text-none"
+            :disabled="isLoadingData || productOptions.length === 0"
+          >
+            Tambah Variant
+          </VBtn>
+        </div>
+      </VCol>
+    </VRow>
+
+    <!-- Loading State for Products -->
+    <VRow v-if="productsLoading && productOptions.length === 0" class="mb-4">
+      <VCol cols="12">
+        <VAlert
+          type="info"
+          variant="tonal"
+          class="mb-4"
+        >
+          <VProgressCircular
+            indeterminate
+            size="20"
+            class="me-2"
+          />
+          Memuat data produk...
+        </VAlert>
+      </VCol>
+    </VRow>
+
+    <!-- No Products Warning -->
+    <VRow v-else-if="!productsLoading && productOptions.length === 0" class="mb-4">
+      <VCol cols="12">
+        <VAlert
+          type="warning"
+          variant="tonal"
+          class="mb-4"
+        >
+          <VIcon icon="tabler-alert-triangle" class="me-2" />
+          Tidak ada produk aktif yang tersedia. 
+          <RouterLink to="/products" class="text-decoration-none">
+            Kelola produk terlebih dahulu
+          </RouterLink>
+          untuk dapat membuat variant.
+        </VAlert>
+      </VCol>
+    </VRow>
+
+    <!-- Statistics Cards -->
+    <VRow class="mb-6">
+      <VCol cols="12" sm="6" md="3">
+        <VCard class="stats-card stats-primary">
+          <VCardText class="d-flex align-center">
+            <VAvatar
+              size="56"
+              color="primary"
+              variant="tonal"
+              class="me-4"
+            >
+              <VIcon 
+                icon="tabler-versions"
+                size="28"
+              />
+            </VAvatar>
+            <div>
+              <div class="text-h5 font-weight-bold">
+                {{ (stats?.total_variants || 0).toLocaleString() }}
+              </div>
+              <div class="text-caption text-medium-emphasis">
+                Total Variants
+              </div>
+            </div>
+          </VCardText>
+        </VCard>
+      </VCol>
+
+      <VCol cols="12" sm="6" md="3">
+        <VCard class="stats-card stats-success">
+          <VCardText class="d-flex align-center">
+            <VAvatar
+              size="56"
+              color="success"
+              variant="tonal"
+              class="me-4"
+            >
+              <VIcon 
+                icon="tabler-check-circle"
+                size="28"
+              />
+            </VAvatar>
+            <div>
+              <div class="text-h5 font-weight-bold">
+                {{ (stats?.active_variants || 0).toLocaleString() }}
+              </div>
+              <div class="text-caption text-medium-emphasis">
+                Variants Aktif
+              </div>
+            </div>
+          </VCardText>
+        </VCard>
+      </VCol>
+
+      <VCol cols="12" sm="6" md="3">
+        <VCard class="stats-card stats-warning">
+          <VCardText class="d-flex align-center">
+            <VAvatar
+              size="56"
+              color="warning"
+              variant="tonal"
+              class="me-4"
+            >
+              <VIcon 
+                icon="tabler-alert-triangle"
+                size="28"
+              />
+            </VAvatar>
+            <div>
+              <div class="text-h5 font-weight-bold">
+                {{ (stats?.low_stock_variants || 0).toLocaleString() }}
+              </div>
+              <div class="text-caption text-medium-emphasis">
+                Stok Rendah
+              </div>
+            </div>
+          </VCardText>
+        </VCard>
+      </VCol>
+
+      <VCol cols="12" sm="6" md="3">
+        <VCard class="stats-card stats-info">
+          <VCardText class="d-flex align-center">
+            <VAvatar
+              size="56"
+              color="info"
+              variant="tonal"
+              class="me-4"
+            >
+              <VIcon 
+                icon="tabler-currency-dollar"
+                size="28"
+              />
+            </VAvatar>
+            <div>
+              <div class="text-h5 font-weight-bold">
+                {{ formatPrice(stats?.average_price || 0) }}
+              </div>
+              <div class="text-caption text-medium-emphasis">
+                Harga Rata-rata
+              </div>
+            </div>
+          </VCardText>
+        </VCard>
+      </VCol>
+    </VRow>
+
+    <!-- Additional Stats Row -->
+    <VRow class="mb-6">
+      <VCol cols="12" md="4">
+        <VCard class="stats-detail-card">
+          <VCardText>
+            <div class="d-flex align-center justify-space-between mb-2">
+              <span class="text-body-2 text-medium-emphasis">Produk dengan Variants</span>
+              <VIcon 
+                icon="tabler-package"
+                size="20"
+                class="text-info"
+              />
+            </div>
+            <div class="text-h6 font-weight-bold">
+              {{ (stats?.total_products_with_variants || 0).toLocaleString() }}
+            </div>
+          </VCardText>
+        </VCard>
+      </VCol>
+
+      <VCol cols="12" md="4">
+        <VCard class="stats-detail-card">
+          <VCardText>
+            <div class="d-flex align-center justify-space-between mb-2">
+              <span class="text-body-2 text-medium-emphasis">Harga Tertinggi</span>
+              <VIcon 
+                icon="tabler-trending-up"
+                size="20"
+                class="text-success"
+              />
+            </div>
+            <div class="text-h6 font-weight-bold text-success">
+              {{ formatPrice(stats?.highest_price || 0) }}
+            </div>
+          </VCardText>
+        </VCard>
+      </VCol>
+
+      <VCol cols="12" md="4">
+        <VCard class="stats-detail-card">
+          <VCardText>
+            <div class="d-flex align-center justify-space-between mb-2">
+              <span class="text-body-2 text-medium-emphasis">Harga Terendah</span>
+              <VIcon 
+                icon="tabler-trending-down"
+                size="20"
+                class="text-info"
+              />
+            </div>
+            <div class="text-h6 font-weight-bold text-info">
+              {{ formatPrice(stats?.lowest_price || 0) }}
+            </div>
+          </VCardText>
+        </VCard>
+      </VCol>
+    </VRow>
+
+    <!-- Variants Table -->
+    <VariantTable
+      :variants-list="variantsList"
+      :loading="isLoadingData"
+      :total-items="totalItems"
+      :current-page="currentPage"
+      :items-per-page="itemsPerPage"
+      :filters="filters"
+      :product-options="productOptions"
+      :can-create-edit="canCreateEdit && productOptions.length > 0"
+      @open-create="openCreateDialog"
+      @open-bulk-create="() => openBulkCreateDialog(1)"
+      @edit="openEditDialog"
+      @delete="openDeleteDialog"
+      @page-change="onPageChange"
+      @items-per-page-change="handleItemsPerPageChange"
+      @filters-update="handleFiltersUpdate"
+      @clear-filters="clearFilters"
+    />
+
+    <!-- Create/Edit Dialog -->
+    <VariantDialog
+      v-model="dialog"
+      :edit-mode="editMode"
+      :variant="selectedVariant"
+      :product-options="productOptions"
+      :save-loading="saveLoading"
+      :modal-error-message="modalErrorMessage"
+      :form-data="formData"
+      :name-rules="nameRules"
+      :price-rules="priceRules"
+      :sku-rules="skuRules"
+      :barcode-rules="barcodeRules"
+      @save="saveVariant"
+      @close="closeDialog"
+      @clear-error="clearModalError"
+    />
+
+    <!-- Bulk Create Dialog -->
+    <VariantBulkCreateDialog
+      v-model="bulkCreateDialog"
+      :product-options="productOptions"
+      :bulk-create-loading="bulkCreateLoading"
+      :modal-error-message="modalErrorMessage"
+      :bulk-create-data="bulkCreateData"
+      @save="bulkCreateVariants"
+      @close="closeBulkCreateDialog"
+      @clear-error="clearModalError"
+    />
+
+    <!-- Delete Confirmation Dialog -->
+    <VDialog
+      v-model="deleteDialog"
+      max-width="400"
+      persistent
+      class="delete-dialog"
+    >
+      <VCard>
+        <VCardTitle class="dialog-title d-flex align-center">
+          <VIcon 
+            icon="tabler-alert-triangle"
+            color="warning"
+            class="me-3"
+          />
+          Konfirmasi Hapus
+        </VCardTitle>
+
+        <VDivider />
+
+        <VCardText class="py-4">
+          <p class="mb-2">
+            Apakah Anda yakin ingin menghapus variant ini?
+          </p>
+          <div 
+            v-if="selectedVariant"
+            class="text-body-2 text-medium-emphasis"
+          >
+            <strong>{{ selectedVariant?.name || 'Unknown Variant' }}</strong><br>
+            Produk: {{ selectedVariant?.product?.name || 'Unknown Product' }}
+          </div>
+          <VAlert
+            type="warning"
+            variant="tonal"
+            class="mt-3"
+            density="compact"
+          >
+            Tindakan ini tidak dapat dibatalkan!
+          </VAlert>
+        </VCardText>
+
+        <VDivider />
+
+        <VCardActions class="pa-4">
+          <VSpacer />
+          <VBtn
+            @click="closeDeleteDialog"
+            variant="outlined"
+            :disabled="deleteLoading"
+          >
+            Batal
+          </VBtn>
+          <VBtn
+            @click="deleteVariant"
+            :loading="deleteLoading"
+            variant="flat"
+            color="error"
+          >
+            Hapus
+          </VBtn>
+        </VCardActions>
+      </VCard>
+    </VDialog>
+
+    <!-- Success/Error Snackbars -->
+    <VSnackbar
+      v-model="showSuccessMessage"
+      color="success"
+      timeout="4000"
+      location="top right"
+    >
+      {{ successMessage }}
+      <template #actions>
+        <VBtn
+          @click="showSuccessMessage = false"
+          icon
+          variant="text"
+        >
+          <VIcon icon="tabler-x" />
+        </VBtn>
+      </template>
+    </VSnackbar>
+
+    <VSnackbar
+      v-model="showErrorMessage"
+      color="error"
+      timeout="6000"
+      location="top right"
+    >
+      {{ errorMessage }}
+      <template #actions>
+        <VBtn
+          @click="showErrorMessage = false"
+          icon
+          variant="text"
+        >
+          <VIcon icon="tabler-x" />
+        </VBtn>
+      </template>
+    </VSnackbar>
+  </div>
+</template>
+
+<script setup lang="ts">
+import VariantBulkCreateDialog from '@/components/variants/VariantBulkCreateDialog.vue'
+import VariantDialog from '@/components/variants/VariantDialog.vue'
+import VariantTable from '@/components/variants/VariantTable.vue'
+import { useProducts } from '@/composables/useProducts'
+import { useVariants } from '@/composables/useVariants'
+import { computed, onMounted, watch } from 'vue'
+
+// Use variants composable
+const {
+  // State
+  variantsList,
+  loading,
+  saveLoading,
+  deleteLoading,
+  bulkCreateLoading,
+  stats,
+  dialog,
+  deleteDialog,
+  bulkCreateDialog,
+  editMode,
+  selectedVariant,
+  currentPage,
+  totalItems,
+  itemsPerPage,
+  filters,
+  errorMessage,
+  successMessage,
+  modalErrorMessage,
+  formData,
+  bulkCreateData,
+
+  // Computed
+  canCreateEdit,
+
+  // Validation rules
+  nameRules,
+  priceRules,
+  skuRules,
+  barcodeRules,
+
+  // Methods
+  fetchVariantsList,
+  fetchStats,
+  saveVariant,
+  bulkCreateVariants,
+  deleteVariant,
+  openCreateDialog,
+  openEditDialog,
+  openDeleteDialog,
+  openBulkCreateDialog,
+  closeDialog,
+  closeDeleteDialog,
+  closeBulkCreateDialog,
+  clearModalError,
+  onPageChange,
+  handleFiltersUpdate,
+  clearFilters,
+  formatPrice
+} = useVariants()
+
+// Use products composable
+const {
+  productsList: products,
+  loading: productsLoading,
+  fetchProductsList: fetchProducts
+} = useProducts()
+
+// Computed product options with safety checks
+const productOptions = computed(() => {
+  // Debug log with more detail
+  console.log('Raw products data:', products.value)
+  console.log('Products type:', typeof products.value)
+  console.log('Products length:', products.value?.length)
+  
+  if (!products.value || !Array.isArray(products.value)) {
+    console.warn('Products is not an array or null:', products.value)
+    return []
+  }
+  
+  // Log first product structure for debugging
+  if (products.value.length > 0) {
+    console.log('First product structure:', products.value[0])
+    console.log('Available keys:', Object.keys(products.value[0]))
+  }
+  
+  try {
+    const filteredProducts = products.value
+      .filter((product: any) => {
+        // Check all possible ID fields
+        const productId = product.id_product || product.id || product.product_id
+        console.log(`Product: ${product.name}, ID: ${productId}, Active: ${product.active}`)
+        
+        const isValid = product && 
+                       typeof product === 'object' &&
+                       (productId !== null && productId !== undefined) &&
+                       product.name !== null &&
+                       product.name !== undefined &&
+                       typeof product.name === 'string' &&
+                       product.name.trim() !== '' &&
+                       product.active !== false
+        
+        if (!isValid) {
+          console.warn('Invalid product filtered out:', product)
+        }
+        
+        return isValid
+      })
+      .map((product: any) => {
+        // Try different ID fields
+        const productId = product.id_product || product.id || product.product_id
+        const mappedProduct = {
+          id: Number(productId),
+          name: String(product.name).trim()
+        }
+        console.log('Mapped product:', mappedProduct)
+        return mappedProduct
+      })
+      .sort((a: any, b: any) => a.name.localeCompare(b.name))
+    
+    console.log('Final filtered product options:', filteredProducts)
+    return filteredProducts
+  } catch (error) {
+    console.error('Error processing products:', error)
+    return []
+  }
+})
+
+// Loading state
+const isLoadingData = computed(() => loading.value || productsLoading.value)
+
+// Message handling
+const showSuccessMessage = computed<boolean>({
+  get() {
+    return !!successMessage.value;
+  },
+  set(value: boolean) {
+    if (!value) successMessage.value = '';
+  },
+});
+
+const showErrorMessage = computed<boolean>({
+  get() {
+    return !!errorMessage.value;
+  },
+  set(value: boolean) {
+    if (!value) errorMessage.value = '';
+  },
+});
+
+// Event handlers
+const handleItemsPerPageChange = (newItemsPerPage: number) => {
+  itemsPerPage.value = newItemsPerPage
+  currentPage.value = 1
+  fetchVariantsList()
+}
+
+// Initialize with error handling
+onMounted(async () => {
+  try {
+    console.log('Initializing variant management...')
+    console.log('Fetching products...')
+    await fetchProducts()
+    console.log('Products fetched, current products:', products.value)
+    
+    console.log('Fetching variants and stats...')
+    await Promise.all([
+      fetchVariantsList(),
+      fetchStats()
+    ])
+    console.log('Initialization completed')
+  } catch (error) {
+    console.error('Error initializing variant management:', error)
+    errorMessage.value = 'Gagal memuat data. Silakan refresh halaman.'
+  }
+})
+
+// Watchers
+watch(successMessage, (newMessage) => {
+  if (newMessage) {
+    showSuccessMessage.value = true
+  }
+})
+
+watch(errorMessage, (newMessage) => {
+  if (newMessage) {
+    showErrorMessage.value = true
+  }
+})
+</script>
+
+<style scoped lang="scss">
+.variants-management {
+  .coffee-title {
+    color: rgb(var(--v-theme-primary));
+    font-family: 'Inter', sans-serif;
+  }
+
+  .coffee-subtitle {
+    opacity: 0.8;
+    margin-top: 4px;
+  }
+}
+</style>

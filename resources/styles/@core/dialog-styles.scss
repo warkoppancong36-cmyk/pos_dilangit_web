@@ -1,0 +1,327 @@
+// Global Dialog Styles - Coffee Theme
+// File: resources/styles/@core/dialog-styles.scss
+
+// Coffee color palette
+$coffee-primary: #B07124;
+$coffee-secondary: #8D7053;
+$coffee-accent: #D4AC71;
+$coffee-dark: #8D4B00;
+$coffee-medium: #A0672D;
+$coffee-light: #B8946A;
+
+// Common dialog styles
+.coffee-dialog {
+  .coffee-header {
+    background: linear-gradient(135deg, $coffee-primary 0%, $coffee-secondary 100%);
+    position: relative;
+    
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, $coffee-accent 0%, $coffee-light 50%, $coffee-accent 100%);
+    }
+  }
+
+  .coffee-icon {
+    color: $coffee-primary;
+  }
+
+  // Form styling
+  .v-text-field, .v-textarea, .v-select, .v-autocomplete {
+    margin-bottom: 8px;
+  }
+
+  // Section headers
+  h6 {
+    color: $coffee-dark;
+    border-bottom: 1px solid $coffee-accent;
+    padding-bottom: 8px;
+    margin-bottom: 16px;
+  }
+
+  // Form sections
+  .form-section {
+    margin-bottom: 24px;
+    
+    .section-title {
+      color: $coffee-dark;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      
+      .section-icon {
+        color: $coffee-primary;
+      }
+    }
+  }
+
+  // Button styling - More specific selectors
+  .v-card-actions .v-btn {
+    &.coffee-primary {
+      background: linear-gradient(135deg, #B07124 0%, #D4AC71 100%) !important;
+      color: white !important;
+      border: none !important;
+      font-weight: 600 !important;
+      letter-spacing: 0.5px !important;
+      
+      &:hover:not(:disabled) {
+        background: linear-gradient(135deg, #A0672D 0%, #B8946A 100%) !important;
+        box-shadow: 0 4px 12px rgba(176, 113, 36, 0.3) !important;
+        transform: translateY(-1px) !important;
+      }
+
+      &:not(:disabled) {
+        background: linear-gradient(135deg, #B07124 0%, #D4AC71 100%) !important;
+      }
+
+      // Loading state
+      &.v-btn--loading {
+        background: linear-gradient(135deg, #B07124 0%, #D4AC71 100%) !important;
+        opacity: 0.8 !important;
+      }
+    }
+    
+    &.coffee-secondary {
+      border: 2px solid #D4AC71 !important;
+      color: #8D4B00 !important;
+      background: transparent !important;
+      font-weight: 500 !important;
+      
+      &:hover:not(:disabled) {
+        background: rgba(212, 172, 113, 0.1) !important;
+        border-color: #B07124 !important;
+        color: #B07124 !important;
+      }
+    }
+  }
+
+  // Card styling
+  .v-card {
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  }
+
+  // Input focus states
+  .v-field {
+    &.v-field--focused {
+      .v-field__outline {
+        --v-field-border-color: #{$coffee-primary};
+      }
+    }
+  }
+
+  // Divider styling
+  .v-divider {
+    border-color: rgba($coffee-accent, 0.3);
+  }
+
+  // Loading overlay
+  &.loading {
+    position: relative;
+    
+    &::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.8);
+      z-index: 1000;
+      pointer-events: none;
+      border-radius: 12px;
+    }
+  }
+
+  // Responsive adjustments
+  @media (max-width: 768px) {
+    .v-dialog {
+      margin: 12px;
+    }
+    
+    .form-section {
+      margin-bottom: 16px;
+    }
+    
+    h6 {
+      font-size: 1rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .v-card-text {
+      padding: 16px !important;
+    }
+    
+    .v-card-actions {
+      padding: 16px !important;
+      flex-direction: column;
+      gap: 8px;
+      
+      .v-btn {
+        width: 100%;
+      }
+    }
+  }
+}
+
+// Error snackbar styling - Global
+:deep(.v-snackbar) {
+  &.coffee-error {
+    .v-snackbar__wrapper {
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      border-left: 4px solid #f44336;
+    }
+    
+    .v-snackbar__content {
+      padding: 16px 20px;
+    }
+    
+    &.v-snackbar--variant-elevated {
+      box-shadow: 0 4px 20px rgba(244, 67, 54, 0.3);
+    }
+  }
+
+  &.coffee-success {
+    .v-snackbar__wrapper {
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      border-left: 4px solid #4caf50;
+    }
+    
+    .v-snackbar__content {
+      padding: 16px 20px;
+    }
+    
+    &.v-snackbar--variant-elevated {
+      box-shadow: 0 4px 20px rgba(76, 175, 80, 0.3);
+    }
+  }
+}
+
+// Animation classes
+.coffee-slide-in {
+  animation: coffeeSlideIn 0.3s ease-out;
+}
+
+.coffee-fade-in {
+  animation: coffeeFadeIn 0.2s ease-out;
+}
+
+@keyframes coffeeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes coffeeFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+// Utility classes
+.coffee-text-primary {
+  color: $coffee-primary !important;
+}
+
+.coffee-text-secondary {
+  color: $coffee-secondary !important;
+}
+
+.coffee-text-dark {
+  color: $coffee-dark !important;
+}
+
+.coffee-bg-light {
+  background-color: rgba($coffee-accent, 0.1) !important;
+}
+
+.coffee-border {
+  border-color: $coffee-accent !important;
+}
+
+// Additional button variants
+  // Force overrides for Vuetify button styles
+  .v-btn--variant-elevated.coffee-primary,
+  .v-btn--variant-flat.coffee-primary,
+  .v-btn.coffee-primary {
+    background-color: #B07124 !important;
+    background-image: linear-gradient(135deg, #B07124 0%, #D4AC71 100%) !important;
+    border: none !important;
+    
+    &:before {
+      display: none !important;
+    }
+    
+    .v-btn__overlay {
+      display: none !important;
+    }
+    
+    .v-btn__content {
+      color: white !important;
+    }
+  }
+
+  // Ensure text color override
+  .v-btn.coffee-primary * {
+    color: white !important;
+  }
+
+  // Additional button variants
+  .coffee-btn-light {
+    background: linear-gradient(135deg, #D4AC71 0%, #F5E6D3 100%) !important;
+    color: #8D4B00 !important;
+    border: 1px solid #B07124 !important;
+    
+    &:hover {
+      background: linear-gradient(135deg, #C9A06B 0%, #EDD6C3 100%) !important;
+    }
+  }
+
+  .coffee-btn-outline {
+    background: transparent !important;
+    border: 2px solid #B07124 !important;
+    color: #B07124 !important;
+    
+    &:hover {
+      background: rgba(176, 113, 36, 0.1) !important;
+    }
+  }
+
+// Form validation error states
+.v-text-field.error--text {
+  .v-field__outline {
+    border-color: #f44336 !important;
+    border-width: 2px !important;
+  }
+}
+
+.v-select.error--text {
+  .v-field__outline {
+    border-color: #f44336 !important;
+    border-width: 2px !important;
+  }
+}
+
+.v-textarea.error--text {
+  .v-field__outline {
+    border-color: #f44336 !important;
+    border-width: 2px !important;
+  }
+}

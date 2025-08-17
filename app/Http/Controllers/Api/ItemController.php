@@ -1,0 +1,314 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Item;
+use App\Models\Supplier;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+
+class ItemController extends Controller
+{
+    public function index(Request $request): JsonResponse
+    {
+        try {
+            $query = Item::with(['creator', 'updater', 'inventory'])
+                ->orderBy('created_at', 'desc');
+
+            // Filter by active status
+            if ($request->has('active') && $request->active !== 'all') {
+                $query->where('active', $request->active === 'true');
+            }
+
+            // Filter by unit
+            if ($request->has('unit') && !empty($request->unit)) {
+                $query->where('unit', $request->unit);
+            }
+
+            // Filter by stock status
+            if ($request->has('stock_status')) {
+                switch ($request->stock_status) {
+                    case 'low_stock':
+                        $query->whereHas('inventory', function ($q) {
+                            $q->whereRaw('current_stock <= reorder_level');
+                        });
+                        break;
+                    case 'out_of_stock':
+                        $query->whereHas('inventory', function ($q) {
+                            $q->where('current_stock', '<=', 0);
+                        });
+                        break;
+                    case 'in_stock':
+                        $query->whereHas('inventory', function ($q) {
+                            $q->where('current_stock', '>', 0)
+                              ->whereRaw('current_stock > reorder_level');
+                        });
+                        break;
+                }
+            }
+
+            // Search functionality
+            if ($request->has('search') && !empty($request->search)) {
+                $query->search($request->search);
+            }
+
+            // Filter expiring items
+            if ($request->has('expiring_days')) {
+                $query->expiringSoon((int) $request->expiring_days);
+            }
+
+            // Filter expired items
+            if ($request->has('show_expired') && $request->show_expired === 'true') {
+                $query->expired();
+            }
+
+            $items = $query->paginate($request->get('per_page', 15));
+
+            return response()->json([
+                'success' => true,
+                'data' => $items,
+                'message' => 'Items retrieved successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error retrieving items: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'unit' => 'required|string|max:50',
+                'cost_per_unit' => 'nullable|numeric|min:0',  // Make optional since handled by inventory
+                'current_stock' => 'nullable|numeric|min:0',  // Make optional since handled by inventory
+                'minimum_stock' => 'nullable|numeric|min:0',  // Make optional since handled by inventory
+                'storage_location' => 'nullable|string|max:255',
+                'expiry_date' => 'nullable|date|after_or_equal:today',
+                'active' => 'boolean',
+                'is_delivery' => 'boolean',  // Add new field validation
+                'is_takeaway' => 'boolean',  // Add new field validation
+                'properties' => 'nullable|array',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $validated = $validator->validated();
+            $validated['created_by'] = Auth::id();
+            
+            // Set default values for fields not managed in UI
+            $validated['cost_per_unit'] = $validated['cost_per_unit'] ?? 0;
+            $validated['is_delivery'] = $validated['is_delivery'] ?? false;
+            $validated['is_takeaway'] = $validated['is_takeaway'] ?? false;
+            
+            DB::beginTransaction();
+            
+            // Retry logic for handling duplicate item_code
+            $maxRetries = 3;
+            $retryCount = 0;
+            $item = null;
+            
+            while ($retryCount < $maxRetries) {
+                try {
+                    $item = Item::create($validated);
+                    break; // Success, exit retry loop
+                } catch (\Illuminate\Database\QueryException $e) {
+                    if ($e->errorInfo[1] == 1062 && strpos($e->getMessage(), 'item_code') !== false) {
+                        // Duplicate item_code error, retry
+                        $retryCount++;
+                        if ($retryCount >= $maxRetries) {
+                            // If still failing after retries, generate a completely unique code
+                            $validated['item_code'] = 'ITM' . now()->format('ymdHis') . rand(100, 999);
+                            $item = Item::create($validated);
+                            break;
+                        }
+                        // Wait a small amount before retry
+                        usleep(10000); // 10ms
+                        continue;
+                    } else {
+                        // Different error, rethrow
+                        throw $e;
+                    }
+                }
+            }
+            
+            DB::commit();
+
+            $item->load(['creator']);
+
+            return response()->json([
+                'success' => true,
+                'data' => $item,
+                'message' => 'Item created successfully'
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollback();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error creating item: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function show($id): JsonResponse
+    {
+        try {
+            $item = Item::with(['creator', 'updater', 'productItems.product', 'purchaseItems.purchase'])
+                ->findOrFail($id);
+
+            return response()->json([
+                'success' => true,
+                'data' => $item,
+                'message' => 'Item retrieved successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Item not found'
+            ], 404);
+        }
+    }
+
+    public function update(Request $request, $id): JsonResponse
+    {
+        try {
+            $item = Item::findOrFail($id);
+
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'unit' => 'required|string|max:50',
+                'cost_per_unit' => 'nullable|numeric|min:0',  // Make optional since handled by inventory
+                'current_stock' => 'nullable|numeric|min:0',  // Make optional since handled by inventory
+                'minimum_stock' => 'nullable|numeric|min:0',  // Make optional since handled by inventory
+                'storage_location' => 'nullable|string|max:255',
+                'expiry_date' => 'nullable|date|after_or_equal:today',
+                'active' => 'boolean',
+                'is_delivery' => 'boolean',  // Add new field validation
+                'is_takeaway' => 'boolean',  // Add new field validation
+                'properties' => 'nullable|array',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $validated = $validator->validated();
+            $validated['updated_by'] = Auth::id();
+            
+            // Set default values for fields not managed in UI
+            if (isset($validated['cost_per_unit']) && $validated['cost_per_unit'] === null) {
+                $validated['cost_per_unit'] = 0;
+            }
+            if (isset($validated['is_delivery']) && $validated['is_delivery'] === null) {
+                $validated['is_delivery'] = false;
+            }
+            if (isset($validated['is_takeaway']) && $validated['is_takeaway'] === null) {
+                $validated['is_takeaway'] = false;
+            }
+
+            DB::beginTransaction();
+            
+            $item->update($validated);
+            
+            DB::commit();
+
+            $item->load(['creator', 'updater']);
+
+            return response()->json([
+                'success' => true,
+                'data' => $item,
+                'message' => 'Item updated successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollback();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error updating item: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function destroy($id): JsonResponse
+    {
+        try {
+            $item = Item::findOrFail($id);
+
+            // Check if item is used in any active products
+            $productCount = $item->productItems()->count();
+            if ($productCount > 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Cannot delete item. It is used in {$productCount} product(s)."
+                ], 422);
+            }
+
+            DB::beginTransaction();
+            
+            $item->delete();
+            
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Item deleted successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollback();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error deleting item: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function getStats(): JsonResponse
+    {
+        try {
+            $stats = [
+                'total_items' => Item::count(),
+                'active_items' => Item::active()->count(),
+                'inactive_items' => Item::inactive()->count(),
+                'low_stock_items' => Item::lowStock()->count(),
+                'out_of_stock_items' => Item::outOfStock()->count(),
+                'total_value' => Item::active()->get()->sum(function($item) {
+                    return $item->calculateTotalValue();
+                }),
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $stats
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error retrieving stats: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+}
