@@ -59,7 +59,9 @@ const groupedProductItems = computed<ProductGroup[]>(() => {
 
   props.productItems.forEach(productItem => {
     const productId = productItem.product_id
-    const product = props.products.find(p => p.id_product === productId)
+    
+    // PERBAIKAN: Gunakan product dari ProductItem response jika ada
+    let product = productItem.product || props.products.find(p => p.id_product === productId)
     
     console.log(`Looking for product ID ${productId}:`, product ? `Found: ${product.name}` : 'NOT FOUND')
 
@@ -70,8 +72,8 @@ const groupedProductItems = computed<ProductGroup[]>(() => {
       }
     }
 
-    // Add item details to product item
-    const item = props.items.find(i => i.id_item === productItem.item_id)
+    // PERBAIKAN: Gunakan item dari ProductItem response jika ada
+    const item = productItem.item || props.items.find(i => i.id_item === productItem.item_id)
     console.log(`Looking for item ID ${productItem.item_id}:`, item ? `Found: ${item.name}` : 'NOT FOUND')
 
     groups[productId].items.push({
