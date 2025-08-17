@@ -13,11 +13,13 @@ return new class extends Migration
     {
         // Indexes for product_items table - critical for HPP calculation
         Schema::table('product_items', function (Blueprint $table) {
-            // Skip product_id and item_id indexes - already exist from create table migration
-            // Skip is_critical index - already exists from create table migration
+            // Skip all indexes - already exist from create table migration:
+            // - product_id index already exists
+            // - item_id index already exists  
+            // - is_critical index already exists
+            // - composite unique constraint on [product_id, item_id] already exists
             
-            // Only add composite index yang belum ada
-            $table->index(['product_id', 'item_id'], 'idx_product_items_product_item');
+            // No additional indexes needed for this table
         });
 
         // Indexes for purchase_items table - untuk query harga pembelian
