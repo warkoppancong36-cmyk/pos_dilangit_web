@@ -28,16 +28,32 @@ return new class extends Migration
             // Will need to update these indexes after structure migration is completed
             
             // Index untuk query berdasarkan id_product (current structure)
-            $table->index('id_product', 'idx_purchase_items_id_product');
+            try {
+                $table->index('id_product', 'idx_purchase_items_id_product');
+            } catch (Exception $e) {
+                // Index might already exist
+            }
             
             // Index untuk query berdasarkan created_at (untuk get latest purchase)
-            $table->index('created_at', 'idx_purchase_items_created_at');
+            try {
+                $table->index('created_at', 'idx_purchase_items_created_at');
+            } catch (Exception $e) {
+                // Index might already exist
+            }
             
             // Composite index untuk query product + tanggal
-            $table->index(['id_product', 'created_at'], 'idx_purchase_items_product_date');
+            try {
+                $table->index(['id_product', 'created_at'], 'idx_purchase_items_product_date');
+            } catch (Exception $e) {
+                // Index might already exist
+            }
             
             // Index untuk unit_cost (untuk performance saat calculate average)
-            $table->index('unit_cost', 'idx_purchase_items_unit_cost');
+            try {
+                $table->index('unit_cost', 'idx_purchase_items_unit_cost');
+            } catch (Exception $e) {
+                // Index might already exist
+            }
         });
 
         // Indexes for products table - untuk performance product queries

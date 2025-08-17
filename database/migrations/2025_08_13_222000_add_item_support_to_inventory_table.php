@@ -19,7 +19,7 @@ return new class extends Migration
             $table->foreign('id_item')->references('id_item')->on('items')->onDelete('cascade');
             
             // Modify unique constraint to include id_item
-            $table->dropUnique(['id_product', 'id_variant']);
+            $table->dropUnique('inventory_id_product_id_variant_unique');
             
             // Create index for id_item
             $table->index(['id_item']);
@@ -54,7 +54,7 @@ return new class extends Migration
             $table->dropColumn('id_item');
             
             // Restore original unique constraint
-            $table->unique(['id_product', 'id_variant']);
+            $table->unique(['id_product', 'id_variant'], 'inventory_id_product_id_variant_unique');
         });
     }
 };
