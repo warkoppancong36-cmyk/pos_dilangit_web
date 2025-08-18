@@ -198,10 +198,10 @@ export const useProducts = () => {
     (v: string) => v.length <= 255 || 'Nama produk maksimal 255 karakter'
   ]
 
-  const priceRules = [
-    (v: string | number) => !!v || 'Harga wajib diisi',
-    (v: string | number) => Number(v) > 0 || 'Harga harus lebih dari 0'
-  ]
+  // const priceRules = [
+  //   (v: string | number) => !!v || 'Harga wajib diisi',
+  //   (v: string | number) => Number(v) > 0 || 'Harga harus lebih dari 0'
+  // ]
 
   const categoryRules = [
     (v: string | number) => !!v || 'Kategori wajib dipilih'
@@ -637,7 +637,7 @@ export const useProducts = () => {
     selectedImage,
     imagePreview,
     nameRules,
-    priceRules,
+    // priceRules,
     categoryRules,
     skuRules,
 

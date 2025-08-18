@@ -82,7 +82,7 @@ class ProductController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
-                'price' => 'required|numeric|min:0',
+                // 'price' => 'required|numeric|min:0',
                 'cost' => 'nullable|numeric|min:0',
                 'min_stock' => 'nullable|integer|min:0',
                 'category_id' => 'required|exists:categories,id_category',
@@ -97,6 +97,7 @@ class ProductController extends Controller
             $productData['status'] = $productData['status'] ?? 'published';
             $productData['active'] = $request->boolean('active', true);
             $productData['featured'] = $request->boolean('featured', false);
+            $productData['price'] = $request->input('price', 0);
 
             if (!$request->filled('sku')) {
                 $productData['sku'] = $this->generateSKU($request->name);

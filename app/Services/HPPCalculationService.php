@@ -177,12 +177,10 @@ class HPPCalculationService
         try {
             \Log::info("HPP Service - Looking for product with id_product: {$productId}");
             
-            // Debug: Check all products first
-            $allProducts = Product::select('id_product', 'name')->take(5)->get();
-            \Log::info("HPP Service - First 5 products: " . $allProducts->toJson());
-            
             // Use the correct primary key (id_product) for finding product
-            $product = Product::where('id_product', $productId)->first();
+            $product = Product::with(['productItems.item.purchaseItems' => function($query) {
+                $query->orderBy('created_at', 'desc');
+            }])->where('id_product', $productId)->first();
             
             \Log::info("HPP Service - Product found: " . ($product ? "YES ({$product->name})" : "NO"));
             
@@ -191,21 +189,24 @@ class HPPCalculationService
                 return null;
             }
             
+            // Calculate HPP using different methods based on purchase prices
             $hppMethods = [
-                'current' => $product->calculateHPP(),
-                'latest' => $product->calculateHPPFromLatestPurchases(),
-                'average' => $product->calculateHPPFromAveragePurchases(),
+                'current' => self::calculateHPPFromCurrentPrices($product),
+                'latest' => self::calculateHPPFromLatestPurchases($product),
+                'average' => self::calculateHPPFromAveragePurchases($product),
             ];
             
             $suggestedPrices = [];
             foreach ($hppMethods as $method => $hpp) {
-                $suggestedPrice = $hpp * (1 + $markupPercentage / 100);
-                $suggestedPrices[$method] = [
-                    'hpp' => $hpp,
-                    'markup_percentage' => $markupPercentage,
-                    'suggested_price' => round($suggestedPrice, 0), // Round to nearest rupiah
-                    'profit_margin' => $suggestedPrice - $hpp,
-                ];
+                if ($hpp > 0) {
+                    $suggestedPrice = $hpp * (1 + $markupPercentage / 100);
+                    $suggestedPrices[$method] = [
+                        'hpp' => round($hpp, 2),
+                        'markup_percentage' => $markupPercentage,
+                        'suggested_price' => round($suggestedPrice, 0), // Round to nearest rupiah
+                        'profit_margin' => round($suggestedPrice - $hpp, 2),
+                    ];
+                }
             }
             
             return [
@@ -221,5 +222,99 @@ class HPPCalculationService
             Log::error("Error calculating suggested price for product {$productId}: " . $e->getMessage());
             return null;
         }
+    }
+    
+    /**
+     * Calculate HPP from current item prices (cost_per_unit)
+     */
+    private static function calculateHPPFromCurrentPrices(Product $product): float
+    {
+        $totalCost = 0;
+        
+        foreach ($product->productItems as $productItem) {
+            $item = $productItem->item;
+            if ($item && $item->cost_per_unit) {
+                $itemCost = (float) $item->cost_per_unit * $productItem->quantity_needed;
+                $totalCost += $itemCost;
+                
+                \Log::info("HPP Current - Item: {$item->name}, Cost per unit: {$item->cost_per_unit}, Qty: {$productItem->quantity_needed}, Total: {$itemCost}");
+            }
+        }
+        
+        \Log::info("HPP Current - Total cost: {$totalCost}");
+        return $totalCost;
+    }
+    
+    /**
+     * Calculate HPP from latest purchase prices for each item
+     */
+    private static function calculateHPPFromLatestPurchases(Product $product): float
+    {
+        $totalCost = 0;
+        
+        foreach ($product->productItems as $productItem) {
+            $item = $productItem->item;
+            if ($item) {
+                // Get latest purchase price for this item
+                $latestPurchase = $item->purchaseItems()
+                    ->orderBy('created_at', 'desc')
+                    ->first();
+                
+                if ($latestPurchase) {
+                    $latestPrice = (float) $latestPurchase->unit_cost;
+                    $itemCost = $latestPrice * $productItem->quantity_needed;
+                    $totalCost += $itemCost;
+                    
+                    \Log::info("HPP Latest - Item: {$item->name}, Latest price: {$latestPrice}, Qty: {$productItem->quantity_needed}, Total: {$itemCost}");
+                } else {
+                    // Fallback to current cost if no purchase history
+                    $currentPrice = (float) $item->cost_per_unit;
+                    $itemCost = $currentPrice * $productItem->quantity_needed;
+                    $totalCost += $itemCost;
+                    
+                    \Log::info("HPP Latest - Item: {$item->name}, No purchase history, using current: {$currentPrice}, Qty: {$productItem->quantity_needed}, Total: {$itemCost}");
+                }
+            }
+        }
+        
+        \Log::info("HPP Latest - Total cost: {$totalCost}");
+        return $totalCost;
+    }
+    
+    /**
+     * Calculate HPP from average purchase prices for each item
+     */
+    private static function calculateHPPFromAveragePurchases(Product $product): float
+    {
+        $totalCost = 0;
+        
+        foreach ($product->productItems as $productItem) {
+            $item = $productItem->item;
+            if ($item) {
+                // Get average purchase price for this item (last 10 purchases)
+                $averagePrice = $item->purchaseItems()
+                    ->orderBy('created_at', 'desc')
+                    ->take(10)
+                    ->avg('unit_cost');
+                
+                if ($averagePrice) {
+                    $avgPrice = (float) $averagePrice;
+                    $itemCost = $avgPrice * $productItem->quantity_needed;
+                    $totalCost += $itemCost;
+                    
+                    \Log::info("HPP Average - Item: {$item->name}, Avg price: {$avgPrice}, Qty: {$productItem->quantity_needed}, Total: {$itemCost}");
+                } else {
+                    // Fallback to current cost if no purchase history
+                    $currentPrice = (float) $item->cost_per_unit;
+                    $itemCost = $currentPrice * $productItem->quantity_needed;
+                    $totalCost += $itemCost;
+                    
+                    \Log::info("HPP Average - Item: {$item->name}, No purchase history, using current: {$currentPrice}, Qty: {$productItem->quantity_needed}, Total: {$itemCost}");
+                }
+            }
+        }
+        
+        \Log::info("HPP Average - Total cost: {$totalCost}");
+        return $totalCost;
     }
 }

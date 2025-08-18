@@ -121,7 +121,6 @@
                 @update:model-value="(value) => updatePrice(value)"
                 label="Harga Jual"
                 placeholder="Rp 0"
-                :rules="priceValidationRules"
                 required
                 variant="outlined"
                 @focus="onPriceFocus"

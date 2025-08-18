@@ -21,7 +21,7 @@ export default [
         role: ['admin', 'manager'], // Only admin and manager can access
       },
       {
-        title: 'Setting PPN',
+        title: 'Pajak',
         to: { name: 'ppn-management' },
         icon: { icon: 'tabler-percentage' },
         role: ['admin', 'manager'], // Only admin and manager can access

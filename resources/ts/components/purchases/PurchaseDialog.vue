@@ -73,7 +73,7 @@ const title = computed(() => {
 const totals = computed(() => {
   const subtotal = formData.value.items.reduce((sum, item) => sum + (item.total_cost || 0), 0)
   const discount = Number.parseFloat(formData.value.discount_amount_display.replace(/\D/g, '')) || 0
-  const tax = (subtotal - discount) * 0.11 // 11% PPN
+  const tax = 0 //(subtotal - discount) * 0.11 // 11% PPN
   const total = subtotal - discount + tax
 
   return {
@@ -189,7 +189,7 @@ const addItem = () => {
 
     const newItem = {
       id_item: null,
-      quantity: 1,
+      quantity: 0,
       unit_cost: 0,
       unit_cost_display: '0',
       total_cost: 0,
@@ -228,7 +228,7 @@ const formatQuantity = (index: number, event: Event) => {
   const item = formData.value.items[index]
   
   if (value === '' || value === null || value === undefined) {
-    item.quantity = 1
+    item.quantity = ''
   } else {
     item.quantity = Number.parseInt(value) || 1
   }
@@ -665,10 +665,10 @@ onMounted(() => {
                       <span>Diskon:</span>
                       <span class="text-success">-{{ formatCurrency(totals.discount) }}</span>
                     </div>
-                    <div class="d-flex justify-space-between mb-2">
+                    <!-- <div class="d-flex justify-space-between mb-2">
                       <span>PPN (11%):</span>
                       <span>{{ formatCurrency(totals.tax) }}</span>
-                    </div>
+                    </div> -->
                     <VDivider class="my-2" />
                     <div class="d-flex justify-space-between">
                       <span class="text-h6 font-weight-bold">Total:</span>

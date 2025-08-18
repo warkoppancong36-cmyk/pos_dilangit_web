@@ -225,7 +225,7 @@
                 size="small"
                 variant="text"
                 color="primary"
-                @click="$emit('open-recipe-dialog', item)"
+                @click="$emit('open-composition-dialog', item)"
               />
             </template>
           </VTooltip>
@@ -327,6 +327,7 @@ defineEmits<{
   'edit-product': [product: Product]
   'manage-recipes': [product: Product]
   'open-recipe-dialog': [product: Product]
+  'open-composition-dialog': [product: Product]
   'delete-product': [product: Product]
   'toggle-active': [product: Product]
   'toggle-featured': [product: Product]

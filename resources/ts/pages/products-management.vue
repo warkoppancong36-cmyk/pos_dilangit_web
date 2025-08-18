@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog.vue'
 import ProductCompositionCards from '@/components/products/ProductCompositionCards.vue'
+import ProductCompositionDialog from '@/components/products/ProductCompositionDialog.vue'
 import ProductDialog from '@/components/products/ProductDialog.vue'
 import ProductRecipeDialog from '@/components/products/ProductRecipeDialog.vue'
 import ProductRecipeList from '@/components/products/ProductRecipeList.vue'
@@ -91,6 +92,10 @@ const {
 // Local state
 const activeTab = ref('products')
 
+// Composition dialog state
+const compositionDialog = ref(false)
+const selectedCompositionProduct = ref(null)
+
 const confirmDelete = async () => {
   await deleteProduct()
 }
@@ -103,6 +108,34 @@ const handleOpenRecipeDialog = (product: any) => {
   console.log('🍳 Opening komposisi dialog for product:', product.name)
   const productId = product.id_product || product.id
   openRecipeCreateDialog(productId)
+}
+
+const handleOpenCompositionDialog = async (product: any) => {
+  console.log('🧑‍🍳 Opening composition dialog for product:', product.name)
+  selectedCompositionProduct.value = product
+  
+  // Fetch composition data for this specific product
+  try {
+    await fetchProductItemsForComposition({
+      page: 1,
+      per_page: 50,
+      critical_only: false
+    })
+  } catch (error) {
+    console.error('Error fetching composition items:', error)
+  }
+  
+  compositionDialog.value = true
+}
+
+const getProductCompositionItems = (product: any) => {
+  if (!product) return []
+  
+  // Filter product items yang sesuai dengan product ID
+  const productId = product.id_product || product.id
+  return productItemsList.value.filter(item => 
+    item.product?.id_product === productId || item.product_id === productId
+  ) || []
 }
 
 const handleFiltersUpdate = (newFilters: any) => {
@@ -228,6 +261,7 @@ onMounted(() => {
           @add-product="openCreateDialog"
           @edit-product="openEditDialog"
           @open-recipe-dialog="handleOpenRecipeDialog"
+          @open-composition-dialog="handleOpenCompositionDialog"
           @delete-product="openDeleteDialog"
           @toggle-active="toggleActiveStatus"
           @toggle-featured="toggleFeaturedStatus"
@@ -286,6 +320,15 @@ onMounted(() => {
       confirm-text="Hapus Produk"
       @confirm="confirmDelete"
       @cancel="deleteDialog = false"
+    />
+
+    <!-- Product Composition Dialog -->
+    <ProductCompositionDialog
+      v-model="compositionDialog"
+      :product="selectedCompositionProduct"
+      :items="getProductCompositionItems(selectedCompositionProduct)"
+      @save="() => { fetchProductsList(); compositionDialog = false }"
+      @refresh="fetchProductsList"
     />
 
   </div>
