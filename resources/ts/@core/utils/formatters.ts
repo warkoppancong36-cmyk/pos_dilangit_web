@@ -46,3 +46,22 @@ export const formatDateToMonthShort = (value: string, toTimeForCurrentDay = true
 }
 
 export const prefixWithPlus = (value: number) => value > 0 ? `+${value}` : value
+
+/**
+ * Format number to Indonesian Rupiah currency
+ * @param {number | string} value amount to format
+ * @param {boolean} showCurrency whether to show "Rp" prefix
+ */
+export const formatRupiah = (value: number | string, showCurrency = true) => {
+  if (!value && value !== 0) return showCurrency ? 'Rp 0' : '0'
+  
+  const numValue = typeof value === 'string' ? parseFloat(value) : value
+  if (isNaN(numValue)) return showCurrency ? 'Rp 0' : '0'
+  
+  const formatted = new Intl.NumberFormat('id-ID', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(numValue)
+  
+  return showCurrency ? `Rp ${formatted}` : formatted
+}

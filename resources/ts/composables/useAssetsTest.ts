@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { getAuthToken } from '@/utils/auth'
 
 export interface Asset {
   id: number
@@ -71,14 +72,10 @@ export const useAssetsTest = () => {
   const filters = computed(() => state.value.filters)
 
   const hasAssets = computed(() => {
-    const result = Array.isArray(assets.value) && assets.value.length > 0
-    console.log('hasAssets computed:', result, 'assets:', assets.value)
-    return result
+    return Array.isArray(assets.value) && assets.value.length > 0
   })
   const isEmpty = computed(() => {
-    const result = !loading.value && !hasAssets.value
-    console.log('isEmpty computed:', result, 'loading:', loading.value, 'hasAssets:', hasAssets.value)
-    return result
+    return !loading.value && !hasAssets.value
   })
   const activeAssets = computed(() => {
     if (!Array.isArray(assets.value)) return []
@@ -95,35 +92,35 @@ export const useAssetsTest = () => {
     state.value.error = null
 
     try {
-      console.log('Fetching assets from API...')
-      console.log('API URL:', 'http://localhost:8000/api/test-assets')
+      // Get authentication token
+      const token = getAuthToken()
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+      
+      // Add authorization header if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
       
       const response = await fetch('http://localhost:8000/api/test-assets', {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
+        headers
       })
-
-      console.log('Response status:', response.status)
-      console.log('Response ok:', response.ok)
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error('Error response:', errorText)
         throw new Error(`HTTP error! status: ${response.status} - ${errorText}`)
       }
 
       const data = await response.json()
-      console.log('API Response:', data)
       
       // Handle Laravel response format with pagination
       if (data.success && data.data) {
         // Check if data.data has pagination structure (has 'data' property)
         if (data.data.data && Array.isArray(data.data.data)) {
           state.value.assets = data.data.data
-          console.log('Assets set from paginated data.data.data:', state.value.assets.length)
           
           // Update pagination info
           state.value.pagination = {
@@ -137,47 +134,26 @@ export const useAssetsTest = () => {
         } else if (Array.isArray(data.data)) {
           // Direct array in data.data
           state.value.assets = data.data
-          console.log('Assets set from data.data:', state.value.assets.length)
         } else {
           state.value.assets = []
-          console.log('No valid data found in data.data')
         }
       } else if (Array.isArray(data)) {
         state.value.assets = data
-        console.log('Assets set from array:', state.value.assets.length)
       } else {
         state.value.assets = []
-        console.log('No valid data found, setting empty array')
-      }
-      
-      console.log('Final assets loaded:', state.value.assets.length)
-      console.log('Assets is array:', Array.isArray(state.value.assets))
-      console.log('First asset:', state.value.assets[0])
-      
-      // Force update state if needed
-      if (state.value.assets.length === 0) {
-        console.log('WARNING: No assets loaded, checking raw response...')
-        console.log('Raw response data:', data)
       }
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch assets'
       state.value.error = errorMessage
-      console.error('Error fetching assets:', err)
-      console.error('Error details:', errorMessage)
       
       // Fallback: Load sample data if API fails
-      console.log('Loading fallback sample data...')
       const sampleData = getSampleAssets()
       state.value.assets = sampleData
       state.value.error = `API Error: ${errorMessage}. Showing sample data instead.`
-      console.log('Sample data loaded:', state.value.assets.length)
-      console.log('Sample data is array:', Array.isArray(state.value.assets))
       
     } finally {
       state.value.loading = false
-      console.log('Loading set to false')
-      console.log('Final state check - assets is array:', Array.isArray(state.value.assets))
     }
   }
 

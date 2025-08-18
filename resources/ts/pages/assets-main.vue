@@ -33,62 +33,6 @@
       </VCardTitle>
     </VCard>
 
-    <!-- Debug Information (Development) -->
-    <VCard class="mb-6" color="orange-lighten-5">
-      <VCardTitle class="text-h6 text-orange-darken-2">
-        <VIcon icon="tabler-bug" class="me-2" />
-        Debug Information
-      </VCardTitle>
-      <VCardText>
-        <VRow>
-          <VCol cols="12" md="3">
-            <VChip :color="loading ? 'warning' : 'success'" variant="outlined">
-              Status: {{ loading ? 'Loading...' : 'Ready' }}
-            </VChip>
-          </VCol>
-          <VCol cols="12" md="3">
-            <VChip color="info" variant="outlined">
-              Assets: {{ Array.isArray(assets) ? assets.length : 0 }}
-            </VChip>
-          </VCol>
-          <VCol cols="12" md="4">
-            <VChip color="secondary" variant="outlined">
-              API: {{ apiBaseUrl }}
-            </VChip>
-          </VCol>
-          <VCol cols="12" md="2">
-            <VBtn
-              size="small"
-              color="orange"
-              variant="outlined"
-              @click="testApiConnection"
-            >
-              Test API
-            </VBtn>
-          </VCol>
-          <VCol cols="12" md="2">
-            <VBtn
-              size="small"
-              color="purple"
-              variant="outlined"
-              @click="testWithDummyData"
-            >
-              Test Dummy Data
-            </VBtn>
-          </VCol>
-        </VRow>
-        <VAlert v-if="error" type="error" class="mt-3">
-          {{ error }}
-        </VAlert>
-        <VAlert v-if="Array.isArray(assets) && assets.length > 0" type="success" class="mt-3">
-          <strong>Data berhasil dimuat!</strong><br>
-          {{ assets.length }} assets ditemukan<br>
-          Asset pertama: {{ assets[0]?.name || 'N/A' }} ({{ assets[0]?.asset_code || 'N/A' }})<br>
-          hasAssets: {{ hasAssets }}, isEmpty: {{ isEmpty }}
-        </VAlert>
-      </VCardText>
-    </VCard>
-
     <!-- Statistics Cards -->
     <VRow class="mb-6">
       <VCol cols="12" md="3">
@@ -133,7 +77,7 @@
             <VAvatar size="56" color="info" class="mb-4">
               <VIcon icon="tabler-currency-dollar" size="28" />
             </VAvatar>
-            <div class="text-h4 font-weight-bold">${{ totalValue.toLocaleString() }}</div>
+            <div class="text-h4 font-weight-bold">{{ formatRupiah(totalValue) }}</div>
             <div class="text-subtitle-2 text-medium-emphasis">Total Value</div>
           </VCardText>
         </VCard>
@@ -296,8 +240,8 @@
         <div class="text-h6 mt-4">Memuat assets...</div>
       </div>
 
-      <!-- Empty State - DISABLED FOR DEBUGGING -->
-      <div v-if="false" class="text-center pa-12">
+      <!-- Empty State -->
+      <div v-else-if="isEmpty" class="text-center pa-12">
         <VAvatar size="120" color="grey-lighten-3" class="mb-6">
           <VIcon icon="tabler-box-off" size="60" color="grey-darken-1" />
         </VAvatar>
@@ -317,15 +261,6 @@
 
       <!-- Assets Content -->
       <div v-else>
-        <!-- Debug Info in Template -->
-        <VAlert type="info" class="ma-4">
-          <strong>Template Debug:</strong><br>
-          assets.length: {{ Array.isArray(assets) ? assets.length : 'not array' }}<br>
-          loading: {{ loading }}<br>
-          hasAssets: {{ hasAssets }}<br>
-          isEmpty: {{ isEmpty }}<br>
-          viewMode: {{ viewMode }}
-        </VAlert>
         <!-- Grid View -->
         <div v-if="viewMode === 'grid'" class="pa-6">
           <VRow>
@@ -378,7 +313,7 @@
                     </div>
                     <div class="d-flex align-center mb-1">
                       <VIcon icon="tabler-currency-dollar" size="16" class="me-2" />
-                      ${{ asset.purchase_price?.toLocaleString() || '0' }}
+                      {{ formatRupiah(asset.purchase_price) }}
                     </div>
                   </div>
                 </VCardText>
@@ -445,7 +380,7 @@
             </template>
             
             <template #item.purchase_price="{ item }">
-              ${{ item.purchase_price?.toLocaleString() || '0' }}
+              {{ formatRupiah(item.purchase_price) }}
             </template>
             
             <template #item.actions="{ item }">
@@ -546,9 +481,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAssetsTest } from '@/composables/useAssetsTest'
 import type { Asset } from '@/composables/useAssetsTest'
+import { formatRupiah } from '@/@core/utils/formatters'
 
 // Component imports
 import AssetFormDialog from '@/components/assets/AssetFormDialog.vue'
@@ -607,66 +543,6 @@ const totalValue = computed(() => {
     return total + (asset.purchase_price || 0)
   }, 0)
 })
-
-// Debug properties and methods
-const apiBaseUrl = computed(() => import.meta.env.VITE_API_BASE_URL || 'Not set')
-
-const testApiConnection = async () => {
-  try {
-    console.log('Testing API connection...')
-    const response = await fetch('http://localhost:8000/api/test')
-    const data = await response.json()
-    console.log('API test response:', data)
-    alert('API connection successful! Check console for details.')
-  } catch (err) {
-    console.error('API connection failed:', err)
-    alert('API connection failed! Check console for details.')
-  }
-}
-
-const forceRefreshAssets = async () => {
-  console.log('=== FORCE REFRESH ASSETS ===')
-  console.log('Before refresh - assets:', assets.value)
-  console.log('Before refresh - loading:', loading.value)
-  
-  await fetchAssets()
-  
-  console.log('After refresh - assets:', assets.value)
-  console.log('After refresh - loading:', loading.value)
-  console.log('After refresh - hasAssets:', hasAssets.value)
-  console.log('After refresh - isEmpty:', isEmpty.value)
-  
-  alert(`Refresh completed! Assets loaded: ${Array.isArray(assets.value) ? assets.value.length : 'ERROR'} items`)
-}
-
-const manualTestAPI = async () => {
-  console.log('=== MANUAL API TEST ===')
-  try {
-    const response = await fetch('http://localhost:8000/api/test-assets')
-    const data = await response.json()
-    
-    console.log('Raw API Response:', data)
-    console.log('Response success:', data.success)
-    console.log('Response data:', data.data)
-    console.log('Response data.data:', data.data?.data)
-    
-    if (data.success && data.data && data.data.data) {
-      console.log('Assets count:', data.data.data.length)
-      console.log('First asset:', data.data.data[0])
-      alert(`Manual API test: ${data.data.data.length} assets found!\nFirst asset: ${data.data.data[0]?.name}`)
-    } else {
-      alert('Manual API test: Invalid response structure')
-    }
-  } catch (err) {
-    console.error('Manual API test failed:', err)
-    alert('Manual API test failed! Check console.')
-  }
-}
-
-const testWithDummyData = () => {
-  console.log('=== TESTING WITH DUMMY DATA ===')
-  alert('This button will test if rendering works with dummy data')
-}
 
 // Utility functions
 const getStatusColor = (status: string) => {
@@ -786,47 +662,15 @@ const loadFilterOptions = async () => {
 
 // Lifecycle
 onMounted(async () => {
-  console.log('Assets component mounted')
-  console.log('Initial assets:', assets.value)
-  console.log('Initial hasAssets:', hasAssets.value)
-  console.log('Initial isEmpty:', isEmpty.value)
-  
-  // Force multiple attempts to load data
   try {
-    await fetchAssets()
-    console.log('First fetch attempt complete')
-    
-    // If still no data, try direct API call
-    if (!Array.isArray(assets.value) || assets.value.length === 0) {
-      console.log('No data from fetchAssets, trying direct API call...')
-      const response = await fetch('http://localhost:8000/api/test-assets')
-      const data = await response.json()
-      
-      if (data.success && data.data && data.data.data) {
-        console.log('Direct API call successful, updating assets manually...')
-        // Manually update assets if composable failed
-        // We'll need to access the internal state
-      }
-    }
-    
-    await loadFilterOptions()
+    await Promise.all([
+      fetchAssets(),
+      loadFilterOptions()
+    ])
   } catch (error) {
-    console.error('Error in onMounted:', error)
+    console.error('Error loading data:', error)
   }
-  
-  console.log('After fetch - assets:', assets.value)
-  console.log('After fetch - assets length:', Array.isArray(assets.value) ? assets.value.length : 'not array')
-  console.log('After fetch - hasAssets:', hasAssets.value)
-  console.log('After fetch - isEmpty:', isEmpty.value)
 })
-
-// Watch assets changes for debugging
-watch(assets, (newAssets) => {
-  console.log('Assets changed:', newAssets)
-  console.log('Assets length:', Array.isArray(newAssets) ? newAssets.length : 'not array')
-  console.log('hasAssets:', hasAssets.value)
-  console.log('isEmpty:', isEmpty.value)
-}, { deep: true, immediate: true })
 </script>
 
 <style scoped>

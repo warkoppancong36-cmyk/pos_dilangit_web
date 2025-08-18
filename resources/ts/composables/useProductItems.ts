@@ -11,16 +11,53 @@ export interface ProductItem {
   item_id: number
   quantity_needed: number
   unit: string
+  cost_per_unit?: number
   is_critical: boolean
   notes?: string
   created_by?: number
   updated_by?: number
   created_at?: string
   updated_at?: string
-  product?: any
-  item?: any
-  creator?: any
-  updater?: any
+  total_cost_per_product?: number
+  formatted_cost_per_unit?: string
+  formatted_total_cost?: string
+  product?: {
+    id_product: number
+    name: string
+    slug: string
+    description?: string
+    sku: string
+    price: string
+    cost: string
+    image?: string
+    image_url?: string
+    formatted_price?: string
+    formatted_cost?: string
+    active: boolean
+    featured: boolean
+  }
+  item?: {
+    id_item: number
+    item_code: string
+    name: string
+    description?: string
+    unit: string
+    cost_per_unit: string
+    formatted_cost_per_unit?: string
+    stock_status: string
+    is_low_stock: boolean
+    stock_percentage: number
+    active: boolean
+    inventory?: {
+      id_inventory: number
+      current_stock: number
+      available_stock: number
+      reorder_level: number
+      max_stock_level: number
+      is_low_stock: boolean
+      stock_status: string
+    }
+  }
 }
 
 export interface ProductItemFormData {
@@ -504,6 +541,58 @@ export const useProductItems = () => {
 
     // Methods
     fetchProductItemsList,
+    fetchProductItemsForComposition: async (params?: { page?: number; per_page?: number; critical_only?: boolean }) => {
+      loading.value = true
+      errorMessage.value = ''
+      
+      try {
+        const queryParams = {
+          page: params?.page || 1,
+          per_page: params?.per_page || 15,
+          critical_only: params?.critical_only || false
+        }
+        
+        console.log('🔄 Fetching product items for composition:', queryParams)
+        
+        const response = await ProductItemsApi.getAll(queryParams)
+        
+        console.log('📦 API Response:', response)
+        
+        if (response.success) {
+          // Extract data from nested structure: response.data.data
+          const apiData = response.data?.data || response.data || []
+          productItemsList.value = apiData
+          
+          // Extract pagination info
+          currentPage.value = response.data?.current_page || 1
+          totalItems.value = response.data?.total || 0
+          itemsPerPage.value = response.data?.per_page || 15
+          
+          // Update filters to match current state
+          filters.critical_only = queryParams.critical_only
+          
+          console.log('✅ Product items for composition loaded:', productItemsList.value.length)
+          console.log('📊 First item:', productItemsList.value[0])
+          
+          // Fetch related data if needed
+          if (products.value.length === 0) {
+            await fetchProducts()
+          }
+          if (items.value.length === 0) {
+            await fetchItems()
+          }
+        } else {
+          console.error('❌ API returned success: false')
+          productItemsList.value = []
+        }
+      } catch (error: any) {
+        console.error('❌ Failed to fetch product items for composition:', error)
+        errorMessage.value = error.message || 'Gagal memuat data komposisi produk'
+        productItemsList.value = []
+      } finally {
+        loading.value = false
+      }
+    },
     fetchProducts,
     fetchItems,
     saveProductItem,

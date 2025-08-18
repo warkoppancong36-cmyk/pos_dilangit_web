@@ -13,6 +13,7 @@ interface Emits {
   (e: 'edit-recipe', recipe: ProductRecipe): void
   (e: 'delete-recipe', recipe: ProductRecipe): void
   (e: 'duplicate-recipe', recipe: ProductRecipe): void
+  (e: 'add-recipe'): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -81,14 +82,14 @@ const selectedPanels = ref<number[]>([])
   <VCard class="recipe-list-card">
     <VCardTitle class="d-flex align-center gap-2 coffee-header">
       <VIcon icon="tabler-chef-hat" class="coffee-icon" />
-      <span>Resep Produk</span>
+      <span>Komposisi Produk</span>
       <VSpacer />
       <VChip
         :color="recipes.length > 0 ? 'success' : 'default'"
         size="small"
         variant="tonal"
       >
-        {{ recipes.length }} Resep
+        {{ recipes.length }} Komposisi
       </VChip>
     </VCardTitle>
 
@@ -106,16 +107,24 @@ const selectedPanels = ref<number[]>([])
       </div>
 
       <!-- Empty State -->
-      <div v-else-if="recipes.length === 0" class="text-center pa-8">
+      <div v-else-if="recipes.length === 0" class="text-center pa-12">
         <VIcon
           icon="tabler-chef-hat-off"
-          size="64"
-          class="text-disabled mb-4"
+          size="96"
+          class="text-disabled mb-6"
         />
-        <div class="text-h6 text-disabled mb-2">Belum Ada Resep</div>
-        <div class="text-body-2 text-disabled">
-          Tambahkan resep untuk produk ini agar dapat diproduksi
+        <div class="text-h5 font-weight-bold mb-3">Belum Ada Komposisi Produk</div>
+        <div class="text-body-1 text-medium-emphasis mb-6">
+          Tambahkan komposisi produk untuk menentukan bahan-bahan yang dibutuhkan
         </div>
+        <VBtn
+          color="primary"
+          size="large"
+          prepend-icon="tabler-plus"
+          @click="emit('add-recipe')"
+        >
+          Tambah Komposisi Produk
+        </VBtn>
       </div>
 
       <!-- Recipe List -->

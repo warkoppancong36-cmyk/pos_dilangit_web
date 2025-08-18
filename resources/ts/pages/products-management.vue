@@ -1,14 +1,20 @@
 <script setup lang="ts">
 import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog.vue'
+import ProductCompositionCards from '@/components/products/ProductCompositionCards.vue'
 import ProductDialog from '@/components/products/ProductDialog.vue'
 import ProductRecipeDialog from '@/components/products/ProductRecipeDialog.vue'
+import ProductRecipeList from '@/components/products/ProductRecipeList.vue'
 import ProductSearchFilters from '@/components/products/ProductSearchFilters.vue'
 import ProductStatsCards from '@/components/products/ProductStatsCards.vue'
 import ProductTable from '@/components/products/ProductTable.vue'
 import { useProductRecipes } from '@/composables/useProductRecipes'
+import { useProductItems } from '@/composables/useProductItems'
 import { useProducts } from '@/composables/useProducts'
 // import '@styles/index.scss'
-import { onMounted } from 'vue'
+import { onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const {
   productsList,
@@ -49,9 +55,7 @@ const {
   closeDialog,
   handleImageUpload,
   clearModalError,
-  onPageChange,
-  clearErrorMessage,
-  clearSuccessMessage
+  onPageChange
 } = useProducts()
 
 // Product Recipes composable
@@ -67,9 +71,25 @@ const {
   closeDialog: closeRecipeDialog,
   saveRecipe,
   clearModalError: clearRecipeModalError,
-  fetchAvailableItems
+  fetchAvailableItems,
+  fetchRecipes,
+  recipesList,
+  deleteRecipe
 } = useProductRecipes()
 
+// Product Items composable for composition tab
+const {
+  productItemsList,
+  loading: itemsLoading,
+  errorMessage: itemsError,
+  currentPage: itemsCurrentPage,
+  totalItems: itemsTotalItems,
+  itemsPerPage: itemsPerPageSize,
+  fetchProductItemsForComposition
+} = useProductItems()
+
+// Local state
+const activeTab = ref('products')
 
 const confirmDelete = async () => {
   await deleteProduct()
@@ -80,9 +100,36 @@ const confirmBulkDelete = async () => {
 }
 
 const handleOpenRecipeDialog = (product: any) => {
-  console.log('🍳 Opening recipe dialog for product:', product.name)
-  openRecipeCreateDialog(product.id_product || product.id)
+  console.log('🍳 Opening komposisi dialog for product:', product.name)
+  const productId = product.id_product || product.id
+  openRecipeCreateDialog(productId)
 }
+
+const handleFiltersUpdate = (newFilters: any) => {
+  Object.assign(filters, newFilters)
+}
+
+const removeImage = () => {
+  // Implementation for removing image
+  selectedImage.value = null
+  if (imagePreview.value) {
+    imagePreview.value = ''
+  }
+}
+
+// Watch for tab changes to refresh data
+watch(activeTab, async (newTab) => {
+  console.log('🔄 Tab changed to:', newTab)
+  
+  if (newTab === 'compositions') {
+    console.log('🧑‍🍳 Loading composition data...')
+    await fetchProductItemsForComposition({
+      page: 1,
+      per_page: 15,
+      critical_only: false
+    })
+  }
+}, { immediate: false })
 
 onMounted(() => {
   fetchProductsList()
@@ -96,11 +143,11 @@ onMounted(() => {
   <div class="product-management">
     <div class="d-flex justify-space-between align-center mb-6">
       <div>
-        <h1 class="text-h4 font-weight-bold coffee-title">Kelola Produk</h1>
-        <p class="text-body-1 text-medium-emphasis coffee-subtitle">Kelola produk dan inventori untuk coffee shop Anda</p>
+        <h1 class="text-h4 font-weight-bold coffee-title">Kelola Produk & Komposisi</h1>
+        <p class="text-body-1 text-medium-emphasis coffee-subtitle">Kelola produk dan komposisi untuk coffee shop Anda</p>
       </div>
       <div class="d-flex gap-3 align-center">
-        <div v-if="hasSelectedProducts" class="d-flex gap-2">
+        <div v-if="hasSelectedProducts && activeTab === 'products'" class="d-flex gap-2">
           <VChip color="primary" size="small">
             {{ selectedProducts.length }} dipilih
           </VChip>
@@ -115,7 +162,7 @@ onMounted(() => {
           </VBtn>
         </div>
         <VBtn
-          v-if="canCreateEdit"
+          v-if="canCreateEdit && activeTab === 'products'"
           color="primary"
           prepend-icon="mdi-plus"
           class="coffee-btn"
@@ -125,6 +172,18 @@ onMounted(() => {
         </VBtn>
       </div>
     </div>
+
+    <!-- Navigation Tabs -->
+    <VTabs v-model="activeTab" class="mb-6">
+      <VTab value="products">
+        <VIcon icon="mdi-coffee" class="me-2" />
+        Produk
+      </VTab>
+      <VTab value="compositions">
+        <VIcon icon="mdi-chef-hat" class="me-2" />
+        Komposisi Produk
+      </VTab>
+    </VTabs>
 
     <VAlert
       v-if="errorMessage"
@@ -146,36 +205,45 @@ onMounted(() => {
       @click:close="successMessage = ''"
     />
 
-    <ProductStatsCards :stats="stats" />
+    <!-- Tab Content -->
+    <VWindow v-model="activeTab">
+      <!-- Products Tab -->
+      <VWindowItem value="products">
+        <ProductStatsCards :stats="stats" />
 
-    <ProductSearchFilters
-      :filters="filters"
-      @update:filters="handleFiltersUpdate"
-    />
+        <ProductSearchFilters
+          :filters="filters"
+          @update:filters="handleFiltersUpdate"
+        />
 
-    <ProductTable
-      :products="productsList"
-      :loading="loading"
-      :current-page="currentPage"
-      :total-items="totalItems"
-      :items-per-page="itemsPerPage"
-      :selected-products="selectedProducts"
-      :toggle-loading="toggleLoading"
-      @update:page="onPageChange"
-      @add-product="openCreateDialog"
-      @edit-product="openEditDialog"
-      @manage-recipes="(product) => {
-        console.log('Product data:', product);
-        console.log('Product ID:', product.id);
-        console.log('Product ID_Product:', product.id_product);
-        $router.push(`/product-recipes/${product.id_product || product.id}`);
-      }"
-      @open-recipe-dialog="handleOpenRecipeDialog"
-      @delete-product="openDeleteDialog"
-      @toggle-active="toggleActiveStatus"
-      @toggle-featured="toggleFeaturedStatus"
-      @update:selected-products="(products: number[]) => selectedProducts = products"
-    />
+        <ProductTable
+          :products="productsList"
+          :loading="loading"
+          :current-page="currentPage"
+          :total-items="totalItems"
+          :items-per-page="itemsPerPage"
+          :selected-products="selectedProducts"
+          :toggle-loading="toggleLoading"
+          @update:page="onPageChange"
+          @add-product="openCreateDialog"
+          @edit-product="openEditDialog"
+          @open-recipe-dialog="handleOpenRecipeDialog"
+          @delete-product="openDeleteDialog"
+          @toggle-active="toggleActiveStatus"
+          @toggle-featured="toggleFeaturedStatus"
+          @update:selected-products="(products: number[]) => selectedProducts = products"
+        />
+      </VWindowItem>
+
+      <!-- Compositions Tab -->
+      <VWindowItem value="compositions">
+        <ProductCompositionCards 
+          :product-items="productItemsList"
+          :loading="itemsLoading"
+          @refresh="fetchProductItemsForComposition"
+        />
+      </VWindowItem>
+    </VWindow>
 
     <ProductDialog
       v-model="dialog"
@@ -219,6 +287,7 @@ onMounted(() => {
       @confirm="confirmDelete"
       @cancel="deleteDialog = false"
     />
+
   </div>
 </template>
 <style scoped lang="scss">

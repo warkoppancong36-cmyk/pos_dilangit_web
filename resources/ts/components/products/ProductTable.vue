@@ -216,8 +216,8 @@
       <!-- Actions -->
       <template #item.actions="{ item }">
         <div class="d-flex align-center gap-1">
-          <!-- Recipe Management -->
-          <!-- <VTooltip text="Kelola Resep">
+          <!-- Komposisi Management -->
+          <VTooltip text="Kelola Komposisi">
             <template #activator="{ props }">
               <VBtn
                 v-bind="props"
@@ -228,7 +228,7 @@
                 @click="$emit('open-recipe-dialog', item)"
               />
             </template>
-          </VTooltip> -->
+          </VTooltip>
 
           <!-- View -->
           <!-- <VTooltip text="Lihat Detail">
