@@ -361,6 +361,14 @@ Route::get('/test', function () {
     ]);
 });
 
+// Test asset routes without authentication
+Route::prefix('test-assets')->group(function () {
+    Route::get('/', [App\Http\Controllers\Api\AssetController::class, 'index']);
+    Route::post('/', [App\Http\Controllers\Api\AssetController::class, 'store']);
+    Route::get('/types', [App\Http\Controllers\Api\AssetController::class, 'getTypes']);
+    Route::get('/stats', [App\Http\Controllers\Api\AssetController::class, 'getStats']);
+});
+
 // Temporary test endpoint for development
 Route::get('/test-token', function () {
     $user = App\Models\User::first();
@@ -382,3 +390,43 @@ Route::prefix('master-slave-test')->group(function () {
     Route::get('/consistent-logs', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'getConsistentLogs']);
     Route::get('/database-stats', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'getDatabaseStats']);
 });
+
+    // Asset Management Routes
+    Route::prefix('assets')->group(function () {
+        Route::get('/', [App\Http\Controllers\Api\AssetController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\Api\AssetController::class, 'store']);
+        Route::get('/types', [App\Http\Controllers\Api\AssetController::class, 'getTypes']);
+        Route::get('/stats', [App\Http\Controllers\Api\AssetController::class, 'getStats']);
+        Route::get('/search', [App\Http\Controllers\Api\AssetController::class, 'search']);
+        Route::get('/{asset}', [App\Http\Controllers\Api\AssetController::class, 'show']);
+        Route::put('/{asset}', [App\Http\Controllers\Api\AssetController::class, 'update']);
+        Route::delete('/{asset}', [App\Http\Controllers\Api\AssetController::class, 'destroy']);
+        Route::post('/{asset}/toggle-access', [App\Http\Controllers\Api\AssetController::class, 'toggleAccess']);
+        Route::get('/{asset}/download', [App\Http\Controllers\Api\AssetController::class, 'download']);
+        Route::post('/bulk-upload', [App\Http\Controllers\Api\AssetController::class, 'bulkUpload']);
+        Route::post('/bulk-delete', [App\Http\Controllers\Api\AssetController::class, 'bulkDelete']);
+    });
+
+    // Permission Management Routes
+    Route::prefix('permissions')->group(function () {
+        Route::get('/', [App\Http\Controllers\Api\PermissionController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\Api\PermissionController::class, 'store']);
+        Route::get('/modules', [App\Http\Controllers\Api\PermissionController::class, 'getModules']);
+        Route::get('/actions', [App\Http\Controllers\Api\PermissionController::class, 'getActions']);
+        Route::get('/user/{userId}', [App\Http\Controllers\Api\PermissionController::class, 'getUserPermissions']);
+        Route::get('/role/{roleId}', [App\Http\Controllers\Api\PermissionController::class, 'getRolePermissions']);
+        Route::get('/{permission}', [App\Http\Controllers\Api\PermissionController::class, 'show']);
+        Route::put('/{permission}', [App\Http\Controllers\Api\PermissionController::class, 'update']);
+        Route::delete('/{permission}', [App\Http\Controllers\Api\PermissionController::class, 'destroy']);
+        
+        // Permission assignment routes
+        Route::post('/assign-to-user', [App\Http\Controllers\Api\PermissionController::class, 'assignToUser']);
+        Route::post('/assign-to-role', [App\Http\Controllers\Api\PermissionController::class, 'assignToRole']);
+        Route::post('/revoke-from-user', [App\Http\Controllers\Api\PermissionController::class, 'revokeFromUser']);
+        Route::post('/revoke-from-role', [App\Http\Controllers\Api\PermissionController::class, 'revokeFromRole']);
+        Route::post('/bulk-assign', [App\Http\Controllers\Api\PermissionController::class, 'bulkAssign']);
+        
+        // Permission checking routes
+        Route::post('/check-user-permission', [App\Http\Controllers\Api\PermissionController::class, 'checkUserPermission']);
+        Route::get('/user/{userId}/effective', [App\Http\Controllers\Api\PermissionController::class, 'getEffectivePermissions']);
+    });

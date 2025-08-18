@@ -305,59 +305,6 @@
                 </div>
               </VAlert>
             </VCol>
-
-            <!-- Inventory -->
-            <VCol cols="12">
-              <h6 class="text-h6 mb-4 d-flex align-center gap-2">
-                <VIcon
-                  icon="tabler-package"
-                  size="20"
-                  class="coffee-icon"
-                />
-                Inventori
-              </h6>
-            </VCol>
-
-            <!-- Min Stock -->
-            <VCol cols="12" md="4">
-              <VTextField
-                v-model.number="localFormData.min_stock"
-                label="Stok Minimum"
-                placeholder="0"
-                type="number"
-                variant="outlined"
-              />
-            </VCol>
-
-            <VCol cols="12" md="4">
-              <VTextField
-                v-model="localFormData.unit"
-                label="Satuan"
-                placeholder="pcs, kg, liter, dll"
-                variant="outlined"
-              />
-            </VCol>
-
-            <!-- Barcode & Weight -->
-            <VCol cols="12" md="6">
-              <VTextField
-                v-model="localFormData.barcode"
-                label="Barcode"
-                placeholder="Masukkan barcode"
-                variant="outlined"
-              />
-            </VCol>
-
-            <VCol cols="12" md="6">
-              <VTextField
-                v-model.number="localFormData.weight"
-                label="Berat (gram)"
-                placeholder="0"
-                type="number"
-                variant="outlined"
-              />
-            </VCol>
-
             <!-- Dimensions -->
             <VCol cols="12">
               <h6 class="text-h6 mb-4 d-flex align-center gap-2">

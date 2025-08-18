@@ -96,4 +96,29 @@ export default [
       },
     ],
   },
+  {
+    title: 'System Administration',
+    icon: { icon: 'tabler-shield-lock' },
+    role: ['admin'], // Only admin can access
+    children: [
+      {
+        title: 'Asset Management',
+        to: { name: 'assets' },
+        icon: { icon: 'tabler-files' },
+        role: ['admin'],
+      },
+      {
+        title: 'Role Management',
+        to: { name: 'roles' },
+        icon: { icon: 'tabler-users-group' },
+        role: ['admin'],
+      },
+      {
+        title: 'User Management',
+        to: { name: 'users' },
+        icon: { icon: 'tabler-user-cog' },
+        role: ['admin'],
+      },
+    ],
+  },
 ]

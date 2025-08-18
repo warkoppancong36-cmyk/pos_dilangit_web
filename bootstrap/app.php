@@ -24,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Register token expiration middleware
         $middleware->alias([
             'check.token.expiration' => \App\Http\Middleware\CheckTokenExpiration::class,
+            'check.permission' => \App\Http\Middleware\CheckPermission::class,
         ]);
         
     })

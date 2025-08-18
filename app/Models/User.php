@@ -78,9 +78,143 @@ class User extends Authenticatable
     }
 
     /**
+     * Get direct permissions assigned to this user
+     */
+    public function permissions(): BelongsToMany
+    {
+        return $this->belongsToMany(Permission::class, 'user_permissions', 'user_id', 'permission_id')
+                    ->withPivot(['type', 'reason', 'granted_by', 'expires_at'])
+                    ->withTimestamps();
+    }
+
+    /**
+     * Get user permissions
+     */
+    public function userPermissions(): HasMany
+    {
+        return $this->hasMany(UserPermission::class);
+    }
+
+    /**
+     * Get uploaded assets
+     */
+    public function uploadedAssets(): HasMany
+    {
+        return $this->hasMany(Asset::class, 'uploaded_by');
+    }
+
+    /**
      * Check if user has specific permission
      */
     public function hasPermission(string $permission): bool
+    {
+        // Check direct user permissions first
+        $userPermission = $this->userPermissions()
+                              ->whereHas('permission', function ($q) use ($permission) {
+                                  $q->where('name', $permission);
+                              })
+                              ->active()
+                              ->first();
+
+        if ($userPermission) {
+            return $userPermission->type === 'grant';
+        }
+
+        // Check role permissions
+        return $this->role && $this->role->hasPermission($permission);
+    }
+
+    /**
+     * Get all permissions for this user (role + direct permissions)
+     */
+    public function getAllPermissions(): array
+    {
+        $rolePermissions = $this->role ? $this->role->getPermissionNames() : [];
+        
+        $directPermissions = $this->userPermissions()
+                                 ->active()
+                                 ->with('permission')
+                                 ->get()
+                                 ->filter(function ($up) {
+                                     return $up->type === 'grant';
+                                 })
+                                 ->pluck('permission.name')
+                                 ->toArray();
+
+        $deniedPermissions = $this->userPermissions()
+                                 ->where('type', 'deny')
+                                 ->with('permission')
+                                 ->get()
+                                 ->pluck('permission.name')
+                                 ->toArray();
+
+        $allPermissions = array_unique(array_merge($rolePermissions, $directPermissions));
+        
+        // Remove denied permissions
+        return array_diff($allPermissions, $deniedPermissions);
+    }
+
+    /**
+     * Grant permission to user
+     */
+    public function grantPermission(string $permission, int $grantedBy, string $reason = null, $expiresAt = null): bool
+    {
+        $permissionModel = Permission::where('name', $permission)->first();
+        
+        if (!$permissionModel) {
+            return false;
+        }
+
+        UserPermission::grantPermission(
+            $this->id,
+            $permissionModel->id_permission,
+            $grantedBy,
+            $reason,
+            $expiresAt
+        );
+
+        return true;
+    }
+
+    /**
+     * Deny permission to user
+     */
+    public function denyPermission(string $permission, int $grantedBy, string $reason = null): bool
+    {
+        $permissionModel = Permission::where('name', $permission)->first();
+        
+        if (!$permissionModel) {
+            return false;
+        }
+
+        UserPermission::denyPermission(
+            $this->id,
+            $permissionModel->id_permission,
+            $grantedBy,
+            $reason
+        );
+
+        return true;
+    }
+
+    /**
+     * Remove permission from user
+     */
+    public function removePermission(string $permission): bool
+    {
+        $permissionModel = Permission::where('name', $permission)->first();
+        
+        if (!$permissionModel) {
+            return false;
+        }
+
+        return UserPermission::removePermission($this->id, $permissionModel->id_permission);
+    }
+
+    /**
+     * Check if user has specific permission (backward compatibility)
+     */
+    public function hasPermissionOld(string $permission): bool
     {
         return $this->role && $this->role->hasPermission($permission);
     }
