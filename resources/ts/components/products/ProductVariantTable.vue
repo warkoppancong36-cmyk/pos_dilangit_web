@@ -668,8 +668,10 @@ const handleCompositionSave = () => {
 }
 
 const handleAddItemSave = () => {
+  console.log('🔄 handleAddItemSave called - refreshing data...')
   addItemDialog.value = false
   emit('refresh')
+  console.log('✅ refresh event emitted to parent')
 }
 </script>
 

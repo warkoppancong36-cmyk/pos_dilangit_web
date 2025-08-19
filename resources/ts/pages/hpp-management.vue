@@ -16,7 +16,7 @@
           prepend-icon="mdi-package-variant-closed"
           @click="$router.push('/product-items-management')"
         >
-          Komposisi Produk
+          Komposisi Produk 123
         </VBtn>
         
         <VBtn

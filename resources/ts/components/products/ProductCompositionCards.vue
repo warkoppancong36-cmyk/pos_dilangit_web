@@ -523,17 +523,6 @@ const getItemsText = (totalItems: number) => {
               </span>
             </div>
 
-            <!-- Setting HPP Button -->
-            <VBtn
-              block
-              variant="outlined"
-              color="secondary"
-              size="small"
-              prepend-icon="mdi-calculator"
-              class="mb-2"
-            >
-              Setting HPP
-            </VBtn>
 
             <!-- Action Buttons -->
             <div class="d-flex gap-2">
@@ -808,13 +797,7 @@ const getItemsText = (totalItems: number) => {
           >
             Kelola Komposisi
           </VBtn>
-          <VBtn
-            color="primary"
-            variant="elevated"
-            prepend-icon="mdi-calculator-variant"
-          >
-            Setting HPP
-          </VBtn>
+          
         </VCardActions>
       </VCard>
     </VDialog>

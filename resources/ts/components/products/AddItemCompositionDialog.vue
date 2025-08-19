@@ -155,6 +155,9 @@
                   min="0.01"
                   step="0.01"
                   :rules="[v => !!v || 'Jumlah wajib diisi', v => v > 0 || 'Jumlah harus lebih dari 0']"
+                  :hint="quantityHelperText"
+                  persistent-hint
+                  :color="existingCompositionItem ? 'warning' : 'primary'"
                 />
               </v-col>
 
@@ -190,14 +193,17 @@
               <!-- Add Button -->
               <v-col cols="12" md="2" class="d-flex align-center">
                 <v-btn
-                  color="#D4A574"
+                  :color="existingCompositionItem ? 'warning' : '#D4A574'"
                   @click="handleSave"
                   :loading="loading"
                   :disabled="!formData.item_id || !formData.quantity"
                   block
                 >
-                  <v-icon icon="mdi-plus" class="me-1" />
-                  Tambah
+                  <v-icon 
+                    :icon="existingCompositionItem ? 'mdi-plus-box-multiple' : 'mdi-plus'" 
+                    class="me-1" 
+                  />
+                  {{ existingCompositionItem ? 'Akumulasi' : 'Tambah' }}
                 </v-btn>
               </v-col>
             </v-row>
@@ -244,7 +250,7 @@
                       size="small"
                       variant="text"
                       color="error"
-                      @click="removeItem(index)"
+                      @click="showDeleteConfirmation(item, index)"
                     />
                   </div>
                 </div>
@@ -287,6 +293,106 @@
         >
           Simpan Komposisi
         </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+  <!-- Delete Confirmation Dialog -->
+  <v-dialog v-model="deleteDialog" max-width="400px" persistent>
+    <v-card>
+      <v-card-title class="d-flex align-center justify-center text-h6 text-error">
+        <v-icon icon="mdi-alert-circle" color="error" class="me-2" />
+        Konfirmasi Hapus
+      </v-card-title>
+      
+      <v-divider />
+      
+      <v-card-text class="pa-6">
+        <div class="text-center">
+          <v-icon icon="mdi-delete-alert" size="64" color="error" class="mb-4" />
+          <p class="text-body-1 mb-2">
+            Apakah Anda yakin ingin menghapus item ini?
+          </p>
+          <div v-if="itemToDelete" class="text-body-2 text-medium-emphasis">
+            <strong>{{ itemToDelete.item.name }}</strong><br>
+            Dibutuhkan: {{ itemToDelete.item.quantity }} {{ itemToDelete.item.unit }}
+          </div>
+          <v-alert
+            type="warning"
+            variant="tonal"
+            class="mt-4 text-start"
+          >
+            <strong>Perhatian:</strong> Item yang sudah dihapus tidak dapat dikembalikan!
+          </v-alert>
+        </div>
+      </v-card-text>
+      
+      <v-card-actions class="px-6 pb-6">
+        <v-btn
+          variant="outlined"
+          @click="cancelDelete"
+          :disabled="deleting"
+          class="flex-grow-1"
+        >
+          Batal
+        </v-btn>
+        <v-btn
+          color="error"
+          @click="confirmDelete"
+          :loading="deleting"
+          class="flex-grow-1"
+        >
+          Hapus
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+  <!-- Success/Info Dialog -->
+  <v-dialog v-model="successDialog" max-width="450px" persistent>
+    <v-card>
+      <v-card-title class="d-flex align-center justify-center text-h6" :class="getSuccessDialogTitleClass()">
+        <v-icon :icon="getSuccessDialogIcon()" :color="getSuccessDialogIconColor()" class="me-2" size="24" />
+        {{ successTitle }}
+      </v-card-title>
+      
+      <v-divider />
+      
+      <v-card-text class="pa-6">
+        <div class="text-center">
+          <v-icon :icon="getSuccessDialogIcon()" :color="getSuccessDialogIconColor()" size="64" class="mb-4" />
+          <div class="text-body-1 mb-2" style="white-space: pre-line;">
+            {{ successMessage }}
+          </div>
+          <v-alert
+            :type="successType"
+            variant="tonal"
+            class="mt-4 text-start"
+          >
+            <template v-if="successType === 'success'">
+              <strong>Berhasil!</strong> Perubahan telah disimpan.
+            </template>
+            <template v-else-if="successType === 'info'">
+              <strong>Informasi:</strong> Item telah diperbarui sesuai permintaan.
+            </template>
+            <template v-else>
+              <strong>Perhatian:</strong> Silakan periksa kembali informasi.
+            </template>
+          </v-alert>
+        </div>
+      </v-card-text>
+      
+      <v-card-actions class="px-6 pb-6">
+        <v-spacer />
+        <v-btn
+          :color="getSuccessDialogButtonColor()"
+          @click="successDialog = false"
+          class="px-6"
+        >
+          <v-icon icon="mdi-check" class="me-1" />
+          OK
+        </v-btn>
+        <v-spacer />
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -349,6 +455,17 @@ const loadingItems = ref(false)
 const availableItems = ref<Item[]>([])
 const compositionItems = ref<CompositionItem[]>([])
 
+// Delete confirmation dialog state
+const deleteDialog = ref(false)
+const itemToDelete = ref<{item: CompositionItem, index: number} | null>(null)
+const deleting = ref(false)
+
+// Success/Info dialog state
+const successDialog = ref(false)
+const successMessage = ref('')
+const successTitle = ref('')
+const successType = ref<'success' | 'info' | 'warning'>('success')
+
 // Dialog state
 const dialog = computed({
   get: () => {
@@ -374,6 +491,28 @@ const formData = ref(defaultFormData())
 const selectedItem = computed(() => {
   if (!formData.value.item_id || !Array.isArray(availableItems.value)) return null
   return availableItems.value.find(item => item.id_item === formData.value.item_id)
+})
+
+// Check if selected item already exists in composition
+const existingCompositionItem = computed(() => {
+  if (!selectedItem.value) return null
+  
+  return compositionItems.value.find(item => 
+    item.name === selectedItem.value?.name ||
+    (item.id && selectedItem.value?.id_item && item.id === selectedItem.value.id_item)
+  )
+})
+
+// Generate helper text for quantity field
+const quantityHelperText = computed(() => {
+  if (!selectedItem.value) return ''
+  
+  if (existingCompositionItem.value) {
+    const existing = existingCompositionItem.value
+    return `Item sudah ada dengan quantity ${existing.quantity} ${existing.unit}. Quantity akan ditambahkan.`
+  }
+  
+  return `Stok tersedia: ${getItemStock(selectedItem.value)} ${selectedItem.value.unit}`
 })
 
 // Filter items with stock > 0 only
@@ -525,43 +664,165 @@ const handleSave = async () => {
 
   if (!selectedItem.value) return
 
-  // Add item to composition list
-  const newItem: CompositionItem = {
-    name: selectedItem.value.name,
-    quantity: formData.value.quantity,
-    unit: selectedItem.value.unit,
-    stock: selectedItem.value.inventory?.current_stock || selectedItem.value.current_stock || 0,
-    price: selectedItem.value.cost_per_unit || 0,
-    is_critical: formData.value.is_critical
-  }
+  const selectedItemName = selectedItem.value.name
+  const selectedItemId = selectedItem.value.id_item
+  const quantityToAdd = formData.value.quantity
 
-  compositionItems.value.push(newItem)
+  console.log('🔍 Checking for existing item:', selectedItemName, 'ID:', selectedItemId)
+
+  // Check if item already exists in composition list
+  const existingItemIndex = compositionItems.value.findIndex(item => 
+    item.name === selectedItemName || 
+    (item.id && selectedItemId && item.id === selectedItemId)
+  )
+
+  if (existingItemIndex !== -1) {
+    // Item already exists, accumulate quantity
+    const existingItem = compositionItems.value[existingItemIndex]
+    const oldQuantity = existingItem.quantity
+    const newQuantity = oldQuantity + quantityToAdd
+    
+    console.log('📦 Item already exists! Accumulating quantity:')
+    console.log(`   - Item: ${selectedItemName}`)
+    console.log(`   - Old quantity: ${oldQuantity}`)
+    console.log(`   - Adding: ${quantityToAdd}`)
+    console.log(`   - New quantity: ${newQuantity}`)
+    
+    // Update existing item quantity
+    compositionItems.value[existingItemIndex].quantity = newQuantity
+    
+  } else {
+    // Item doesn't exist, add new item
+    console.log('➕ Adding new item to composition:', selectedItemName)
+    
+    const newItem: CompositionItem = {
+      name: selectedItemName,
+      quantity: quantityToAdd,
+      unit: selectedItem.value.unit,
+      stock: selectedItem.value.inventory?.current_stock || selectedItem.value.current_stock || 0,
+      price: selectedItem.value.cost_per_unit || 0,
+      is_critical: formData.value.is_critical
+    }
+
+    compositionItems.value.push(newItem)
+    console.log('✅ New item added successfully')
+    
+    
+  }
   
   // Reset form
   formData.value = defaultFormData()
+  console.log('🔄 Form reset')
 }
 
 const editItem = (item: CompositionItem, index: number) => {
   console.log('Edit item:', item, index)
 }
 
-const removeItem = async (index: number) => {
-  const item = compositionItems.value[index]
+// Show delete confirmation dialog
+const showDeleteConfirmation = (item: CompositionItem, index: number) => {
+  itemToDelete.value = { item, index }
+  deleteDialog.value = true
+}
+
+// Confirm delete action
+const confirmDelete = async () => {
+  if (!itemToDelete.value) return
   
-  // If item has an ID, it exists in database and needs to be deleted via API
-  if (item.id) {
-    try {
-      await axios.delete(`/api/variant-items/${item.id}`)
-      console.log('Item deleted from database:', item.name)
-    } catch (error) {
-      console.error('Error deleting item from database:', error)
-      alert('Gagal menghapus item dari database')
-      return
+  const { item, index } = itemToDelete.value
+  const itemName = item.name
+  const itemId = item.id
+  deleting.value = true
+  
+  console.log('🚀 Starting delete process for:', itemName, 'ID:', itemId, 'Index:', index)
+  
+  try {
+    // If item has an ID, it exists in database and needs to be deleted via API
+    if (itemId) {
+      console.log('🗑️ Deleting item from database:', itemName, 'with ID:', itemId)
+      await axios.delete(`/api/variant-items/${itemId}`)
+      console.log('✅ Item deleted from database successfully')
+    } else {
+      console.log('📝 Item has no ID, removing from local list only')
     }
+    
+    // Close dialog first
+    deleteDialog.value = false
+    itemToDelete.value = null
+    console.log('✅ Delete dialog closed')
+    
+    // Force refresh composition list from server
+    console.log('🔄 Force refreshing composition list...')
+    await loadCompositionItems()
+    console.log('✅ Composition list refreshed from server. New count:', compositionItems.value.length)
+    
+    // Emit save event to notify parent component to refresh
+    console.log('📡 Emitting save event to parent component...')
+    emit('save')
+    console.log('✅ Save event emitted to parent component')
+    
+    // Show success message
+    console.log('🎉 Item successfully deleted:', itemName)
+    
+  } catch (error: any) {
+    console.error('❌ Error deleting item:', error)
+    console.error('❌ Error details:', error.response?.data)
+    alert('Gagal menghapus item: ' + (error.response?.data?.message || error.message))
+  } finally {
+    deleting.value = false
+    console.log('🏁 Delete process completed')
   }
-  
-  // Remove from local array
-  compositionItems.value.splice(index, 1)
+}
+
+// Cancel delete action
+const cancelDelete = () => {
+  deleteDialog.value = false
+  itemToDelete.value = null
+}
+
+// Show success/info dialog
+const showSuccessDialog = (title: string, message: string, type: 'success' | 'info' | 'warning' = 'success') => {
+  successTitle.value = title
+  successMessage.value = message
+  successType.value = type
+  successDialog.value = true
+}
+
+// Helper functions for success dialog styling
+const getSuccessDialogIcon = () => {
+  switch (successType.value) {
+    case 'success': return 'mdi-check-circle'
+    case 'info': return 'mdi-information'
+    case 'warning': return 'mdi-alert'
+    default: return 'mdi-check-circle'
+  }
+}
+
+const getSuccessDialogIconColor = () => {
+  switch (successType.value) {
+    case 'success': return 'success'
+    case 'info': return 'info'
+    case 'warning': return 'warning'
+    default: return 'success'
+  }
+}
+
+const getSuccessDialogTitleClass = () => {
+  switch (successType.value) {
+    case 'success': return 'text-success'
+    case 'info': return 'text-info'
+    case 'warning': return 'text-warning'
+    default: return 'text-success'
+  }
+}
+
+const getSuccessDialogButtonColor = () => {
+  switch (successType.value) {
+    case 'success': return 'success'
+    case 'info': return 'info'
+    case 'warning': return 'warning'
+    default: return 'success'
+  }
 }
 
 const saveComposition = async () => {
