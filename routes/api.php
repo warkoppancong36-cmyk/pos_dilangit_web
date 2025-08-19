@@ -24,6 +24,36 @@ use App\Http\Controllers\Api\HPPController;
 
 
 // Test route to create sample inventory movement
+Route::get('/debug-variants/{productId}', function($productId) {
+    try {
+        $variants = DB::table('variants')
+            ->where('id_product', $productId)
+            ->get(['id_variant', 'name', 'variant_values']);
+            
+        $result = [];
+        foreach ($variants as $variant) {
+            $decoded = json_decode($variant->variant_values, true);
+            $result[] = [
+                'id_variant' => $variant->id_variant,
+                'name' => $variant->name,
+                'variant_values_raw' => $variant->variant_values,
+                'variant_values_decoded' => $decoded,
+                'json_error' => json_last_error_msg()
+            ];
+        }
+        
+        return response()->json([
+            'success' => true,
+            'data' => $result
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ]);
+    }
+});
+
 Route::post('/test-create-movement', function(Request $request) {
     try {
         $inventory = \App\Models\Inventory::find($request->inventory_id ?? 24);
@@ -175,17 +205,43 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
         Route::delete('/{supplier}', [SupplierController::class, 'destroy']);
     });
 
-    // VARIANT ROUTES DISABLED - Variant system removed
-    // Route::prefix('variants')->group(function () {
-    //     Route::get('/', [App\Http\Controllers\Api\VariantController::class, 'index']);
-    //     Route::post('/', [App\Http\Controllers\Api\VariantController::class, 'store']);
-    //     Route::post('/bulk-create', [App\Http\Controllers\Api\VariantController::class, 'bulkCreate']);
-    //     Route::get('/stats', [App\Http\Controllers\Api\VariantController::class, 'stats']);
-    //     Route::get('/attributes', [App\Http\Controllers\Api\VariantController::class, 'getVariantAttributes']);
-    //     Route::get('/{variant}', [App\Http\Controllers\Api\VariantController::class, 'show']);
-    //     Route::put('/{variant}', [App\Http\Controllers\Api\VariantController::class, 'update']);
-    //     Route::delete('/{variant}', [App\Http\Controllers\Api\VariantController::class, 'destroy']);
-    // });
+    // VARIANT ROUTES - Product Variant Management
+    Route::prefix('variants')->group(function () {
+        Route::get('/', [App\Http\Controllers\Api\VariantController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\Api\VariantController::class, 'store']);
+        Route::get('/product/{productId}', [App\Http\Controllers\Api\VariantController::class, 'getProductVariants']);
+        Route::post('/bulk-delete', [App\Http\Controllers\Api\VariantController::class, 'bulkDelete']);
+        Route::get('/{id}', [App\Http\Controllers\Api\VariantController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\Api\VariantController::class, 'update']);
+        Route::delete('/{id}', [App\Http\Controllers\Api\VariantController::class, 'destroy']);
+        Route::post('/{id}/toggle-active', [App\Http\Controllers\Api\VariantController::class, 'toggleActive']);
+        Route::get('/{id}/production-capacity', [App\Http\Controllers\Api\VariantController::class, 'checkProductionCapacity']);
+    });
+
+    // VARIANT ITEMS ROUTES - Variant Composition Management
+    Route::prefix('variant-items')->group(function () {
+        Route::get('/', [App\Http\Controllers\Api\VariantItemController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\Api\VariantItemController::class, 'store']);
+        Route::post('/bulk-store', [App\Http\Controllers\Api\VariantItemController::class, 'bulkStore']);
+        Route::post('/bulk-update', [App\Http\Controllers\Api\VariantItemController::class, 'bulkUpdate']);
+        Route::post('/bulk-delete', [App\Http\Controllers\Api\VariantItemController::class, 'bulkDelete']);
+        Route::get('/variant/{variantId}', [App\Http\Controllers\Api\VariantItemController::class, 'getVariantComposition']);
+        Route::get('/{id}', [App\Http\Controllers\Api\VariantItemController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\Api\VariantItemController::class, 'update']);
+        Route::delete('/{id}', [App\Http\Controllers\Api\VariantItemController::class, 'destroy']);
+    });
+
+    // VARIANT ATTRIBUTES ROUTES - Product Attribute Management
+    Route::prefix('variant-attributes')->group(function () {
+        Route::get('/', [App\Http\Controllers\Api\VariantAttributeController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\Api\VariantAttributeController::class, 'store']);
+        Route::post('/sort-order', [App\Http\Controllers\Api\VariantAttributeController::class, 'updateSortOrder']);
+        Route::get('/product/{productId}', [App\Http\Controllers\Api\VariantAttributeController::class, 'getProductAttributes']);
+        Route::get('/product/{productId}/combinations', [App\Http\Controllers\Api\VariantAttributeController::class, 'generateVariantCombinations']);
+        Route::get('/{id}', [App\Http\Controllers\Api\VariantAttributeController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\Api\VariantAttributeController::class, 'update']);
+        Route::delete('/{id}', [App\Http\Controllers\Api\VariantAttributeController::class, 'destroy']);
+    });
 
     Route::prefix('customers')->group(function () {
         Route::get('/', [CustomerController::class, 'index']);

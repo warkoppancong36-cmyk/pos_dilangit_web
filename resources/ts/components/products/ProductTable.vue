@@ -230,6 +230,20 @@
             </template>
           </VTooltip>
 
+          <!-- Variant Management -->
+          <VTooltip text="Kelola Variant">
+            <template #activator="{ props }">
+              <VBtn
+                v-bind="props"
+                icon="tabler-versions"
+                size="small"
+                variant="text"
+                color="secondary"
+                @click="$emit('open-variant-dialog', item)"
+              />
+            </template>
+          </VTooltip>
+
           <!-- View -->
           <!-- <VTooltip text="Lihat Detail">
             <template #activator="{ props }">
@@ -328,6 +342,7 @@ defineEmits<{
   'manage-recipes': [product: Product]
   'open-recipe-dialog': [product: Product]
   'open-composition-dialog': [product: Product]
+  'open-variant-dialog': [product: Product]
   'delete-product': [product: Product]
   'toggle-active': [product: Product]
   'toggle-featured': [product: Product]

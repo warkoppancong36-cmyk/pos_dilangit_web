@@ -1,0 +1,1 @@
+const n=t=>t?t.split(" ").map(a=>a.charAt(0).toUpperCase()).join(""):"",m=(t,r=!0)=>{if(!t&&t!==0)return r?"Rp 0":"0";const a=typeof t=="string"?parseFloat(t):t;if(isNaN(a))return r?"Rp 0":"0";const i=new Intl.NumberFormat("id-ID",{minimumFractionDigits:0,maximumFractionDigits:0}).format(a);return r?`Rp ${i}`:i};export{n as a,m as f};

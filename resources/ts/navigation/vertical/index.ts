@@ -38,12 +38,12 @@ export default [
         icon: { icon: 'tabler-box' },
         role: ['admin', 'manager'], // Only admin and manager can access
       },
-      {
-        title: 'Komposisi Produk',
-        to: { name: 'product-items-management' },
-        icon: { icon: 'tabler-assembly' },
-        role: ['admin', 'manager'], // Only admin and manager can access
-      },
+      // {
+      //   title: 'Komposisi Produk',
+      //   to: { name: 'product-items-management' },
+      //   icon: { icon: 'tabler-assembly' },
+      //   role: ['admin', 'manager'], // Only admin and manager can access
+      // },
 
       // VARIANT REMOVED - Using Product-Item relationship instead
       // {
@@ -76,12 +76,12 @@ export default [
         icon: { icon: 'tabler-package' },
         role: ['admin', 'manager'], // Only admin and manager can access
       },
-      {
-        title: 'HPP Management',
-        to: { name: 'hpp-management' },
-        icon: { icon: 'tabler-calculator' },
-        role: ['admin', 'manager'], // Only admin and manager can access
-      },
+      // {
+      //   title: 'HPP Management',
+      //   to: { name: 'hpp-management' },
+      //   icon: { icon: 'tabler-calculator' },
+      //   role: ['admin', 'manager'], // Only admin and manager can access
+      // },
       {
         title: 'Diskon',
         to: { name: 'discounts-management' },

@@ -8,6 +8,7 @@ import ProductRecipeList from '@/components/products/ProductRecipeList.vue'
 import ProductSearchFilters from '@/components/products/ProductSearchFilters.vue'
 import ProductStatsCards from '@/components/products/ProductStatsCards.vue'
 import ProductTable from '@/components/products/ProductTable.vue'
+import ProductVariantTab from '@/components/products/ProductVariantTab.vue'
 import { useProductRecipes } from '@/composables/useProductRecipes'
 import { useProductItems } from '@/composables/useProductItems'
 import { useProducts } from '@/composables/useProducts'
@@ -96,6 +97,10 @@ const activeTab = ref('products')
 const compositionDialog = ref(false)
 const selectedCompositionProduct = ref(null)
 
+// Variant dialog state
+const variantDialog = ref(false)
+const selectedVariantProduct = ref(null)
+
 const confirmDelete = async () => {
   await deleteProduct()
 }
@@ -126,6 +131,16 @@ const handleOpenCompositionDialog = async (product: any) => {
   }
   
   compositionDialog.value = true
+}
+
+const handleOpenVariantDialog = (product: any) => {
+  console.log('🔄 Opening variant dialog for product:', product.name)
+  console.log('🔄 Product object:', product)
+  console.log('🔄 Product ID (id):', product.id)
+  console.log('🔄 Product ID (id_product):', product.id_product)
+  console.log('🔄 Product keys:', Object.keys(product))
+  selectedVariantProduct.value = product
+  variantDialog.value = true
 }
 
 const getProductCompositionItems = (product: any) => {
@@ -272,6 +287,7 @@ onMounted(() => {
           @edit-product="openEditDialog"
           @open-recipe-dialog="handleOpenRecipeDialog"
           @open-composition-dialog="handleOpenCompositionDialog"
+          @open-variant-dialog="handleOpenVariantDialog"
           @delete-product="openDeleteDialog"
           @toggle-active="toggleActiveStatus"
           @toggle-featured="toggleFeaturedStatus"
@@ -340,6 +356,50 @@ onMounted(() => {
       @save="() => { fetchProductsList(); compositionDialog = false }"
       @refresh="fetchProductsList"
     />
+
+    <!-- Product Variant Dialog -->
+    <v-dialog
+      v-model="variantDialog"
+      max-width="1400px"
+      persistent
+    >
+      <v-card>
+        <v-card-title class="d-flex justify-between align-center">
+          <div class="d-flex align-center">
+            <v-icon icon="tabler-versions" class="me-2" />
+            Kelola Variant - {{ selectedVariantProduct?.name }}
+          </div>
+          <v-btn
+            icon="tabler-x"
+            variant="text"
+            @click="variantDialog = false"
+          />
+        </v-card-title>
+
+        <v-divider />
+
+        <v-card-text class="pa-0">
+          <ProductVariantTab
+            v-if="selectedVariantProduct"
+            :product="selectedVariantProduct"
+          />
+        </v-card-text>
+
+        <v-divider />
+
+        <v-card-actions>
+          <v-spacer />
+          <v-btn
+            color="grey-darken-1"
+            variant="outlined"
+            @click="variantDialog = false"
+          >
+            <v-icon icon="mdi-close" class="me-1" />
+            Tutup
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
   </div>
 </template>
