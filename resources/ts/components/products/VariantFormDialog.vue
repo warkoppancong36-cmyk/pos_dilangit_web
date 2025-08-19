@@ -48,7 +48,18 @@
                 placeholder="Auto-generated"
                 hint="SKU akan digenerate otomatis berdasarkan nama variant"
                 persistent-hint
-              />
+              >
+                <template #append-inner>
+                  <v-btn
+                    icon="mdi-refresh"
+                    size="small"
+                    variant="text"
+                    @click="generateSku"
+                    :disabled="!formData.name || isEdit"
+                    title="Generate SKU manually"
+                  />
+                </template>
+              </v-text-field>
             </v-col>
 
             <!-- Status -->
@@ -104,6 +115,7 @@ interface Variant {
 
 interface Product {
   id: number
+  id_product?: number
   name: string
   code?: string
 }
@@ -203,7 +215,7 @@ const loadFormData = () => {
     // Method 2: From products array with different field names
     else if (props.products && props.products.length > 0) {
       const product = props.products[0]
-      resolvedProductId = product.id
+      resolvedProductId = product.id || product.id_product
       console.log('✅ Got product ID from products array:', resolvedProductId, 'from product:', product)
     }
     
@@ -223,22 +235,67 @@ const loadFormData = () => {
   }
   
   console.log('🎯 Final FormData after load:', formData.value)
+  
+  // Also try to generate SKU immediately if both name and product_id are available
+  if (formData.value.name && formData.value.product_id && !isEdit.value) {
+    console.log('🔄 Attempting immediate SKU generation...')
+    generateSku()
+  }
 }
 
 const generateSku = () => {
-  if (formData.value.name && formData.value.product_id) {
-    const product = props.products?.find(p => p.id === formData.value.product_id)
-    if (product) {
-      // Generate SKU based on product code and variant name
-      const productCode = product.code || product.name?.substring(0, 3).toUpperCase() || 'PRD'
-      const variantName = formData.value.name
-        .replace(/\s+/g, '')
-        .substring(0, 3)
-        .toUpperCase()
-      
-      formData.value.sku = `${productCode}-${variantName}`
-    }
+  console.log('🔄 GenerateSku called with:', {
+    name: formData.value.name,
+    product_id: formData.value.product_id,
+    productsLength: props.products?.length || 0,
+    isEdit: isEdit.value,
+    products: props.products
+  })
+  
+  if (!formData.value.name) {
+    console.warn('⚠️ Cannot generate SKU: No variant name provided')
+    return
   }
+  
+  if (!formData.value.product_id) {
+    console.warn('⚠️ Cannot generate SKU: No product ID provided')
+    return
+  }
+  
+  const product = props.products?.find(p => p.id === formData.value.product_id || p.id_product === formData.value.product_id)
+  console.log('🔍 Found product:', product)
+  
+  if (!product) {
+    console.warn('⚠️ Cannot generate SKU: Product not found in products array')
+    console.log('⚠️ Available products:', props.products)
+    console.log('⚠️ Looking for product_id:', formData.value.product_id)
+    
+    // Fallback: generate SKU without product code
+    const variantName = formData.value.name
+      .replace(/\s+/g, '')
+      .substring(0, 6)
+      .toUpperCase()
+    
+    const generatedSku = `PRD-${variantName}`
+    console.log('✅ Generated fallback SKU:', generatedSku)
+    formData.value.sku = generatedSku
+    return
+  }
+  
+  // Generate SKU based on product code and variant name
+  const productCode = product.code || 
+                      product.name?.substring(0, 3).toUpperCase() || 
+                      'PRD'
+  
+  const variantName = formData.value.name
+    .replace(/\s+/g, '')
+    .substring(0, 3)
+    .toUpperCase()
+  
+  const generatedSku = `${productCode}-${variantName}`
+  console.log('✅ Generated SKU:', generatedSku, 'from productCode:', productCode, 'variantName:', variantName)
+  
+  formData.value.sku = generatedSku
 }
 
 const handleSave = async () => {
@@ -327,8 +384,17 @@ watch(() => props.variant, (newVal, oldVal) => {
   }
 })
 
-watch(() => formData.value.name, () => {
-  if (!isEdit.value) {
+watch(() => formData.value.name, (newName) => {
+  console.log('🟡 Watcher name triggered:', { newName, isEdit: isEdit.value })
+  if (!isEdit.value && newName) {
+    generateSku()
+  }
+})
+
+// Also watch for product_id changes to regenerate SKU
+watch(() => formData.value.product_id, (newProductId) => {
+  console.log('🟡 Watcher product_id triggered:', { newProductId, isEdit: isEdit.value })
+  if (!isEdit.value && newProductId && formData.value.name) {
     generateSku()
   }
 })

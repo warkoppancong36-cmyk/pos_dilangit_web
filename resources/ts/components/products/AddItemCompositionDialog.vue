@@ -42,26 +42,6 @@
               <h4 class="text-h6">Tambah Item Komposisi</h4>
             </div>
             
-            <!-- Items Stock Info -->
-            <div v-if="availableItems.length > 0" class="d-flex align-center gap-2">
-              <v-chip 
-                size="small" 
-                color="success" 
-                variant="tonal"
-                prepend-icon="mdi-check-circle"
-              >
-                {{ availableItemsWithStock.length }} Tersedia
-              </v-chip>
-              <v-chip 
-                v-if="availableItems.length - availableItemsWithStock.length > 0"
-                size="small" 
-                color="error" 
-                variant="tonal"
-                prepend-icon="mdi-alert-circle"
-              >
-                {{ availableItems.length - availableItemsWithStock.length }} Stok Habis
-              </v-chip>
-            </div>
           </div>
 
           <v-form ref="form" @submit.prevent="handleSave">
@@ -245,7 +225,7 @@
                     <div>
                       <div class="font-weight-medium">{{ item.name }}</div>
                       <div class="text-caption text-medium-emphasis">
-                        Dibutuhkan: {{ item.quantity }} {{ item.unit }} • 
+                        <span class="font-weight-medium text-primary">Dibutuhkan: {{ item.quantity }} {{ item.unit }}</span> • 
                         Stok: {{ item.stock }} {{ item.unit }} • 
                         {{ formatRupiah(item.price) }}
                       </div>
@@ -506,7 +486,7 @@ const loadCompositionItems = async () => {
     const response = await axios.get(`/api/variant-items/variant/${variantId}`)
     console.log('Composition API response:', response.data)
     
-    // The API returns data.composition, not data directly
+    // The API returns data.composition according to the backend code
     const items = response.data?.data?.composition || response.data?.composition || []
     
     // Ensure items is an array before mapping
@@ -518,12 +498,12 @@ const loadCompositionItems = async () => {
     
     // Transform the API response to match our interface
     compositionItems.value = items.map((item: any) => ({
-      id: item.id,
+      id: item.id_variant_item || item.id,
       name: item.item?.name || item.name,
-      quantity: item.quantity || item.qty,
+      quantity: parseFloat(item.quantity_needed || item.quantity || item.qty || '1'),
       unit: item.unit || item.item?.unit || 'pcs',
       stock: item.item?.inventory?.current_stock || item.item?.current_stock || item.stock || 0,
-      price: item.item?.cost_per_unit || item.item?.price || item.price || 0,
+      price: parseFloat(item.item?.cost_per_unit || item.item?.price || item.price || '0'),
       is_critical: item.is_critical || false
     }))
     

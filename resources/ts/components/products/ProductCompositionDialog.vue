@@ -63,25 +63,6 @@
                 {{ editMode ? 'Edit Item Komposisi' : 'Tambah Item Komposisi' }}
               </div>
               <!-- Items Stock Info -->
-              <div v-if="availableItems.length > 0" class="d-flex align-center gap-2">
-                <VChip 
-                  size="small" 
-                  color="success" 
-                  variant="tonal"
-                  prepend-icon="mdi-check-circle"
-                >
-                  {{ availableItemsWithStock.length }} Tersedia
-                </VChip>
-                <VChip 
-                  v-if="availableItems.length - availableItemsWithStock.length > 0"
-                  size="small" 
-                  color="error" 
-                  variant="tonal"
-                  prepend-icon="mdi-alert-circle"
-                >
-                  {{ availableItems.length - availableItemsWithStock.length }} Stok Habis
-                </VChip>
-              </div>
             </div>
           </VCardTitle>
           <VCardText class="pa-4">
