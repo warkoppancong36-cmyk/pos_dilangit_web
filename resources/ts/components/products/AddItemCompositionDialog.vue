@@ -232,7 +232,15 @@
                       <div class="font-weight-medium">{{ item.name }}</div>
                       <div class="text-caption text-medium-emphasis">
                         <span class="font-weight-medium text-primary">Dibutuhkan: {{ item.quantity }} {{ item.unit }}</span> • 
-                        Stok: {{ item.stock }} {{ item.unit }} • 
+                        <span 
+                          :class="{
+                            'text-success': item.inventory?.current_stock > (item.inventory?.reorder_level || 0),
+                            'text-warning': item.inventory?.current_stock <= (item.inventory?.reorder_level || 0) && item.inventory?.current_stock > 0,
+                            'text-error': item.inventory?.current_stock <= 0
+                          }"
+                        >
+                          Stok: {{ item.inventory?.current_stock || item.stock || 0 }} {{ item.unit }}
+                        </span> • 
                         {{ formatRupiah(item.price) }}
                       </div>
                     </div>
@@ -433,6 +441,12 @@ interface CompositionItem {
   stock: number
   price: number
   is_critical: boolean
+  inventory?: {
+    current_stock: number
+    available_stock: number
+    stock_status: string
+    reorder_level?: number
+  } | null
 }
 
 interface Props {
@@ -643,7 +657,13 @@ const loadCompositionItems = async () => {
       unit: item.unit || item.item?.unit || 'pcs',
       stock: item.item?.inventory?.current_stock || item.item?.current_stock || item.stock || 0,
       price: parseFloat(item.item?.cost_per_unit || item.item?.price || item.price || '0'),
-      is_critical: item.is_critical || false
+      is_critical: item.is_critical || false,
+      inventory: item.item?.inventory ? {
+        current_stock: item.item.inventory.current_stock || 0,
+        available_stock: item.item.inventory.available_stock || 0,
+        stock_status: item.item.inventory.stock_status || 'unknown',
+        reorder_level: item.item.inventory.reorder_level || 0
+      } : null
     }))
     
     console.log('Composition items loaded:', compositionItems.value)
