@@ -71,9 +71,12 @@ export interface ProductItemFormData {
 }
 
 export interface ProductItemFilters {
+  search?: string
   product_id?: number
   item_id?: number
   critical_only?: boolean
+  stock_status?: string
+  sort_by?: string
 }
 
 export interface ProductionCapacity {
@@ -113,9 +116,12 @@ const itemsPerPage = ref(15)
 
 // Filters
 const filters = reactive<ProductItemFilters>({
+  search: '',
   product_id: undefined,
   item_id: undefined,
   critical_only: false,
+  stock_status: null,
+  sort_by: null,
 })
 
 // Messages

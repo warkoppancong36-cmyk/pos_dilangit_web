@@ -42,8 +42,36 @@ const emit = defineEmits<Emits>()
 
 // Dialog state
 const compositionDialog = ref(false)
+const detailDialog = ref(false)
 const selectedProduct = ref(null)
 const selectedProductItems = ref([])
+const selectedProductForDetail = ref(null)
+
+// Filter state
+const filters = ref({
+  search: '',
+  stockStatus: '',
+  itemType: '',
+  criticalOnly: false,
+  sortBy: 'name_asc'
+})
+
+// Filter options
+const stockStatusOptions = [
+  { title: 'Semua Status', value: '' },
+  { title: 'Stok Aman', value: 'safe' },
+  { title: 'Stok Kritis', value: 'critical' },
+  { title: 'Stok Habis', value: 'out' }
+]
+
+const sortOptions = [
+  { title: 'Nama A-Z', value: 'name_asc' },
+  { title: 'Nama Z-A', value: 'name_desc' },
+  { title: 'Harga Tertinggi', value: 'price_desc' },
+  { title: 'Harga Terendah', value: 'price_asc' },
+  { title: 'Item Terbanyak', value: 'items_desc' },
+  { title: 'Item Tersedikit', value: 'items_asc' }
+]
 
 // Open composition dialog
 const openCompositionDialog = (product: any) => {
@@ -52,13 +80,46 @@ const openCompositionDialog = (product: any) => {
   compositionDialog.value = true
 }
 
+// Open detail dialog
+const openDetailDialog = (product: any) => {
+  selectedProductForDetail.value = product
+  detailDialog.value = true
+}
+
 // Handle composition save
 const handleCompositionSave = (data: any) => {
   console.log('Composition saved:', data)
   emit('refresh')
 }
 
-// Group product items by product
+// Clear all filters
+const clearAllFilters = () => {
+  filters.value = {
+    search: '',
+    stockStatus: '',
+    itemType: '',
+    criticalOnly: false,
+    sortBy: 'name_asc'
+  }
+}
+
+// Check if any filter is active
+const hasActiveFilters = computed(() => {
+  return !!(filters.value.search || filters.value.stockStatus || filters.value.itemType || filters.value.criticalOnly || filters.value.sortBy !== 'name_asc')
+})
+
+// Count active filters
+const activeFiltersCount = computed(() => {
+  let count = 0
+  if (filters.value.search) count++
+  if (filters.value.stockStatus) count++
+  if (filters.value.itemType) count++
+  if (filters.value.criticalOnly) count++
+  if (filters.value.sortBy !== 'name_asc') count++
+  return count
+})
+
+// Group product items by product with filtering and sorting
 const compositionData = computed(() => {
   const grouped = new Map()
   
@@ -78,23 +139,126 @@ const compositionData = computed(() => {
     grouped.get(productKey).totalItems++
   })
   
-  return Array.from(grouped.values())
+  let filteredData = Array.from(grouped.values())
+  
+  // Apply search filter
+  if (filters.value.search) {
+    const searchTerm = filters.value.search.toLowerCase()
+    filteredData = filteredData.filter(product => 
+      product.name.toLowerCase().includes(searchTerm) ||
+      (product.sku && product.sku.toLowerCase().includes(searchTerm)) ||
+      product.items.some((item: ProductItem) => 
+        item.item?.name.toLowerCase().includes(searchTerm)
+      )
+    )
+  }
+  
+  // Apply stock status filter
+  if (filters.value.stockStatus) {
+    filteredData = filteredData.filter(product => {
+      const stockStatus = getStockStatus(product)
+      switch (filters.value.stockStatus) {
+        case 'safe':
+          return stockStatus.color === 'success'
+        case 'critical':
+          return stockStatus.color === 'warning'
+        case 'out':
+          return stockStatus.color === 'error'
+        default:
+          return true
+      }
+    })
+  }
+  
+  // Apply critical items filter
+  if (filters.value.criticalOnly) {
+    filteredData = filteredData.filter(product =>
+      product.items.some((item: ProductItem) => item.is_critical)
+    )
+  }
+  
+  // Apply sorting
+  filteredData.sort((a, b) => {
+    switch (filters.value.sortBy) {
+      case 'name_asc':
+        return a.name.localeCompare(b.name)
+      case 'name_desc':
+        return b.name.localeCompare(a.name)
+      case 'price_asc':
+        return (a.price || 0) - (b.price || 0)
+      case 'price_desc':
+        return (b.price || 0) - (a.price || 0)
+      case 'items_asc':
+        return a.totalItems - b.totalItems
+      case 'items_desc':
+        return b.totalItems - a.totalItems
+      default:
+        return a.name.localeCompare(b.name)
+    }
+  })
+  
+  return filteredData
 })
 
 const getStockStatus = (product: any) => {
   // Cek stok dari semua item dalam komposisi
+  let hasOutOfStock = false
   let hasLowStock = false
   
   product.items.forEach((item: ProductItem) => {
-    if (item.is_critical || (item.item?.inventory && item.item.inventory.current_stock < item.quantity_needed)) {
-      hasLowStock = true
+    if (item.item?.inventory) {
+      const currentStock = item.item.inventory.current_stock || 0
+      const needed = item.quantity_needed || 0
+      
+      if (currentStock <= 0) {
+        hasOutOfStock = true
+      } else if (currentStock < needed || item.is_critical) {
+        hasLowStock = true
+      }
     }
   })
 
+  if (hasOutOfStock) {
+    return { text: 'Stok Habis', color: 'error' }
+  }
   if (hasLowStock) {
-    return { text: 'Stok Kritis', color: 'error' }
+    return { text: 'Stok Kritis', color: 'warning' }
   }
   return { text: 'Stok Aman', color: 'success' }
+}
+
+// Helper functions for detail dialog
+const getProductComposition = (productId: string) => {
+  const product = compositionData.value.find(p => p.id_product === productId || p.id === productId)
+  return product?.items || []
+}
+
+const getItemStockColor = (item: any) => {
+  if (!item?.inventory) return 'grey'
+  const stock = item.inventory.current_stock || 0
+  
+  if (stock <= 0) return 'error'
+  if (stock <= 10) return 'warning' // Threshold bisa disesuaikan
+  return 'success'
+}
+
+const getItemStockStatus = (item: any) => {
+  if (!item?.inventory) return 'Tidak ada data'
+  const stock = item.inventory.current_stock || 0
+  
+  if (stock <= 0) return 'Habis'
+  if (stock <= 10) return 'Rendah'
+  return 'Aman'
+}
+
+const getItemStockClass = (item: any) => {
+  const color = getItemStockColor(item)
+  return {
+    'text-error': color === 'error',
+    'text-warning': color === 'warning',
+    'text-success': color === 'success',
+    'text-grey': color === 'grey'
+  }
 }
 
 const getItemsText = (totalItems: number) => {
@@ -113,12 +277,6 @@ const getItemsText = (totalItems: number) => {
             Kelola komposisi bahan untuk setiap produk
           </p>
         </div>
-        <VChip
-          :color="compositionData.length > 0 ? 'success' : 'default'"
-          variant="tonal"
-        >
-          {{ compositionData.length }} Produk dengan Komposisi
-        </VChip>
         <VBtn
           variant="outlined"
           prepend-icon="mdi-refresh"
@@ -131,30 +289,89 @@ const getItemsText = (totalItems: number) => {
     </VCard>
 
     <!-- Filters -->
-    <VCard class="mb-6">
+    <VCard class="mb-6" elevation="0" variant="outlined">
       <VCardText>
         <VRow>
-          <VCol cols="12" md="4">
-            <VSelect
-              label="Filter Produk"
-              :items="['Semua Produk', 'Stok Kritis', 'Stok Aman']"
+          <VCol cols="12" md="3">
+            <VTextField
+              v-model="filters.search"
+              label="Cari Produk"
+              placeholder="Nama produk, SKU, atau item..."
               variant="outlined"
-              prepend-inner-icon="mdi-filter"
+              density="compact"
+              prepend-inner-icon="mdi-magnify"
+              hide-details
+              clearable
             />
           </VCol>
-          <VCol cols="12" md="4">
+          
+          <VCol cols="12" md="3">
             <VSelect
-              label="Filter Item"
-              :items="['Semua Item', 'Bahan Utama', 'Bahan Tambahan']"
+              v-model="filters.stockStatus"
+              :items="stockStatusOptions"
+              label="Status Stok"
               variant="outlined"
-              prepend-inner-icon="mdi-food"
+              density="compact"
+              prepend-inner-icon="mdi-chart-line"
+              hide-details
+              clearable
             />
           </VCol>
-          <VCol cols="12" md="4">
+          
+          <VCol cols="12" md="3">
+            <VSelect
+              v-model="filters.sortBy"
+              :items="sortOptions"
+              label="Urutkan"
+              variant="outlined"
+              density="compact"
+              prepend-inner-icon="mdi-sort"
+              hide-details
+            />
+          </VCol>
+          
+          <VCol cols="12" md="3" class="d-flex align-center">
             <VCheckbox
+              v-model="filters.criticalOnly"
               label="Hanya Item Kritis"
-              density="comfortable"
+              density="compact"
+              hide-details
             />
+          </VCol>
+        </VRow>
+        
+        <!-- Second row for additional controls -->
+        <VRow class="mt-3">
+          <VCol cols="12" md="6" class="d-flex align-center gap-2">
+            <VBtn
+              variant="outlined"
+              color="grey"
+              size="small"
+              prepend-icon="mdi-filter-off"
+              @click="clearAllFilters"
+              :disabled="!hasActiveFilters"
+            >
+              Reset Filter
+            </VBtn>
+            
+            <VChip
+              v-if="hasActiveFilters"
+              color="primary"
+              variant="tonal"
+              size="small"
+            >
+              {{ activeFiltersCount }} filter aktif
+            </VChip>
+          </VCol>
+          
+          <VCol cols="12" md="6" class="d-flex align-center justify-end">
+            <VChip
+              :color="compositionData.length > 0 ? 'success' : 'default'"
+              variant="tonal"
+              prepend-icon="mdi-package-variant"
+            >
+              {{ compositionData.length }} Produk dengan Komposisi
+            </VChip>
           </VCol>
         </VRow>
       </VCardText>
@@ -162,12 +379,12 @@ const getItemsText = (totalItems: number) => {
 
     <!-- Error State -->
     <VAlert
-      v-if="error"
-      type="error"
+      v-if="!loading && compositionData.length === 0 && hasActiveFilters"
+      type="info"
       variant="outlined"
       class="mb-6"
-      :text="error"
-      closable
+      title="Tidak ada hasil"
+      text="Tidak ada produk yang sesuai dengan filter yang dipilih. Coba ubah filter pencarian."
     />
 
     <!-- Loading State -->
@@ -323,19 +540,19 @@ const getItemsText = (totalItems: number) => {
               <VBtn
                 color="primary"
                 size="small"
-                prepend-icon="mdi-cog"
-                @click="openCompositionDialog(product)"
+                prepend-icon="mdi-eye"
+                @click="openDetailDialog(product)"
               >
-                Kelola
+                Detail
               </VBtn>
               <VBtn
                 color="secondary"
                 variant="outlined"
                 size="small"
-                prepend-icon="mdi-eye"
-                @click="emit('view-details', product)"
+                prepend-icon="mdi-cog"
+                @click="openCompositionDialog(product)"
               >
-                Detail
+                Kelola
               </VBtn>
             </div>
           </VCardText>
@@ -351,6 +568,256 @@ const getItemsText = (totalItems: number) => {
       @save="handleCompositionSave"
       @refresh="emit('refresh')"
     />
+
+    <!-- Product Detail Dialog -->
+    <VDialog
+      v-model="detailDialog"
+      max-width="900"
+      scrollable
+    >
+      <VCard>
+        <VCardTitle class="d-flex align-center justify-space-between">
+          <div class="d-flex align-center">
+            <VIcon
+              icon="mdi-eye"
+              class="mr-2"
+              color="primary"
+            />
+            <span>Detail Komposisi Produk</span>
+          </div>
+          <VBtn
+            icon
+            variant="text"
+            @click="detailDialog = false"
+          >
+            <VIcon icon="mdi-close" />
+          </VBtn>
+        </VCardTitle>
+
+        <VDivider />
+
+        <VCardText v-if="selectedProductForDetail">
+          <VContainer>
+            <!-- Product Header Info -->
+            <VRow>
+              <VCol cols="12">
+                <VCard variant="outlined" class="mb-4">
+                  <VCardText>
+                    <div class="d-flex align-center gap-4">
+                      <VAvatar
+                        :image="selectedProductForDetail.image_url"
+                        size="80"
+                      >
+                        <VIcon v-if="!selectedProductForDetail.image_url" icon="mdi-coffee" size="40" />
+                      </VAvatar>
+                      <div class="flex-grow-1">
+                        <h2 class="text-h5 font-weight-bold mb-2">
+                          {{ selectedProductForDetail.name }}
+                        </h2>
+                        <div class="d-flex align-center gap-4 mb-2">
+                          <VChip
+                            :color="getStockStatus(selectedProductForDetail).color"
+                            variant="tonal"
+                            size="small"
+                          >
+                            {{ getStockStatus(selectedProductForDetail).text }}
+                          </VChip>
+                          <span class="text-body-2">SKU: {{ selectedProductForDetail.sku || '-' }}</span>
+                        </div>
+                        <div class="text-h6 text-primary font-weight-bold">
+                          {{ formatRupiah(selectedProductForDetail.price || 0) }}
+                        </div>
+                      </div>
+                    </div>
+                  </VCardText>
+                </VCard>
+              </VCol>
+            </VRow>
+
+            <!-- Composition Items -->
+            <VRow>
+              <VCol cols="12">
+                <VCard variant="outlined">
+                  <VCardTitle class="text-h6">
+                    <VIcon
+                      icon="mdi-format-list-bulleted"
+                      class="mr-2"
+                    />
+                    Komposisi Item ({{ selectedProductForDetail.totalItems || 0 }})
+                  </VCardTitle>
+                  <VCardText>
+                    <template v-if="selectedProductForDetail.items && selectedProductForDetail.items.length > 0">
+                      <VList>
+                        <VListItem
+                          v-for="(item, index) in selectedProductForDetail.items"
+                          :key="item.id_product_item"
+                          class="px-0"
+                        >
+                          <template #prepend>
+                            <VAvatar
+                              size="40"
+                              :color="getItemStockColor(item.item)"
+                              variant="tonal"
+                            >
+                              <VIcon 
+                                :icon="item.item?.inventory && item.item.inventory.current_stock >= item.quantity_needed ? 'mdi-check' : 'mdi-alert'"
+                              />
+                            </VAvatar>
+                          </template>
+
+                          <VListItemTitle class="font-weight-medium">
+                            {{ item.item?.name || 'Unknown Item' }}
+                            <VChip
+                              v-if="item.is_critical"
+                              color="error"
+                              variant="tonal"
+                              size="x-small"
+                              class="ml-2"
+                            >
+                              Kritis
+                            </VChip>
+                          </VListItemTitle>
+
+                          <VListItemSubtitle>
+                            <div class="d-flex align-center mt-1 gap-4">
+                              <div class="d-flex align-center">
+                                <VIcon
+                                  icon="mdi-scale"
+                                  size="14"
+                                  class="mr-1"
+                                />
+                                <span>
+                                  Kebutuhan: {{ Number(item.quantity_needed || 0).toLocaleString('id-ID') }} {{ item.unit }}
+                                </span>
+                              </div>
+                              
+                              <div class="d-flex align-center">
+                                <VIcon
+                                  icon="mdi-warehouse"
+                                  size="14"
+                                  class="mr-1"
+                                />
+                                <span
+                                  :class="getItemStockClass(item.item)"
+                                >
+                                  Stok: {{ Number(item.item?.inventory?.current_stock || 0).toLocaleString('id-ID') }} {{ item.unit }}
+                                </span>
+                              </div>
+
+                              <div v-if="item.formatted_total_cost" class="d-flex align-center">
+                                <VIcon
+                                  icon="mdi-currency-usd"
+                                  size="14"
+                                  class="mr-1"
+                                />
+                                <span class="text-primary font-weight-medium">
+                                  {{ item.formatted_total_cost }}
+                                </span>
+                              </div>
+                            </div>
+                          </VListItemSubtitle>
+
+                          <template #append>
+                            <VChip
+                              :color="getItemStockColor(item.item)"
+                              variant="tonal"
+                              size="small"
+                            >
+                              {{ getItemStockStatus(item.item) }}
+                            </VChip>
+                          </template>
+
+                          <VDivider
+                            v-if="index < selectedProductForDetail.items.length - 1"
+                            class="mt-3"
+                          />
+                        </VListItem>
+                      </VList>
+                    </template>
+                    <template v-else>
+                      <div class="text-center py-8">
+                        <VIcon
+                          icon="mdi-package-variant-closed"
+                          size="48"
+                          color="grey-lighten-1"
+                          class="mb-2"
+                        />
+                        <p class="text-body-1 text-grey">
+                          Belum ada komposisi item untuk produk ini
+                        </p>
+                      </div>
+                    </template>
+                  </VCardText>
+                </VCard>
+              </VCol>
+            </VRow>
+
+            <!-- Summary Statistics -->
+            <VRow class="mt-4">
+              <VCol cols="12" md="4">
+                <VCard variant="outlined" color="primary">
+                  <VCardText class="text-center">
+                    <VIcon icon="mdi-format-list-bulleted" size="32" class="mb-2" />
+                    <div class="text-h6 font-weight-bold">{{ selectedProductForDetail.totalItems || 0 }}</div>
+                    <div class="text-body-2">Total Item</div>
+                  </VCardText>
+                </VCard>
+              </VCol>
+              <VCol cols="12" md="4">
+                <VCard variant="outlined" color="warning">
+                  <VCardText class="text-center">
+                    <VIcon icon="mdi-alert" size="32" class="mb-2" />
+                    <div class="text-h6 font-weight-bold">
+                      {{ selectedProductForDetail.items?.filter((item: ProductItem) => item.is_critical).length || 0 }}
+                    </div>
+                    <div class="text-body-2">Item Kritis</div>
+                  </VCardText>
+                </VCard>
+              </VCol>
+              <VCol cols="12" md="4">
+                <VCard variant="outlined" color="success">
+                  <VCardText class="text-center">
+                    <VIcon icon="mdi-currency-usd" size="32" class="mb-2" />
+                    <div class="text-h6 font-weight-bold">{{ formatRupiah(selectedProductForDetail.price || 0) }}</div>
+                    <div class="text-body-2">Harga Jual</div>
+                  </VCardText>
+                </VCard>
+              </VCol>
+            </VRow>
+          </VContainer>
+        </VCardText>
+
+        <VDivider />
+
+        <VCardActions class="pa-4">
+          <VSpacer />
+          <VBtn
+            variant="outlined"
+            @click="detailDialog = false"
+          >
+            Tutup
+          </VBtn>
+          <VBtn
+            color="secondary"
+            variant="outlined"
+            prepend-icon="mdi-cog"
+            @click="() => {
+              detailDialog = false
+              openCompositionDialog(selectedProductForDetail)
+            }"
+          >
+            Kelola Komposisi
+          </VBtn>
+          <VBtn
+            color="primary"
+            variant="elevated"
+            prepend-icon="mdi-calculator-variant"
+          >
+            Setting HPP
+          </VBtn>
+        </VCardActions>
+      </VCard>
+    </VDialog>
   </div>
 </template>
 

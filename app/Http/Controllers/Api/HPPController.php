@@ -225,9 +225,17 @@ class HPPController extends Controller
             
             $validator = Validator::make($request->all(), [
                 'method' => 'required|in:current,latest,average',
-                'markup_percentage' => 'required|numeric|min:0|max:1000',
+                'markup_percentage' => 'nullable|numeric|min:0|max:1000',
+                'target_price' => 'nullable|numeric|min:0',
                 'update_cost' => 'boolean',
             ]);
+            
+            // Validate that either markup_percentage or target_price is provided
+            if (!$request->has('markup_percentage') && !$request->has('target_price')) {
+                $validator->after(function ($validator) {
+                    $validator->errors()->add('pricing', 'Either markup_percentage or target_price must be provided');
+                });
+            }
             
             if ($validator->fails()) {
                 return response()->json([
@@ -258,13 +266,19 @@ class HPPController extends Controller
                 default => $product->calculateHPP(),
             };
             
-            // Calculate new price with markup
-            $newPrice = round($hpp * (1 + $request->markup_percentage / 100), 0);
-            
-            // Calculate actual markup percentage from saved data
-            $actualMarkupPercentage = $hpp > 0 
-                ? (($newPrice - $hpp) / $hpp) * 100 
-                : 0;
+            // Calculate new price based on input type
+            if ($request->has('target_price') && $request->target_price > 0) {
+                // Use target price directly
+                $newPrice = round($request->target_price, 0);
+                $actualMarkupPercentage = $hpp > 0 
+                    ? (($newPrice - $hpp) / $hpp) * 100 
+                    : 0;
+            } else {
+                // Use markup percentage (legacy mode)
+                $markupPercentage = $request->markup_percentage ?? 0;
+                $newPrice = round($hpp * (1 + $markupPercentage / 100), 0);
+                $actualMarkupPercentage = $markupPercentage;
+            }
             
             // Update product with price, cost, and markup percentage
             $updateData = [

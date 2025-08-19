@@ -23,6 +23,7 @@ interface Emits {
   (e: 'delete', productItem: any): void
   (e: 'check-capacity', product: any): void
   (e: 'view-hpp', product: any): void
+  (e: 'view-detail', product: any): void
   (e: 'update:page', page: number): void
 }
 
@@ -46,6 +47,12 @@ const handleCapacityClick = (product: any) => {
   console.log('📊 CAPACITY CLICKED!', product)
   console.log(`CAPACITY CLICKED: ${product.name}`)
   emit('check-capacity', product)
+}
+
+const handleDetailClick = (product: any) => {
+  console.log('👁️ DETAIL CLICKED!', product)
+  console.log(`DETAIL CLICKED: ${product.name}`)
+  emit('view-detail', product)
 }
 
 // Group product items by product
@@ -392,6 +399,16 @@ const getStockPercentage = (item: any): number => {
 
             <!-- Card Footer -->
             <VCardActions class="pt-0 px-4 pb-3">
+              <VBtn
+                variant="outlined"
+                color="primary"
+                size="small"
+                prepend-icon="mdi-eye"
+                @click="handleDetailClick(productGroup.product)"
+              >
+                Detail
+              </VBtn>
+
               <VBtn
                 variant="tonal"
                 color="orange"

@@ -19,6 +19,17 @@ class ProductItemController extends Controller
         try {
             $query = ProductItem::with(['product', 'item.inventory']);
 
+            // Search filter (search in product name, SKU, or item name)
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->whereHas('product', function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('sku', 'like', "%{$search}%");
+                })->orWhereHas('item', function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%");
+                });
+            }
+
             // Filter by product
             if ($request->has('product_id') && !empty($request->product_id)) {
                 $query->where('product_id', $request->product_id);
@@ -39,8 +50,60 @@ class ProductItemController extends Controller
                 $query->where('is_critical', true);
             }
 
-            $productItems = $query->orderBy('created_at', 'desc')
-                ->paginate($request->get('per_page', 15));
+            // Filter by stock status
+            if ($request->filled('stock_status')) {
+                switch ($request->stock_status) {
+                    case 'safe':
+                        $query->whereHas('item.inventory', function ($q) {
+                            $q->whereRaw('current_stock > min_stock');
+                        });
+                        break;
+                    case 'low':
+                        $query->whereHas('item.inventory', function ($q) {
+                            $q->whereRaw('current_stock <= min_stock AND current_stock > 0');
+                        });
+                        break;
+                    case 'out':
+                        $query->whereHas('item.inventory', function ($q) {
+                            $q->where('current_stock', '<=', 0);
+                        });
+                        break;
+                }
+            }
+
+            // Sorting
+            $sortBy = $request->get('sort_by', 'created_desc');
+            switch ($sortBy) {
+                case 'name_asc':
+                    $query->join('products', 'product_items.product_id', '=', 'products.id_product')
+                          ->orderBy('products.name', 'asc')
+                          ->select('product_items.*');
+                    break;
+                case 'name_desc':
+                    $query->join('products', 'product_items.product_id', '=', 'products.id_product')
+                          ->orderBy('products.name', 'desc')
+                          ->select('product_items.*');
+                    break;
+                case 'price_asc':
+                    $query->join('products', 'product_items.product_id', '=', 'products.id_product')
+                          ->orderBy('products.price', 'asc')
+                          ->select('product_items.*');
+                    break;
+                case 'price_desc':
+                    $query->join('products', 'product_items.product_id', '=', 'products.id_product')
+                          ->orderBy('products.price', 'desc')
+                          ->select('product_items.*');
+                    break;
+                case 'created_asc':
+                    $query->orderBy('created_at', 'asc');
+                    break;
+                case 'created_desc':
+                default:
+                    $query->orderBy('created_at', 'desc');
+                    break;
+            }
+
+            $productItems = $query->paginate($request->get('per_page', 15));
 
             return response()->json([
                 'success' => true,

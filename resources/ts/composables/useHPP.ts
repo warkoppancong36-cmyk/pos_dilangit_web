@@ -252,8 +252,9 @@ export const useHPP = () => {
   const updatePriceFromHPP = async (
     productId: number,
     method: 'current' | 'latest' | 'average',
-    markupPercentage: number,
+    markupPercentageOrTargetPrice: number,
     updateCost: boolean = true,
+    useTargetPrice: boolean = false,
   ) => {
     loading.value = true
     try {
@@ -262,11 +263,21 @@ export const useHPP = () => {
       // Get token from localStorage like other APIs
       const token = localStorage.getItem('token')
 
-      const response = await axios.post(`/api/hpp/products/${productId}/update-price`, {
+      const payload: any = {
         method,
-        markup_percentage: markupPercentage,
         update_cost: updateCost,
-      }, {
+      }
+
+      // Add either markup_percentage or target_price based on mode
+      if (useTargetPrice) {
+        payload.target_price = markupPercentageOrTargetPrice
+        console.log('📊 Using target price mode:', markupPercentageOrTargetPrice)
+      } else {
+        payload.markup_percentage = markupPercentageOrTargetPrice
+        console.log('📊 Using markup percentage mode:', markupPercentageOrTargetPrice)
+      }
+
+      const response = await axios.post(`/api/hpp/products/${productId}/update-price`, payload, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json',

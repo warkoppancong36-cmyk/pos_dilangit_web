@@ -250,6 +250,8 @@ export const useProducts = () => {
         }
       })
 
+      console.log('📡 Fetching products with params:', params)
+
       const response = await ProductsApi.getAll(params)
       if (response.success) {
         productsList.value = response.data as any // Cast to avoid type conflicts

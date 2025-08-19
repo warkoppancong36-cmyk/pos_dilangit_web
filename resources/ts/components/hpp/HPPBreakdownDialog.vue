@@ -37,8 +37,15 @@ const {
 
 // State
 const selectedMethod = ref<'current' | 'latest' | 'average'>('latest')
-const markupPercentage = ref(0) // Will be loaded from database
+const markupPercentage = ref(0) // Will be calculated from target price
+const targetPrice = ref(0) // User input for desired selling price
 const markupKey = ref(0) // Key untuk force re-render TextField
+
+// Snackbar state
+const successSnackbar = ref(false)
+const errorSnackbar = ref(false)
+const successMessage = ref('')
+const errorMessage = ref('')
 
 // Data
 const hppMethods = [
@@ -57,7 +64,7 @@ const breakdownHeaders = [
 ]
 
 // Methods
-const loadProductMarkupPercentage = async () => {
+const loadProductTargetPrice = async () => {
   if (props.productId) {
     try {
       const token = localStorage.getItem('token')
@@ -72,27 +79,25 @@ const loadProductMarkupPercentage = async () => {
       if (response.data.success && response.data.data) {
         const product = response.data.data
 
-        if (product.markup_percentage !== null && product.markup_percentage !== undefined) {
-          // Use stored markup percentage
-          markupPercentage.value = Number(product.markup_percentage)
-        }
-        else if (product.price && product.cost && product.cost > 0) {
-          // Calculate markup percentage from price and cost
-          const calculatedMarkup = ((product.price - product.cost) / product.cost) * 100
-
-          markupPercentage.value = Math.round(calculatedMarkup * 100) / 100
+        // Load current price as target price
+        if (product.price && product.price > 0) {
+          targetPrice.value = Number(product.price)
         }
         else {
-          // Default fallback
-          markupPercentage.value = 20
+          // Default fallback - calculate from HPP if available
+          if (currentHPPBreakdown.value?.total_hpp) {
+            targetPrice.value = Math.round(currentHPPBreakdown.value.total_hpp * 1.2) // 20% markup as default
+          }
         }
 
         markupKey.value += 1 // Force re-render
       }
     }
     catch (error) {
-      console.warn('Could not load markup percentage, using default:', error)
-      markupPercentage.value = 20
+      console.warn('Could not load target price, using default:', error)
+      if (currentHPPBreakdown.value?.total_hpp) {
+        targetPrice.value = Math.round(currentHPPBreakdown.value.total_hpp * 1.2)
+      }
     }
   }
 }
@@ -100,48 +105,78 @@ const loadProductMarkupPercentage = async () => {
 const loadHPPBreakdown = async () => {
   if (props.productId) {
     await getProductHPPBreakdown(props.productId, selectedMethod.value)
-    await loadProductMarkupPercentage()
+    await loadProductTargetPrice()
   }
 }
 
 const updateHPP = async () => {
   if (props.productId) {
-    await updateProductHPP(props.productId, selectedMethod.value)
-    emit('hpp-updated')
+    try {
+      await updateProductHPP(props.productId, selectedMethod.value)
+      
+      // Show success message
+      successMessage.value = `HPP successfully updated using ${selectedMethod.value} method!`
+      successSnackbar.value = true
+      
+      emit('hpp-updated')
 
-    // Reload breakdown after update
-    await loadHPPBreakdown()
+      // Reload breakdown after update
+      await loadHPPBreakdown()
+    } catch (error: any) {
+      console.error('Error updating HPP:', error)
+      
+      // Show error message
+      errorMessage.value = error?.response?.data?.message || 'Failed to update HPP'
+      errorSnackbar.value = true
+    }
   }
 }
 
 const calculateSuggestion = async () => {
-  if (props.productId)
-    await calculateSuggestedPrice(props.productId, markupPercentage.value)
+  if (props.productId && currentHPPBreakdown.value?.total_hpp && targetPrice.value) {
+    try {
+      // Calculate markup percentage from target price and HPP
+      const hpp = currentHPPBreakdown.value.total_hpp
+      markupPercentage.value = hpp > 0 ? ((targetPrice.value - hpp) / hpp) * 100 : 0
+      
+      await calculateSuggestedPrice(props.productId, markupPercentage.value)
+      
+      // Show success message for calculation
+      successMessage.value = `Price suggestion calculated successfully!`
+      successSnackbar.value = true
+    } catch (error: any) {
+      console.error('Error calculating suggestion:', error)
+      
+      // Show error message
+      errorMessage.value = error?.response?.data?.message || 'Failed to calculate price suggestion'
+      errorSnackbar.value = true
+    }
+  }
 }
 
 const applyPriceSuggestion = async () => {
-  if (props.productId) {
+  if (props.productId && currentHPPBreakdown.value?.total_hpp && targetPrice.value) {
     try {
       const response = await updatePriceFromHPP(
         props.productId,
         selectedMethod.value,
-        markupPercentage.value,
+        targetPrice.value,
         true,
+        true, // useTargetPrice = true
       )
 
-      // Update markup percentage FIRST before any reload
-      if (response?.data?.markup_percentage !== undefined) {
-        markupPercentage.value = response.data.markup_percentage
-        markupKey.value += 1
-        await nextTick()
-      }
-      else if (response?.data?.new_price && currentHPPBreakdown.value?.total_hpp) {
-        // Fallback: calculate manually if backend doesn't provide
-        const newPrice = response.data.new_price
-        const hpp = currentHPPBreakdown.value.total_hpp
-        const actualMarkup = ((newPrice - hpp) / hpp) * 100
-
-        markupPercentage.value = Math.round(actualMarkup * 100) / 100
+      // Update target price and markup from response
+      if (response?.data?.new_price) {
+        targetPrice.value = response.data.new_price
+        
+        if (response?.data?.markup_percentage !== undefined) {
+          markupPercentage.value = response.data.markup_percentage
+        } else {
+          // Calculate markup from response data
+          const hpp = currentHPPBreakdown.value.total_hpp
+          markupPercentage.value = hpp > 0 ? ((response.data.new_price - hpp) / hpp) * 100 : 0
+        }
+        
         markupKey.value += 1
         await nextTick()
       }
@@ -149,10 +184,18 @@ const applyPriceSuggestion = async () => {
       // Reload HPP breakdown after price update
       await loadHPPBreakdown()
 
+      // Show success message
+      successMessage.value = `Price successfully updated to ${formatCurrency(response?.data?.new_price || targetPrice.value)}!`
+      successSnackbar.value = true
+
       emit('price-updated')
     }
-    catch (error) {
+    catch (error: any) {
       console.error('Error applying price suggestion:', error)
+      
+      // Show error message
+      errorMessage.value = error?.response?.data?.message || 'Failed to update product price'
+      errorSnackbar.value = true
     }
   }
 }
@@ -380,13 +423,15 @@ watch(() => props.productId, newValue => {
                   >
                     <VTextField
                       :key="markupKey"
-                      v-model.number="markupPercentage"
+                      v-model.number="targetPrice"
                       type="number"
-                      label="Markup Percentage (%)"
+                      label="Target Selling Price"
                       variant="outlined"
-                      suffix="%"
                       min="0"
-                      max="1000"
+                      step="100"
+                      prefix="Rp"
+                      hint="Enter desired selling price"
+                      persistent-hint
                     />
                   </VCol>
                   <VCol
@@ -394,22 +439,7 @@ watch(() => props.productId, newValue => {
                     md="3"
                   >
                     <VBtn
-                      color="info"
-                      variant="elevated"
-                      :loading="loading"
-                      prepend-icon="mdi-calculator"
-                      block
-                      @click="calculateSuggestion"
-                    >
-                      Calculate
-                    </VBtn>
-                  </VCol>
-                  <VCol
-                    cols="12"
-                    md="3"
-                  >
-                    <VBtn
-                      v-if="hasSuggestionData"
+                      v-if="targetPrice && currentHPPBreakdown?.total_hpp"
                       color="success"
                       variant="elevated"
                       :loading="loading"
@@ -425,22 +455,25 @@ watch(() => props.productId, newValue => {
                     md="3"
                   >
                     <div
-                      v-if="hasSuggestionData"
+                      v-if="targetPrice && currentHPPBreakdown?.total_hpp"
                       class="text-center"
                     >
                       <div class="text-subtitle-2">
-                        Suggested Price
+                        Target Price
                       </div>
                       <div class="text-h6 font-weight-bold text-success">
-                        {{ formatCurrency(currentHPPSuggestion.suggestions[selectedMethod]?.suggested_price || 0) }}
+                        {{ formatCurrency(targetPrice) }}
+                      </div>
+                      <div class="text-caption text-grey-darken-1">
+                        Margin: {{ ((targetPrice - currentHPPBreakdown.total_hpp) / currentHPPBreakdown.total_hpp * 100).toFixed(1) }}%
                       </div>
                     </div>
                   </VCol>
                 </VRow>
 
-                <!-- Suggestion Details -->
+                <!-- Price Calculation Details -->
                 <VRow
-                  v-if="hasSuggestionData"
+                  v-if="targetPrice && currentHPPBreakdown?.total_hpp"
                   class="mt-4"
                 >
                   <VCol cols="12">
@@ -451,16 +484,16 @@ watch(() => props.productId, newValue => {
                     >
                       <div class="d-flex justify-space-between align-center">
                         <div>
-                          <strong>HPP:</strong> {{ formatCurrency(currentHPPSuggestion.suggestions[selectedMethod]?.hpp || 0) }} |
-                          <strong>Markup:</strong> {{ markupPercentage }}% |
-                          <strong>Profit:</strong> {{ formatCurrency(currentHPPSuggestion.suggestions[selectedMethod]?.profit_margin || 0) }}
+                          <strong>HPP:</strong> {{ formatCurrency(currentHPPBreakdown.total_hpp) }} |
+                          <strong>Target Price:</strong> {{ formatCurrency(targetPrice) }} |
+                          <strong>Profit:</strong> {{ formatCurrency(targetPrice - currentHPPBreakdown.total_hpp) }}
                         </div>
                         <VChip
                           color="success"
                           variant="elevated"
                           size="small"
                         >
-                          {{ Number(markupPercentage).toFixed(1) }}% margin
+                          {{ ((targetPrice - currentHPPBreakdown.total_hpp) / currentHPPBreakdown.total_hpp * 100).toFixed(1) }}% margin
                         </VChip>
                       </div>
                     </VAlert>
@@ -522,6 +555,44 @@ watch(() => props.productId, newValue => {
       </VCardActions>
     </VCard>
   </VDialog>
+
+  <!-- Success Snackbar -->
+  <VSnackbar
+    v-model="successSnackbar"
+    color="success"
+    location="top"
+    :timeout="4000"
+  >
+    {{ successMessage }}
+    <template #actions>
+      <VBtn
+        color="white"
+        variant="text"
+        @click="successSnackbar = false"
+      >
+        <VIcon>mdi-close</VIcon>
+      </VBtn>
+    </template>
+  </VSnackbar>
+
+  <!-- Error Snackbar -->
+  <VSnackbar
+    v-model="errorSnackbar"
+    color="error"
+    location="top"
+    :timeout="6000"
+  >
+    {{ errorMessage }}
+    <template #actions>
+      <VBtn
+        color="white"
+        variant="text"
+        @click="errorSnackbar = false"
+      >
+        <VIcon>mdi-close</VIcon>
+      </VBtn>
+    </template>
+  </VSnackbar>
 </template>
 
 <style scoped>

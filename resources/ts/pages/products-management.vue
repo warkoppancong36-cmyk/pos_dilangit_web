@@ -139,7 +139,16 @@ const getProductCompositionItems = (product: any) => {
 }
 
 const handleFiltersUpdate = (newFilters: any) => {
+  console.log('📝 Filters updated:', newFilters)
   Object.assign(filters, newFilters)
+  fetchProductsList() // Trigger fetch when filters update
+}
+
+const handleSearch = (query: string) => {
+  console.log('🔍 Search triggered with query:', query)
+  // Update search filter and fetch
+  filters.search = query
+  fetchProductsList()
 }
 
 const removeImage = () => {
@@ -247,6 +256,7 @@ onMounted(() => {
         <ProductSearchFilters
           :filters="filters"
           @update:filters="handleFiltersUpdate"
+          @search="handleSearch"
         />
 
         <ProductTable
