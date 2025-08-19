@@ -445,7 +445,8 @@ const fetchProductComposition = async () => {
     })
     
     if (response.success && response.data?.data) {
-      console.log('📦 Loaded composition items:', response.data.data)
+      console.log('📦 Raw composition items from API:', response.data.data.slice(0, 2))
+      console.log('📦 Sample composition item structure:', JSON.stringify(response.data.data[0], null, 2))
       compositionItems.value = response.data.data
     }
   } catch (error) {
@@ -464,12 +465,14 @@ const fetchAvailableItems = async () => {
     })
     
     if (response.success && response.data?.data) {
+      console.log('📦 Raw available items from API:', response.data.data.slice(0, 3))
       availableItems.value = response.data.data.map((item: any) => ({
         id: item.id_item?.toString() || item.id?.toString(),
         name: item.name,
         current_stock: item.inventory?.current_stock || 0,
         unit: item.unit || 'pcs'
       }))
+      console.log('📦 Processed available items:', availableItems.value.slice(0, 3))
     }
   } catch (error) {
     console.error('Error fetching available items:', error)
@@ -551,6 +554,10 @@ watch(() => newItem.value.itemId, (newItemId) => {
 
 // Watch for props changes
 watch(() => props.items, (newItems) => {
+  console.log('📋 Props items changed:', newItems)
+  if (newItems && newItems.length > 0) {
+    console.log('📋 Sample item structure:', newItems[0])
+  }
   compositionItems.value = [...newItems]
 }, { immediate: true })
 
@@ -625,15 +632,58 @@ const addItem = () => {
 }
 
 const editItem = (item: CompositionItem, index: number) => {
+  console.log('🔍 EditItem called with:', item)
+  console.log('🔍 Item structure:', JSON.stringify(item, null, 2))
+  
+  // Check if available items are loaded
+  if (availableItems.value.length === 0) {
+    console.warn('⚠️ Available items not loaded yet, fetching...')
+    fetchAvailableItems().then(() => {
+      console.log('✅ Available items loaded, retrying edit')
+      editItem(item, index) // Retry after loading
+    })
+    return
+  }
+  
   editMode.value = true
   editIndex.value = index
   
+  // Get item ID - should be in item.item.id based on our data structure
+  let itemId = item.item?.id || null
+  
+  // Convert to string to match availableItems format
+  if (itemId !== null) {
+    itemId = itemId.toString()
+  }
+  
+  console.log('🎯 Found itemId (converted to string):', itemId)
+  console.log('🔍 Available items for reference:', availableItems.value.map(ai => ({ id: ai.id, name: ai.name })))
+  
   // Fill form with item data
   newItem.value = {
-    itemId: item.item?.id || null,
+    itemId: itemId,
     quantity: item.quantity_needed,
     unit: item.unit,
     isCritical: item.is_critical
+  }
+  
+  console.log('📝 Form data set for edit:', newItem.value)
+  
+  // Verify that the itemId exists in available items
+  const foundInAvailable = availableItems.value.find(ai => ai.id === itemId)
+  if (!foundInAvailable) {
+    console.warn('⚠️ Item ID not found in available items, trying alternative matching...')
+    
+    // Try to find by name as backup
+    const foundByName = availableItems.value.find(ai => ai.name === item.item?.name)
+    if (foundByName) {
+      console.log('✅ Found item by name matching, using ID:', foundByName.id)
+      newItem.value.itemId = foundByName.id
+    } else {
+      console.error('❌ Could not find item in available items by ID or name')
+    }
+  } else {
+    console.log('✅ Item found in available items:', foundInAvailable.name)
   }
 }
 
