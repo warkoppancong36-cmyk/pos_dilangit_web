@@ -57,35 +57,97 @@
         <!-- Add New Item Form -->
         <VCard class="mb-6" elevation="2">
           <VCardTitle class="bg-grey-lighten-4 py-3">
-            <VIcon :icon="editMode ? 'mdi-pencil-circle' : 'mdi-plus-circle'" class="me-2" />
-            {{ editMode ? 'Edit Item Komposisi' : 'Tambah Item Komposisi' }}
+            <div class="d-flex align-center justify-space-between w-100">
+              <div class="d-flex align-center">
+                <VIcon :icon="editMode ? 'mdi-pencil-circle' : 'mdi-plus-circle'" class="me-2" />
+                {{ editMode ? 'Edit Item Komposisi' : 'Tambah Item Komposisi' }}
+              </div>
+              <!-- Items Stock Info -->
+              <div v-if="availableItems.length > 0" class="d-flex align-center gap-2">
+                <VChip 
+                  size="small" 
+                  color="success" 
+                  variant="tonal"
+                  prepend-icon="mdi-check-circle"
+                >
+                  {{ availableItemsWithStock.length }} Tersedia
+                </VChip>
+                <VChip 
+                  v-if="availableItems.length - availableItemsWithStock.length > 0"
+                  size="small" 
+                  color="error" 
+                  variant="tonal"
+                  prepend-icon="mdi-alert-circle"
+                >
+                  {{ availableItems.length - availableItemsWithStock.length }} Stok Habis
+                </VChip>
+              </div>
+            </div>
           </VCardTitle>
           <VCardText class="pa-4">
             <VRow>
               <VCol cols="12" md="4">
                 <VAutocomplete
                   v-model="newItem.itemId"
-                  :items="availableItems"
+                  :items="availableItemsWithStock"
                   :loading="loadingItems"
                   item-title="name"
                   item-value="id"
                   label="Pilih Item"
-                  placeholder="Cari item..."
+                  placeholder="Cari item dengan stok..."
                   prepend-inner-icon="mdi-magnify"
                   variant="outlined"
                   clearable
+                  :no-data-text="getNoDataText()"
                 >
                   <template #item="{ props, item }">
-                    <VListItem v-bind="props">
+                    <VListItem 
+                      v-bind="props"
+                      :disabled="getItemStock(item.raw) <= 0"
+                      :class="{ 'text-disabled': getItemStock(item.raw) <= 0 }"
+                    >
                       <template #prepend>
-                        <VAvatar size="32" class="me-3">
-                          <VIcon icon="mdi-package-variant" />
+                        <VAvatar 
+                          size="32" 
+                          class="me-3"
+                          :color="getItemStock(item.raw) <= 0 ? 'grey-darken-2' : 'primary'"
+                          variant="tonal"
+                        >
+                          <VIcon 
+                            icon="mdi-package-variant" 
+                            :color="getItemStock(item.raw) <= 0 ? 'grey-darken-2' : 'primary'" 
+                          />
                         </VAvatar>
                       </template>
                       <VListItemTitle>{{ item.raw.name }}</VListItemTitle>
-                      <VListItemSubtitle>
-                        Stok: {{ item.raw.current_stock }} {{ item.raw.unit }}
+                      <VListItemSubtitle :class="getItemStock(item.raw) <= 0 ? 'text-disabled' : 'text-medium-emphasis'">
+                        <span v-if="getItemStock(item.raw) <= 0" class="text-error">
+                          <VIcon icon="mdi-alert-circle" size="12" class="me-1" />
+                          Stok Habis
+                        </span>
+                        <span v-else>
+                          Stok: {{ getItemStock(item.raw) }} {{ item.raw.unit }}
+                        </span>
                       </VListItemSubtitle>
+                      <template #append>
+                        <VChip 
+                          v-if="getItemStock(item.raw) > 0"
+                          size="x-small" 
+                          :color="getStockChipColor(item.raw)"
+                          variant="dot"
+                        >
+                          {{ getStockLabel(item.raw) }}
+                        </VChip>
+                        <VChip 
+                          v-else
+                          size="x-small" 
+                          color="error"
+                          variant="outlined"
+                          prepend-icon="mdi-close-circle"
+                        >
+                          Habis
+                        </VChip>
+                      </template>
                     </VListItem>
                   </template>
                 </VAutocomplete>
@@ -458,6 +520,43 @@ const selectedItemUnit = computed(() => {
   const selectedItem = availableItems.value.find(item => item.id === newItem.value.itemId)
   return selectedItem?.unit || null
 })
+
+// Filter items with stock > 0 only
+const availableItemsWithStock = computed(() => {
+  if (!Array.isArray(availableItems.value)) return []
+  return availableItems.value.filter(item => getItemStock(item) > 0)
+})
+
+// Helper function to get item stock
+const getItemStock = (item: any): number => {
+  return item.current_stock || item.stock || 0
+}
+
+// Get no data text based on loading state and available items
+const getNoDataText = (): string => {
+  if (loadingItems.value) return 'Memuat items...'
+  if (!availableItems.value || availableItems.value.length === 0) return 'Tidak ada item tersedia'
+  if (availableItemsWithStock.value.length === 0) return 'Semua item sedang stok habis'
+  return 'Tidak ada item yang ditemukan'
+}
+
+// Get stock chip color
+const getStockChipColor = (item: any): string => {
+  const stock = getItemStock(item)
+  if (stock > 50) return 'success'
+  if (stock > 20) return 'warning'
+  if (stock > 0) return 'error'
+  return 'grey'
+}
+
+// Get stock label
+const getStockLabel = (item: any): string => {
+  const stock = getItemStock(item)
+  if (stock > 50) return 'Aman'
+  if (stock > 20) return 'Rendah'
+  if (stock > 0) return 'Kritis'
+  return 'Habis'
+}
 
 // Watch for item selection to auto-fill unit
 watch(() => newItem.value.itemId, (newItemId) => {

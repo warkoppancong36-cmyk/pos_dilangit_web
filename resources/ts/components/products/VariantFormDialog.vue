@@ -23,24 +23,6 @@
       <v-card-text class="pt-4">
         <v-form ref="form" @submit.prevent="handleSave">
           <v-row>
-            <!-- Product automatically selected - just show it as info -->
-            <v-col v-if="!isEdit" cols="12">
-              <v-alert
-                :type="formData.product_id ? 'info' : 'warning'"
-                variant="tonal"
-                class="mb-4"
-              >
-                <div class="d-flex align-center">
-                  <v-icon icon="mdi-package" class="me-2" />
-                  <div>
-                    <strong>Produk:</strong> {{ selectedProductName || 'Produk tidak terdeteksi' }}
-                    <br>
-                    <small v-if="formData.product_id">Variant akan dibuat untuk produk ini</small>
-                    <small v-else class="text-warning">⚠️ Silakan pastikan produk dipilih dengan benar</small>
-                  </div>
-                </div>
-              </v-alert>
-            </v-col>
 
             <!-- Variant Name -->
             <v-col cols="12">

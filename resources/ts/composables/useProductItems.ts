@@ -4,7 +4,6 @@ import { ProductItemsApi } from '@/utils/api/ProductItemsApi'
 import { ProductsApi } from '@/utils/api/ProductsApi'
 import { computed, reactive, ref } from 'vue'
 
-// Types
 export interface ProductItem {
   id_product_item: number
   product_id: number
@@ -92,7 +91,6 @@ export interface ProductionCapacity {
   }>
 }
 
-// State
 const productItemsList = ref<ProductItem[]>([])
 const products = ref<any[]>([])
 const items = ref<any[]>([])
@@ -100,7 +98,6 @@ const loading = ref(false)
 const saveLoading = ref(false)
 const deleteLoading = ref(false)
 
-// Dialog states
 const dialog = ref(false)
 const deleteDialog = ref(false)
 const capacityDialog = ref(false)
@@ -109,12 +106,10 @@ const selectedProductItem = ref<ProductItem | null>(null)
 const selectedProduct = ref<any | null>(null)
 const productionCapacity = ref<ProductionCapacity | null>(null)
 
-// Pagination
 const currentPage = ref(1)
 const totalItems = ref(0)
 const itemsPerPage = ref(15)
 
-// Filters
 const filters = reactive<ProductItemFilters>({
   search: '',
   product_id: undefined,
@@ -124,12 +119,10 @@ const filters = reactive<ProductItemFilters>({
   sort_by: null,
 })
 
-// Messages
 const errorMessage = ref('')
 const successMessage = ref('')
 const modalErrorMessage = ref('')
 
-// Form
 const formData = reactive<ProductItemFormData>({
   product_id: 0,
   item_id: 0,
@@ -139,7 +132,6 @@ const formData = reactive<ProductItemFormData>({
   notes: '',
 })
 
-// Computed
 const canCreateEdit = computed(() => {
   return true
 })
@@ -160,7 +152,6 @@ const itemOptions = computed(() => [
   })),
 ])
 
-// Methods
 const fetchProductItemsList = async () => {
   loading.value = true
   errorMessage.value = ''
@@ -191,18 +182,9 @@ const fetchProductItemsList = async () => {
         totalItems.value = response.data.total || 0
         currentPage.value = response.data.current_page || 1
       }
-      
-      // Debug: Log product items data
-      console.log('🔗 ProductItems loaded:', productItemsList.value.length)
-      if (productItemsList.value.length > 0) {
-        console.log('🔗 First ProductItem:', productItemsList.value[0])
-        console.log('🆔 ProductItem product_ids needed:', [...new Set(productItemsList.value.map(pi => pi.product_id))])
-        console.log('🆔 ProductItem item_ids needed:', [...new Set(productItemsList.value.map(pi => pi.item_id))])
-      }
     }
   }
   catch (error: any) {
-    console.error('Error fetching product items:', error)
     errorMessage.value = error.message || 'Failed to fetch product items'
   }
   finally {
@@ -212,59 +194,30 @@ const fetchProductItemsList = async () => {
 
 const fetchProducts = async () => {
   try {
-    // Remove active filter to get ALL products
     const response = await ProductsApi.getAll({})
-
-    console.log('🔍 fetchProducts response:', response)
-
     if (response.success && response.data) {
       products.value = Array.isArray(response.data) ? response.data : []
-      
-      // Debug: Log all product IDs
-      console.log('📦 Products loaded:', products.value.length)
-      console.log('🆔 Product IDs available:', products.value.map(p => p.id_product || p.id))
     }
     else {
       products.value = []
     }
   }
   catch (error) {
-    console.error('❌ Error fetching products:', error)
     products.value = []
   }
 }
 
 const fetchItems = async () => {
   try {
-    console.log('🔄 Starting fetchItems...')
-    console.log('🔐 Auth token exists:', !!useCookie('accessToken').value)
-
-    // Remove active filter and get ALL items without pagination
-    const response = await ItemsApi.getAll({ per_page: 1000 })
-
-    console.log('🔍 fetchItems response:', response)
-    console.log('🔍 fetchItems response.success:', response.success)
-    console.log('🔍 fetchItems response.data:', response.data)
-    console.log('🔍 fetchItems response.data.data:', response.data?.data)
-
+    const response = await ItemsApi.getAll({ per_page: 'all' })
     if (response.success && response.data && response.data.data) {
-      // Items ada di response.data.data karena API mengembalikan paginated response
       items.value = Array.isArray(response.data.data) ? response.data.data : []
-      console.log('✅ Items set to:', items.value)
-      console.log('✅ Items count:', items.value.length)
-      console.log('✅ First item:', items.value[0])
-      console.log('🆔 Item IDs available:', items.value.map(i => i.id_item || i.id))
     }
     else {
       items.value = []
-      console.log('❌ Items set to empty array - response not successful or no data')
     }
-
-    console.log('📦 Items loaded:', items.value.length)
   }
   catch (error) {
-    console.error('❌ Error fetching items:', error)
-    console.error('❌ Error details:', JSON.stringify(error, null, 2))
     items.value = []
   }
 }
@@ -296,7 +249,6 @@ const saveProductItem = async () => {
     }
   }
   catch (error: any) {
-    console.error('Error saving product item:', error)
     modalErrorMessage.value = error.message || 'Terjadi kesalahan saat menyimpan'
   }
   finally {
@@ -323,7 +275,6 @@ const deleteProductItem = async () => {
     }
   }
   catch (error: any) {
-    console.error('Error deleting product item:', error)
     errorMessage.value = error.message || 'Terjadi kesalahan saat menghapus'
   }
   finally {
@@ -346,7 +297,6 @@ const getProductionCapacity = async (productId: number) => {
     }
   }
   catch (error: any) {
-    console.error('Error getting production capacity:', error)
     errorMessage.value = error.message || 'Terjadi kesalahan saat menghitung kapasitas produksi'
   }
   finally {
@@ -357,32 +307,23 @@ const getProductionCapacity = async (productId: number) => {
 const validateForm = (): boolean => {
   if (formData.product_id <= 0) {
     modalErrorMessage.value = 'Produk harus dipilih'
-
     return false
   }
-
   if (formData.item_id <= 0) {
     modalErrorMessage.value = 'Item harus dipilih'
-
     return false
   }
-
   if (formData.quantity_needed <= 0) {
     modalErrorMessage.value = 'Jumlah yang dibutuhkan harus lebih besar dari 0'
-
     return false
   }
-
   if (!formData.unit.trim()) {
     modalErrorMessage.value = 'Satuan harus diisi'
-
     return false
   }
-
   return true
 }
 
-// Dialog methods
 const openCreateDialog = () => {
   editMode.value = false
   selectedProductItem.value = null
@@ -403,22 +344,14 @@ const openDeleteDialog = (productItem: ProductItem) => {
 }
 
 const openCapacityDialog = (productOrId: any) => {
-  console.log('🔍 openCapacityDialog called with:', productOrId)
-
   let productId: number
   let product: any
 
-  // Handle both product object and productId number
   if (typeof productOrId === 'number') {
     productId = productOrId
-
-    // Find product from products list
     product = products.value.find(p => (p.id_product || p.id) === productId)
-
     if (!product) {
-      console.error('❌ Product not found in products list for ID:', productId)
       errorMessage.value = 'Product tidak ditemukan'
-
       return
     }
   }
@@ -427,19 +360,12 @@ const openCapacityDialog = (productOrId: any) => {
     productId = product.id_product || product.id
   }
   else {
-    console.error('❌ Invalid parameter:', productOrId)
     errorMessage.value = 'Parameter tidak valid'
-
     return
   }
 
-  console.log('🆔 Product ID:', productId)
-  console.log('📦 Product:', product)
-
   if (!productId) {
-    console.error('❌ Product ID is undefined')
     errorMessage.value = 'Product ID tidak ditemukan'
-
     return
   }
 
@@ -490,14 +416,12 @@ const clearModalError = () => {
   modalErrorMessage.value = ''
 }
 
-// Update item unit when selected
 const onItemChange = (itemId: number) => {
   const selectedItem = items.value.find(item => (item.id_item || item.id) === itemId)
   if (selectedItem)
     formData.unit = selectedItem.unit
 }
 
-// Pagination
 const onPageChange = (page: number) => {
   currentPage.value = page
   fetchProductItemsList()
@@ -509,7 +433,6 @@ const onItemsPerPageChange = (perPage: number) => {
   fetchProductItemsList()
 }
 
-// Filters
 const handleFiltersUpdate = () => {
   currentPage.value = 1
   fetchProductItemsList()
@@ -517,7 +440,6 @@ const handleFiltersUpdate = () => {
 
 export const useProductItems = () => {
   return {
-    // State
     productItemsList,
     products,
     items,
@@ -539,48 +461,27 @@ export const useProductItems = () => {
     successMessage,
     modalErrorMessage,
     formData,
-
-    // Computed
     canCreateEdit,
     productOptions,
     itemOptions,
-
-    // Methods
     fetchProductItemsList,
     fetchProductItemsForComposition: async (params?: { page?: number; per_page?: number; critical_only?: boolean }) => {
       loading.value = true
       errorMessage.value = ''
-      
       try {
         const queryParams = {
           page: params?.page || 1,
           per_page: params?.per_page || 15,
           critical_only: params?.critical_only || false
         }
-        
-        console.log('🔄 Fetching product items for composition:', queryParams)
-        
         const response = await ProductItemsApi.getAll(queryParams)
-        
-        console.log('📦 API Response:', response)
-        
         if (response.success) {
-          // Extract data from nested structure: response.data.data
           const apiData = response.data?.data || response.data || []
           productItemsList.value = apiData
-          
-          // Extract pagination info
           currentPage.value = response.data?.current_page || 1
           totalItems.value = response.data?.total || 0
           itemsPerPage.value = response.data?.per_page || 15
-          
-          // Update filters to match current state
           filters.critical_only = queryParams.critical_only
-          
-          console.log('✅ Product items for composition loaded:', productItemsList.value.length)
-          console.log('📊 First item:', productItemsList.value[0])
-          
-          // Fetch related data if needed
           if (products.value.length === 0) {
             await fetchProducts()
           }
@@ -588,11 +489,9 @@ export const useProductItems = () => {
             await fetchItems()
           }
         } else {
-          console.error('❌ API returned success: false')
           productItemsList.value = []
         }
       } catch (error: any) {
-        console.error('❌ Failed to fetch product items for composition:', error)
         errorMessage.value = error.message || 'Gagal memuat data komposisi produk'
         productItemsList.value = []
       } finally {

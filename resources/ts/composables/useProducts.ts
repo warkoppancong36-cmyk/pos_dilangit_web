@@ -1,13 +1,10 @@
-// Products Composable - State Management
 import type { Category } from '@/composables/useCategories'
 import { CategoriesApi } from '@/utils/api/CategoriesApi'
 import { ProductsApi } from '@/utils/api/ProductsApi'
 import { computed, reactive, ref } from 'vue'
 
-// Re-export Category for convenience
 export type { Category }
 
-// Types
 export type ProductStatus = 'draft' | 'published' | 'archived'
 export type StockStatus = 'in_stock' | 'low_stock' | 'out_of_stock' 
 
@@ -46,12 +43,11 @@ export interface ProductFormData {
   updated_at?: string
   deleted_at?: string
   category?: Category
-
 }
 
 export interface Product extends ProductFormData {
   id: number
-  id_product: number // Laravel primary key
+  id_product: number
   category?: Category
   created_by?: number
   updated_by?: number
@@ -61,7 +57,6 @@ export interface Product extends ProductFormData {
   deleter?: { id: number; name: string; email: string }
   created_at: string
   updated_at: string
-  // Computed attributes from backend
   image_url?: string
   stock_status?: string
   formatted_price?: string
@@ -107,7 +102,6 @@ export interface ProductStats {
 }
 
 export const useProducts = () => {
-  // State
   const productsList = ref<Product[]>([])
   const categories = ref<Category[]>([])
   const loading = ref(false)
@@ -133,19 +127,16 @@ export const useProducts = () => {
     profitable_products: 0
   })
 
-  // Dialog states
   const dialog = ref(false)
   const deleteDialog = ref(false)
   const editMode = ref(false)
   const selectedProduct = ref<Product | null>(null)
   const selectedProducts = ref<number[]>([])
 
-  // Pagination
   const currentPage = ref(1)
   const totalItems = ref(0)
   const itemsPerPage = ref(15)
 
-  // Filters
   const filters = reactive<ProductFilters>({
     search: '',
     active: 'all',
@@ -156,12 +147,10 @@ export const useProducts = () => {
     sortOrder: 'desc'
   })
 
-  // Messages
   const errorMessage = ref('')
   const successMessage = ref('')
   const modalErrorMessage = ref('')
 
-  // Form data
   const formData = reactive<ProductFormData>({
     name: '',
     description: '',
@@ -187,21 +176,14 @@ export const useProducts = () => {
     meta_description: ''
   })
 
-  // Image handling
   const selectedImage = ref<File | null>(null)
   const imagePreview = ref<string>('')
 
-  // Validation rules
   const nameRules = [
     (v: string) => !!v || 'Nama produk wajib diisi',
     (v: string) => v.length >= 2 || 'Nama produk minimal 2 karakter',
     (v: string) => v.length <= 255 || 'Nama produk maksimal 255 karakter'
   ]
-
-  // const priceRules = [
-  //   (v: string | number) => !!v || 'Harga wajib diisi',
-  //   (v: string | number) => Number(v) > 0 || 'Harga harus lebih dari 0'
-  // ]
 
   const categoryRules = [
     (v: string | number) => !!v || 'Kategori wajib dipilih'
@@ -209,15 +191,14 @@ export const useProducts = () => {
 
   const skuRules = [
     (v: string) => {
-      if (!v) return true // SKU is optional
+      if (!v) return true
       const validation = ProductsApi.validateSKU(v)
       return validation.valid || validation.error
     }
   ]
 
-  // Computed
-  const canCreateEdit = computed(() => true) // Add role-based logic here
-  const canDelete = computed(() => true) // Add role-based logic here
+  const canCreateEdit = computed(() => true)
+  const canDelete = computed(() => true)
 
   const totalActiveProducts = computed(() => stats.value.active_products)
   const totalInactiveProducts = computed(() => stats.value.inactive_products)
@@ -231,7 +212,6 @@ export const useProducts = () => {
 
   const filteredProductsCount = computed(() => productsList.value.length)
 
-  // Functions
   const fetchProductsList = async () => {
     try {
       loading.value = true
@@ -243,18 +223,15 @@ export const useProducts = () => {
         per_page: itemsPerPage.value
       }
 
-      // Remove empty filters
       Object.keys(params).forEach(key => {
         if (params[key as keyof typeof params] === '' || params[key as keyof typeof params] === 'all') {
           delete params[key as keyof typeof params]
         }
       })
 
-      console.log('📡 Fetching products with params:', params)
-
       const response = await ProductsApi.getAll(params)
       if (response.success) {
-        productsList.value = response.data as any // Cast to avoid type conflicts
+        productsList.value = response.data as any
         if (response.pagination) {
           totalItems.value = response.pagination.total
           currentPage.value = response.pagination.current_page
@@ -264,7 +241,6 @@ export const useProducts = () => {
       }
 
     } catch (error: any) {
-      console.error('Error fetching products:', error)
       errorMessage.value = error.message || 'Gagal mengambil data produk'
       productsList.value = []
     } finally {
@@ -276,15 +252,13 @@ export const useProducts = () => {
     try {
       const response = await CategoriesApi.getCategories({
         page: 1,
-        per_page: 100, // Get all categories
+        per_page: 100,
         status: 'active'
       })
       if (response.success) {
         categories.value = response.data
       }
-    } catch (error) {
-      console.error('Error fetching categories:', error)
-    }
+    } catch (error) {}
   }
 
   const fetchStats = async () => {
@@ -293,9 +267,7 @@ export const useProducts = () => {
       if (response.success) {
         stats.value = response.data
       }
-    } catch (error: any) {
-      console.error('Error fetching stats:', error)
-    }
+    } catch (error: any) {}
   }
 
   const saveProduct = async () => {
@@ -304,8 +276,6 @@ export const useProducts = () => {
       modalErrorMessage.value = ''
 
       const productData = { ...formData }
-      
-      // Convert strings to numbers where needed
       if (productData.price) productData.price = Number(productData.price)
       if (productData.cost) productData.cost = Number(productData.cost)
       if (productData.min_stock) productData.min_stock = Number(productData.min_stock)
@@ -318,19 +288,16 @@ export const useProducts = () => {
       } else {
         response = await ProductsApi.create(productData, selectedImage.value || undefined)
       }
-      console.log('Product save response:', response)
 
       if (response.success) {
         successMessage.value = response.message || 'Product saved successfully'
         closeDialog()
         await fetchProductsList()
-        // await fetchStats()
       } else {
         throw new Error(response.message)
       }
 
     } catch (error: any) {
-      console.error('Error saving product:', error)
       modalErrorMessage.value =  error.errors || error.message
     } finally {
       saveLoading.value = false
@@ -342,20 +309,16 @@ export const useProducts = () => {
 
     try {
       deleteLoading.value = true
-      
       const response = await ProductsApi.delete(selectedProduct.value.id_product)
-      
       if (response.success) {
         successMessage.value = response.message
         deleteDialog.value = false
         await fetchProductsList()
-        // await fetchStats()
       } else {
         throw new Error(response.message)
       }
 
     } catch (error: any) {
-      console.error('Error deleting product:', error)
       errorMessage.value = error.message || 'Gagal menghapus produk'
     } finally {
       deleteLoading.value = false
@@ -367,20 +330,16 @@ export const useProducts = () => {
 
     try {
       deleteLoading.value = true
-      
       const response = await ProductsApi.bulkDelete(selectedProducts.value)
-      
       if (response.success) {
         successMessage.value = response.message
         selectedProducts.value = []
         await fetchProductsList()
-        // await fetchStats()
       } else {
         throw new Error(response.message)
       }
 
     } catch (error: any) {
-      console.error('Error bulk deleting products:', error)
       errorMessage.value = error.message || 'Gagal menghapus produk'
     } finally {
       deleteLoading.value = false
@@ -390,22 +349,17 @@ export const useProducts = () => {
   const toggleActiveStatus = async (product: Product) => {
     try {
       toggleLoading.value[product.id_product] = true
-      
       const response = await ProductsApi.toggleActive(product.id_product)
-      
       if (response.success) {
-        // Update the product in the list
         const index = productsList.value.findIndex(p => p.id_product === product.id_product)
         if (index !== -1) {
           productsList.value[index] = response.data
         }
-        // await fetchStats()
       } else {
         throw new Error(response.message)
       }
 
     } catch (error: any) {
-      console.error('Error toggling active status:', error)
       errorMessage.value = error.message || 'Gagal mengubah status produk'
     } finally {
       toggleLoading.value[product.id_product] = false
@@ -415,22 +369,17 @@ export const useProducts = () => {
   const toggleFeaturedStatus = async (product: Product) => {
     try {
       toggleLoading.value[product.id_product] = true
-      
       const response = await ProductsApi.toggleFeatured(product.id_product)
-      
       if (response.success) {
-        // Update the product in the list
         const index = productsList.value.findIndex(p => p.id_product === product.id_product)
         if (index !== -1) {
-          productsList.value[index] = response.data as any // Cast to avoid type conflicts
+          productsList.value[index] = response.data as any
         }
-        // await fetchStats()
       } else {
         throw new Error(response.message)
       }
 
     } catch (error: any) {
-      console.error('Error toggling featured status:', error)
       errorMessage.value = error.message || 'Gagal mengubah status produk unggulan'
     } finally {
       toggleLoading.value[product.id_product] = false
@@ -513,21 +462,18 @@ export const useProducts = () => {
       meta_title: product.meta_title || '',
       meta_description: product.meta_description || ''
     })
-    
     selectedImage.value = null
     imagePreview.value = product.image_url || ''
   }
 
   const handleImageUpload = (files: File[]) => {
     if (files.length === 0) return
-    
-    const file = files[0] // Take first file
+    const file = files[0]
     const validation = ProductsApi.validateImage(file)
     if (!validation.valid) {
       modalErrorMessage.value = validation.error || 'File tidak valid'
       return
     }
-
     selectedImage.value = file
     imagePreview.value = URL.createObjectURL(file)
     modalErrorMessage.value = ''
@@ -605,7 +551,6 @@ export const useProducts = () => {
   }
 
   return {
-    // State
     productsList,
     categories,
     loading,
@@ -613,37 +558,24 @@ export const useProducts = () => {
     deleteLoading,
     toggleLoading,
     stats,
-
-    // Dialog states  
     dialog,
     deleteDialog,
     editMode,
     selectedProduct,
     selectedProducts,
-
-    // Pagination
     currentPage,
     totalItems,
     itemsPerPage,
-
-    // Filters
     filters,
-
-    // Messages
     errorMessage,
     successMessage,
     modalErrorMessage,
-
-    // Form
     formData,
     selectedImage,
     imagePreview,
     nameRules,
-    // priceRules,
     categoryRules,
     skuRules,
-
-    // Computed
     canCreateEdit,
     canDelete,
     totalActiveProducts,
@@ -655,8 +587,6 @@ export const useProducts = () => {
     totalStockValue,
     hasSelectedProducts,
     filteredProductsCount,
-
-    // Functions
     fetchProductsList,
     fetchCategories,
     fetchStats,

@@ -218,53 +218,43 @@
 
         <!-- Composition Column -->
         <template #item.composition="{ item }">
-          <VChip
-            v-if="item.variant_items_count > 0"
-            color="success"
-            size="small"
-            variant="tonal"
-            @click="openCompositionDialog(item)"
-            class="cursor-pointer"
-          >
-            {{ item.variant_items_count }} Item
-          </VChip>
-          <VChip
-            v-else
-            color="warning"
-            size="small"
-            variant="tonal"
-          >
-            Belum ada
-          </VChip>
+          <div class="d-flex flex-column gap-1">
+            <!-- Composition Items Count -->
+            <VChip
+              v-if="getCompositionItemsCount(item) > 0"
+              color="success"
+              size="small"
+              variant="tonal"
+              class="cursor-pointer"
+            >
+              {{ getCompositionItemsCount(item) }} Item
+            </VChip>
+            <VChip
+              v-else
+              color="warning"
+              size="small"
+              variant="tonal"
+            >
+              Belum ada
+            </VChip>
+          </div>
         </template>
 
         <!-- Actions Column -->
         <template #item.actions="{ item }">
           <div class="d-flex gap-1">
             <!-- View Detail -->
-            <VTooltip text="Lihat Detail">
-              <template #activator="{ props }">
-                <VBtn
-                  v-bind="props"
-                  icon="mdi-eye"
-                  size="small"
-                  variant="text"
-                  color="info"
-                  @click="openDetailDialog(item)"
-                />
-              </template>
-            </VTooltip>
 
-            <!-- Manage Composition -->
-            <VTooltip text="Kelola Komposisi">
+            <!-- Add Item Composition -->
+            <VTooltip text="Tambah Item Komposisi">
               <template #activator="{ props }">
                 <VBtn
                   v-bind="props"
-                  icon="mdi-puzzle"
+                  icon="mdi-plus-circle"
                   size="small"
                   variant="text"
-                  color="primary"
-                  @click="openCompositionDialog(item)"
+                  color="success"
+                  @click="openAddItemDialog(item)"
                 />
               </template>
             </VTooltip>
@@ -318,6 +308,13 @@
       @save="handleCompositionSave"
     />
 
+    <!-- Add Item Dialog -->
+    <AddItemCompositionDialog
+      v-model="addItemDialog"
+      :variant="selectedVariant"
+      @save="handleAddItemSave"
+    />
+
     <!-- Detail Dialog -->
     <VariantDetailDialog
       v-model="detailDialog"
@@ -339,6 +336,7 @@ import VariantFormDialog from './VariantFormDialog.vue'
 import VariantCompositionDialog from './VariantCompositionDialog.vue'
 import VariantDetailDialog from './VariantDetailDialog.vue'
 import VariantManagementDialog from './VariantManagementDialog.vue'
+import AddItemCompositionDialog from './AddItemCompositionDialog.vue'
 
 interface Variant {
   id: number
@@ -351,7 +349,40 @@ interface Variant {
   current_stock: number
   min_stock: number
   is_active: boolean
-  variant_items_count: number
+  variant_items_count?: number // Keep for backward compatibility
+  composition_summary?: {
+    total_items: number
+    critical_items: number
+    total_cost: number
+    stock_status: string
+  }
+  variant_items?: Array<{
+    id_variant_item: number
+    id_variant: number
+    id_item: number
+    quantity_needed: string
+    unit: string
+    cost_per_unit: string | null
+    is_critical: boolean
+    notes: string | null
+    active: boolean
+    stock_status: {
+      status: string
+      color: string
+      text: string
+    }
+    item: {
+      id_item: number
+      name: string
+      unit: string
+      cost_per_unit: string
+      inventory?: {
+        current_stock: number
+        available_stock: number
+        stock_status: string
+      } | null
+    }
+  }>
   product?: {
     id: number
     name: string
@@ -389,6 +420,7 @@ const formDialog = ref(false)
 const compositionDialog = ref(false)
 const detailDialog = ref(false)
 const managementDialog = ref(false)
+const addItemDialog = ref(false)
 const selectedVariant = ref<Variant | null>(null)
 const editMode = ref(false)
 
@@ -525,6 +557,56 @@ const formatRupiah = (amount: number): string => {
   }).format(amount)
 }
 
+// Composition helper functions
+const getCompositionItemsCount = (variant: Variant): number => {
+  // First try composition_summary.total_items (from API response)
+  if (variant.composition_summary?.total_items) {
+    return variant.composition_summary.total_items
+  }
+  
+  // Fallback to variant_items array length
+  if (variant.variant_items?.length) {
+    return variant.variant_items.length
+  }
+  
+  // Fallback to legacy variant_items_count
+  return variant.variant_items_count || 0
+}
+
+const getStockStatusColor = (variant: Variant): string => {
+  const stockStatus = variant.composition_summary?.stock_status
+  
+  switch (stockStatus) {
+    case 'sufficient':
+      return 'success'
+    case 'low':
+      return 'warning'
+    case 'out_of_stock':
+      return 'error'
+    case 'unknown':
+      return 'grey'
+    default:
+      return 'grey'
+  }
+}
+
+const getStockStatusText = (variant: Variant): string => {
+  const stockStatus = variant.composition_summary?.stock_status
+  
+  switch (stockStatus) {
+    case 'sufficient':
+      return 'Stok cukup'
+    case 'low':
+      return 'Stok rendah'
+    case 'out_of_stock':
+      return 'Stok habis'
+    case 'unknown':
+      return 'Tidak diketahui'
+    default:
+      return 'Tidak diketahui'
+  }
+}
+
 const resetFilters = () => {
   filters.value = {
     search: '',
@@ -561,6 +643,16 @@ const openCompositionDialog = (variant: Variant) => {
   compositionDialog.value = true
 }
 
+const openAddItemDialog = (variant: Variant) => {
+  console.log('🟢 [DEBUG] Button clicked! Opening Add Item dialog for variant:', variant.name)
+  console.log('🟢 [DEBUG] Current addItemDialog state:', addItemDialog.value)
+  console.log('🟢 [DEBUG] Setting selectedVariant to:', variant)
+  selectedVariant.value = variant
+  addItemDialog.value = true
+  console.log('🟢 [DEBUG] New addItemDialog state:', addItemDialog.value)
+  console.log('🟢 [DEBUG] New selectedVariant:', selectedVariant.value)
+}
+
 const openManagementDialog = () => {
   managementDialog.value = true
 }
@@ -572,6 +664,11 @@ const handleSave = () => {
 
 const handleCompositionSave = () => {
   compositionDialog.value = false
+  emit('refresh')
+}
+
+const handleAddItemSave = () => {
+  addItemDialog.value = false
   emit('refresh')
 }
 </script>

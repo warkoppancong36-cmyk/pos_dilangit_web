@@ -66,11 +66,37 @@ class ItemController extends Controller
                 $query->expired();
             }
 
-            $items = $query->paginate($request->get('per_page', 15));
+            // Handle pagination - support 'all' parameter to get all items
+            $perPage = $request->get('per_page', 15);
+            
+            if ($perPage === 'all') {
+                // Get all items without pagination
+                $items = $query->get();
+                
+                // Format response to match pagination structure for frontend compatibility
+                $response = [
+                    'current_page' => 1,
+                    'data' => $items,
+                    'first_page_url' => null,
+                    'from' => 1,
+                    'last_page' => 1,
+                    'last_page_url' => null,
+                    'links' => [],
+                    'next_page_url' => null,
+                    'path' => $request->url(),
+                    'per_page' => $items->count(),
+                    'prev_page_url' => null,
+                    'to' => $items->count(),
+                    'total' => $items->count()
+                ];
+            } else {
+                // Use normal pagination
+                $response = $query->paginate((int) $perPage);
+            }
 
             return response()->json([
                 'success' => true,
-                'data' => $items,
+                'data' => $response,
                 'message' => 'Items retrieved successfully'
             ]);
 

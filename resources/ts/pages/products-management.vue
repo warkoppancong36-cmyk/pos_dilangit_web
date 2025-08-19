@@ -110,13 +110,11 @@ const confirmBulkDelete = async () => {
 }
 
 const handleOpenRecipeDialog = (product: any) => {
-  console.log('🍳 Opening komposisi dialog for product:', product.name)
   const productId = product.id_product || product.id
   openRecipeCreateDialog(productId)
 }
 
 const handleOpenCompositionDialog = async (product: any) => {
-  console.log('🧑‍🍳 Opening composition dialog for product:', product.name)
   selectedCompositionProduct.value = product
   
   // Fetch composition data for this specific product
@@ -127,18 +125,12 @@ const handleOpenCompositionDialog = async (product: any) => {
       critical_only: false
     })
   } catch (error) {
-    console.error('Error fetching composition items:', error)
   }
   
   compositionDialog.value = true
 }
 
 const handleOpenVariantDialog = (product: any) => {
-  console.log('🔄 Opening variant dialog for product:', product.name)
-  console.log('🔄 Product object:', product)
-  console.log('🔄 Product ID (id):', product.id)
-  console.log('🔄 Product ID (id_product):', product.id_product)
-  console.log('🔄 Product keys:', Object.keys(product))
   selectedVariantProduct.value = product
   variantDialog.value = true
 }
@@ -154,13 +146,11 @@ const getProductCompositionItems = (product: any) => {
 }
 
 const handleFiltersUpdate = (newFilters: any) => {
-  console.log('📝 Filters updated:', newFilters)
   Object.assign(filters, newFilters)
   fetchProductsList() // Trigger fetch when filters update
 }
 
 const handleSearch = (query: string) => {
-  console.log('🔍 Search triggered with query:', query)
   // Update search filter and fetch
   filters.search = query
   fetchProductsList()
@@ -176,10 +166,8 @@ const removeImage = () => {
 
 // Watch for tab changes to refresh data
 watch(activeTab, async (newTab) => {
-  console.log('🔄 Tab changed to:', newTab)
   
   if (newTab === 'compositions') {
-    console.log('🧑‍🍳 Loading composition data...')
     await fetchProductItemsForComposition({
       page: 1,
       per_page: 15,
@@ -389,6 +377,7 @@ onMounted(() => {
 
         <v-card-actions>
           <v-spacer />
+
           <v-btn
             color="grey-darken-1"
             variant="outlined"

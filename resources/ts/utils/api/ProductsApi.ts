@@ -48,12 +48,9 @@ export class ProductsApi {
   // Get all products with filters and pagination
   static async getAll(params: Partial<ProductFilters> & { page?: number; per_page?: number }): Promise<ProductResponse> {
     try {
-      console.log('[ProductsApi.getAll] Making API call with params:', params);
       const response = await axios.get(API_BASE_URL, { params })
-      console.log('[ProductsApi.getAll] API response received:', response.data);
       return response.data
     } catch (error: any) {
-      console.error('[ProductsApi.getAll] API error:', error);
       throw error.response?.data || this.handleError(error)
     }
   }
