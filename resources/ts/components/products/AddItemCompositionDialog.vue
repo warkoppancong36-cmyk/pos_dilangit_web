@@ -716,7 +716,37 @@ const handleSave = async () => {
 }
 
 const editItem = (item: CompositionItem, index: number) => {
-  console.log('Edit item:', item, index)
+  console.log('🔍 Edit item called:', item, index)
+  
+  // Find item in available items to get the correct ID
+  const foundItem = availableItems.value.find(availableItem => 
+    availableItem.name === item.name || availableItem.id_item === item.id
+  )
+  
+  if (foundItem) {
+    console.log('✅ Found item in available items:', foundItem)
+    
+    // Set form data menggunakan formData (bukan newItem)
+    formData.value = {
+      item_id: foundItem.id_item,
+      quantity: item.quantity,
+      is_critical: item.is_critical || false
+    }
+    
+    console.log('📝 Form data set:', formData.value)
+    
+    // Scroll to form
+    setTimeout(() => {
+      const formElement = document.querySelector('.add-item-form')
+      if (formElement) {
+        formElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }, 100)
+  } else {
+    console.error('❌ Could not find item in available items')
+    console.log('Available items:', availableItems.value.map(ai => ({ id: ai.id_item, name: ai.name })))
+    console.log('Looking for item:', { id: item.id, name: item.name })
+  }
 }
 
 // Show delete confirmation dialog
@@ -835,63 +865,72 @@ const saveComposition = async () => {
   try {
     const variantId = props.variant.id || props.variant.id_variant
     
-  // Debug: Check if we have valid items to save
-  console.log('🔍 [DEBUG] Composition items count:', compositionItems.value.length)
-  console.log('🔍 [DEBUG] Raw composition items:', JSON.stringify(compositionItems.value, null, 2))
-  console.log('🔍 [DEBUG] Available items count:', availableItems.value.length)
-  console.log('🔍 [DEBUG] Available items sample:', availableItems.value.slice(0, 3))
-  
-  const payload = {
-      id_variant: variantId,
-      items: compositionItems.value.map(item => {
-        const foundItem = availableItems.value.find(ai => ai.name === item.name)
-        console.log(`Mapping item "${item.name}":`)
-        console.log(`  - Found item:`, foundItem?.id_item)
-        console.log(`  - Quantity:`, item.quantity)
-        console.log(`  - Unit:`, item.unit)
-        console.log(`  - Is critical:`, item.is_critical)
-        
-        const mappedItem = {
-          id_item: foundItem?.id_item,
-          quantity_needed: Number(item.quantity), // Ensure it's a number
-          unit: item.unit,
-          is_critical: item.is_critical || false
-        }
-        
-        console.log(`  - Mapped result:`, mappedItem)
-        return mappedItem
-      }).filter(item => item.id_item && item.quantity_needed > 0) // Remove items without valid id_item or quantity
-    }
-
-    console.log('Final payload before sending:', JSON.stringify(payload, null, 2))
+    console.log('🔍 [DEBUG] Composition items count:', compositionItems.value.length)
+    console.log('🔍 [DEBUG] Raw composition items:', JSON.stringify(compositionItems.value, null, 2))
     
-    // Validate payload before sending
-    if (!payload.id_variant) {
-      throw new Error('Variant ID is missing')
-    }
+    // Check if we're editing existing composition or creating new one
+    const hasExistingItems = compositionItems.value.some(item => item.id)
+    console.log('🔍 [DEBUG] Has existing items:', hasExistingItems)
     
-    if (payload.items.length === 0) {
-      throw new Error('No valid items to save')
-    }
-    
-    // Additional validation for each item
-    for (let i = 0; i < payload.items.length; i++) {
-      const item = payload.items[i]
-      if (!item.id_item) {
-        throw new Error(`Item ${i + 1}: Missing id_item`)
+    if (hasExistingItems) {
+      // EDIT MODE: Update existing composition
+      console.log('� [EDIT MODE] Updating existing composition')
+      
+      // Use bulk-update endpoint that replaces all items
+      const payload = {
+        items: compositionItems.value.map(item => {
+          const foundItem = availableItems.value.find(ai => ai.name === item.name)
+          console.log(`Mapping item "${item.name}":`)
+          console.log(`  - Found item:`, foundItem?.id_item)
+          console.log(`  - Original ID (id_variant_item):`, item.id)
+          console.log(`  - Quantity:`, item.quantity)
+          console.log(`  - Unit:`, item.unit)
+          console.log(`  - Is critical:`, item.is_critical)
+          
+          return {
+            id_variant_item: item.id, // Use item.id as id_variant_item
+            quantity_needed: Number(item.quantity),
+            unit: item.unit,
+            is_critical: item.is_critical || false
+          }
+        }).filter(item => item.id_variant_item && item.quantity_needed > 0)
       }
-      if (!item.quantity_needed || item.quantity_needed <= 0) {
-        throw new Error(`Item ${i + 1}: Missing or invalid quantity_needed`)
+      
+      console.log('Edit payload:', JSON.stringify(payload, null, 2))
+      
+      // Use bulk-update endpoint dengan POST method dan variant ID di payload
+      const response = await axios.post('/api/variant-items/bulk-update', payload)
+      console.log('Composition updated successfully:', response.data)
+      
+    } else {
+      // CREATE MODE: Create new composition
+      console.log('✨ [CREATE MODE] Creating new composition')
+      
+      const payload = {
+        id_variant: variantId,
+        items: compositionItems.value.map(item => {
+          const foundItem = availableItems.value.find(ai => ai.name === item.name)
+          console.log(`Mapping item "${item.name}":`)
+          console.log(`  - Found item:`, foundItem?.id_item)
+          console.log(`  - Quantity:`, item.quantity)
+          console.log(`  - Unit:`, item.unit)
+          console.log(`  - Is critical:`, item.is_critical)
+          
+          return {
+            id_item: foundItem?.id_item,
+            quantity_needed: Number(item.quantity),
+            unit: item.unit,
+            is_critical: item.is_critical || false
+          }
+        }).filter(item => item.id_item && item.quantity_needed > 0)
       }
-      if (!item.unit) {
-        throw new Error(`Item ${i + 1}: Missing unit`)
-      }
+      
+      console.log('Create payload:', JSON.stringify(payload, null, 2))
+      
+      // Use bulk-store endpoint for new items
+      const response = await axios.post('/api/variant-items/bulk-store', payload)
+      console.log('Composition created successfully:', response.data)
     }
-    
-    // Use bulk-store API endpoint for saving composition
-    const response = await axios.post('/api/variant-items/bulk-store', payload)
-    
-    console.log('Composition saved successfully:', response.data)
     
     emit('save')
     closeDialog()
