@@ -85,10 +85,8 @@ class PurchaseController extends Controller
 
             DB::beginTransaction();
 
-            // Generate purchase number
-            $lastPurchase = Purchase::orderBy('id_purchase', 'desc')->first();
-            $nextNumber = $lastPurchase ? intval(substr($lastPurchase->purchase_number, -6)) + 1 : 1;
-            $purchaseNumber = 'PO-' . date('Ymd') . '-' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
+            // Generate unique purchase number
+            $purchaseNumber = $this->generateUniquePurchaseNumber();
 
             // Calculate totals
             $subtotal = 0;
@@ -595,5 +593,32 @@ class PurchaseController extends Controller
                 'message' => 'Error receiving items: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Generate unique purchase number
+     */
+    private function generateUniquePurchaseNumber()
+    {
+        $today = date('Ymd');
+        $baseNumber = "PO-{$today}-";
+        
+        // Use database lock to prevent race condition
+        return DB::transaction(function () use ($baseNumber) {
+            // Find the highest number for today, including soft deleted records
+            $lastNumber = Purchase::withTrashed()
+                ->where('purchase_number', 'like', $baseNumber . '%')
+                ->lockForUpdate() // Add row-level lock
+                ->orderByRaw('CAST(SUBSTRING(purchase_number, -6) AS UNSIGNED) DESC')
+                ->value('purchase_number');
+            
+            if ($lastNumber) {
+                $nextNumber = intval(substr($lastNumber, -6)) + 1;
+            } else {
+                $nextNumber = 1;
+            }
+            
+            return $baseNumber . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
+        });
     }
 }
