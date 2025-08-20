@@ -228,6 +228,10 @@ onMounted(() => {
         <VIcon icon="mdi-chef-hat" class="me-2" />
         Komposisi Produk
       </VTab>
+      <VTab value="variants">
+        <VIcon icon="mdi-tune-variant" class="me-2" />
+        Variant Produk
+      </VTab>
     </VTabs>
 
     <VAlert
@@ -289,6 +293,14 @@ onMounted(() => {
           :product-items="productItemsList"
           :loading="itemsLoading"
           @refresh="fetchProductItemsForComposition"
+        />
+      </VWindowItem>
+
+      <!-- Variants Tab -->
+      <VWindowItem value="variants">
+        <ProductVariantTab 
+          :loading="loading"
+          @refresh="fetchProductsList"
         />
       </VWindowItem>
     </VWindow>

@@ -4,12 +4,12 @@ export default [
     to: { name: 'root' },
     icon: { icon: 'tabler-smart-home' },
   },
-  {
-    title: 'Point of Sale',
-    to: { name: 'pos' },
-    icon: { icon: 'tabler-cash-register' },
-    role: ['admin', 'manager', 'kasir'], // Cashier, manager, and admin can access
-  },
+  // {
+  //   title: 'Point of Sale',
+  //   to: { name: 'pos' },
+  //   icon: { icon: 'tabler-cash-register' },
+  //   role: ['admin', 'manager', 'kasir'], // Cashier, manager, and admin can access
+  // },
   {
     title: 'Management',
     icon: { icon: 'tabler-settings' },
