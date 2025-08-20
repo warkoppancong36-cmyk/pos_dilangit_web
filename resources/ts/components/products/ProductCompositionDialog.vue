@@ -114,7 +114,7 @@
                           v-if="getItemStock(item.raw) > 0"
                           size="x-small" 
                           :color="getStockChipColor(item.raw)"
-                          variant="dot"
+                          variant="tonal"
                         >
                           {{ getStockLabel(item.raw) }}
                         </VChip>
@@ -352,8 +352,8 @@
   <!-- HPP Breakdown Dialog -->
   <HPPBreakdownDialog
     v-model="hppDialog"
-    :product-id="product?.id_product || product?.id"
-    :product-name="product?.product_name"
+    :product-id="parseInt(String(product?.id_product || product?.id || '0'))"
+    :product-name="product?.product_name || product?.name"
     @hpp-updated="emit('refresh')"
     @price-updated="emit('refresh')"
   />
@@ -380,6 +380,7 @@ interface CompositionItem {
   unit: string
   is_critical: boolean
   formatted_total_cost?: string
+  notes?: string
 }
 
 interface Product {
@@ -396,8 +397,25 @@ interface AvailableItem {
   id: string | number
   name: string
   unit: string
-  current_stock?: number
+  current_stock: number
   stock?: number
+}
+
+// New item form interface
+interface NewItemForm {
+  itemId: string | number | null
+  quantity: number
+  unit: string
+  isCritical: boolean
+}
+
+interface ProductItemFormData {
+  product_id: number
+  item_id: number
+  quantity_needed: number
+  unit: string
+  is_critical: boolean
+  notes: string
 }
 
 interface Props {
@@ -439,8 +457,8 @@ const editIndex = ref(-1)
 const hppDialog = ref(false)
 
 // New item form
-const newItem = ref({
-  itemId: null as string | null,
+const newItem = ref<NewItemForm>({
+  itemId: null as string | number | null,
   quantity: 1,
   unit: 'pcs',
   isCritical: false
@@ -637,10 +655,10 @@ const addItem = () => {
   const newCompositionItem: CompositionItem = {
     id_product_item: `temp_${Date.now()}`,
     item: {
-      id: selectedItem.id,
+      id: String(selectedItem.id),
       name: selectedItem.name,
       inventory: {
-        current_stock: selectedItem.current_stock
+        current_stock: selectedItem.current_stock || 0
       }
     },
     quantity_needed: newItem.value.quantity,
@@ -720,10 +738,10 @@ const updateItem = () => {
   compositionItems.value[editIndex.value] = {
     ...compositionItems.value[editIndex.value],
     item: {
-      id: selectedItem.id,
+      id: String(selectedItem.id),
       name: selectedItem.name,
       inventory: {
-        current_stock: selectedItem.current_stock
+        current_stock: selectedItem.current_stock || 0
       }
     },
     quantity_needed: newItem.value.quantity,
@@ -760,7 +778,7 @@ const saveComposition = async () => {
     console.log('📦 Items to save:', compositionItems.value)
     
     // Prepare data for API
-    const productId = props.product.id_product || props.product.id
+    const productId = parseInt(String(props.product?.id_product || props.product?.id || '0'))
     
     // Get existing items to determine which are new, updated, or deleted
     const existingItems = props.items || []
@@ -772,7 +790,7 @@ const saveComposition = async () => {
         existing.id_product_item === item.id_product_item
       )
       
-      const apiData = {
+      const apiData: ProductItemFormData = {
         product_id: productId,
         item_id: parseInt(item.item?.id || '0'),
         quantity_needed: item.quantity_needed,
@@ -787,7 +805,7 @@ const saveComposition = async () => {
         if (existingItem && !item.id_product_item?.toString().startsWith('temp_')) {
           // Update existing item
           console.log('✏️ Updating item:', existingItem.id_product_item)
-          await ProductItemsApi.update(existingItem.id_product_item, apiData)
+          await ProductItemsApi.update(parseInt(existingItem.id_product_item || '0'), apiData)
         } else {
           // Create new item
           console.log('➕ Creating new item')
@@ -817,7 +835,7 @@ const saveComposition = async () => {
       if (!stillExists && existingItem.id_product_item) {
         try {
           console.log('🗑️ Deleting item:', existingItem.id_product_item)
-          await ProductItemsApi.delete(existingItem.id_product_item)
+          await ProductItemsApi.delete(parseInt(existingItem.id_product_item))
         } catch (deleteError: any) {
           console.error('❌ Error deleting item:', deleteError)
           errorMessage.value = `Gagal menghapus item: ${deleteError.message}`

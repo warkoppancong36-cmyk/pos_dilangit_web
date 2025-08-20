@@ -145,7 +145,7 @@ const loadItems = async () => {
 
     console.log('Making request to /api/items')
 
-    const response = await axios.get('/api/items', { headers })
+    const response = await axios.get('/api/items?per_page=all', { headers })
 
     console.log('Items response:', response.data)
 
