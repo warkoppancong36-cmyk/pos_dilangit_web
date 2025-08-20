@@ -480,7 +480,7 @@ const fetchProductComposition = async () => {
     const response = await ProductItemsApi.getAll({ 
       product_id: productId,
       page: 1,
-      per_page: 100
+      per_page: 100000
     })
     
     if (response.success && response.data?.data) {
@@ -499,19 +499,17 @@ const fetchAvailableItems = async () => {
   try {
     const response = await ItemsApi.getAll({ 
       page: 1, 
-      per_page: 100,
+      per_page: 100000,
       active: true 
     })
     
     if (response.success && response.data?.data) {
-      console.log('📦 Raw available items from API:', response.data.data.slice(0, 3))
       availableItems.value = response.data.data.map((item: any) => ({
         id: item.id_item?.toString() || item.id?.toString(),
         name: item.name,
         current_stock: item.inventory?.current_stock || 0,
         unit: item.unit || 'pcs'
       }))
-      console.log('📦 Processed available items:', availableItems.value.slice(0, 3))
     }
   } catch (error) {
     console.error('Error fetching available items:', error)
@@ -595,9 +593,7 @@ watch(() => newItem.value.itemId, (newItemId) => {
 
 // Watch for props changes
 watch(() => props.items, (newItems) => {
-  console.log('📋 Props items changed:', newItems)
   if (newItems && newItems.length > 0) {
-    console.log('📋 Sample item structure:', newItems[0])
   }
   compositionItems.value = [...newItems]
 }, { immediate: true })
@@ -605,7 +601,6 @@ watch(() => props.items, (newItems) => {
 // Watch for dialog opening to fetch composition data
 watch(() => props.modelValue, (isOpen) => {
   if (isOpen && props.product) {
-    console.log('🔄 Dialog opened, fetching composition...')
     fetchProductComposition()
   }
 })

@@ -5,15 +5,11 @@ export const ItemsApi = {
   // Get all items with filters and pagination
   async getAll(params: any = {}) {
     try {
-      console.log('ItemsApi.getAll - Sending request with params:', params)
-      console.log('ItemsApi.getAll - Authorization header:', axios.defaults.headers.common['Authorization'])
-      
+
       const response = await axios.get('/api/items', { params })
-      console.log('ItemsApi.getAll - Response received:', response.status, response.data)
       return response.data
     } catch (error: any) {
-      console.error('ItemsApi.getAll error:', error)
-      console.error('ItemsApi.getAll error response:', error.response?.data)
+
       throw error.response?.data || error
     }
   },
@@ -24,7 +20,6 @@ export const ItemsApi = {
       const response = await axios.get(`/api/items/${id}`)
       return response.data
     } catch (error: any) {
-      console.error('ItemsApi.getById error:', error)
       throw error.response?.data || error
     }
   },
