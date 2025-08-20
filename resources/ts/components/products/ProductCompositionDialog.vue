@@ -248,7 +248,7 @@
                 
                 <VListItemSubtitle>
                   <div class="d-flex align-center gap-4 mt-1">
-                    <span>Dibutuhkan: {{ parseFloat(item.quantity_needed,0) }} {{ item.unit }}</span>
+                    <span>Dibutuhkan: {{ parseFloat(item.quantity_needed) }} {{ item.unit }}</span>
                     <span v-if="item.item?.inventory" :class="item.item.inventory.current_stock >= item.quantity_needed ? 'text-success' : 'text-error'">
                       Stok: {{ item.item.inventory.current_stock }} {{ item.unit }}
                     </span>

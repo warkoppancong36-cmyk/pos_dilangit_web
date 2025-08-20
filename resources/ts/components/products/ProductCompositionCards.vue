@@ -498,7 +498,7 @@ const getItemsText = (totalItems: number) => {
                 </div>
                 <div class="text-end flex-shrink-0">
                   <div class="text-body-2 font-weight-medium">
-                    {{ item.quantity_needed }} {{ item.unit }}
+                    {{ parseFloat(item.quantity_needed) }} {{ item.unit }}
                   </div>
                   <div class="text-caption text-success" v-if="item.item?.inventory">
                     Stok: {{ item.item.inventory.current_stock }} {{ item.unit }}
