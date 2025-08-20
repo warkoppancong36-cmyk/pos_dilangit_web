@@ -226,6 +226,7 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
         Route::post('/bulk-store', [App\Http\Controllers\Api\VariantItemController::class, 'bulkStore']);
         Route::post('/bulk-update', [App\Http\Controllers\Api\VariantItemController::class, 'bulkUpdate']);
         Route::post('/bulk-delete', [App\Http\Controllers\Api\VariantItemController::class, 'bulkDelete']);
+        Route::get('/product/{productId}', [App\Http\Controllers\Api\VariantItemController::class, 'getVariantsByProduct']);
         Route::get('/variant/{variantId}', [App\Http\Controllers\Api\VariantItemController::class, 'getVariantComposition']);
         Route::get('/{id}', [App\Http\Controllers\Api\VariantItemController::class, 'show']);
         Route::put('/{id}', [App\Http\Controllers\Api\VariantItemController::class, 'update']);

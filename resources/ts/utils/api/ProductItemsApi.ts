@@ -25,9 +25,15 @@ export const ProductItemsApi = {
   },
 
   // Create new product item
-  async create(data: ProductItemFormData) {
+  async create(data: ProductItemFormData, isEditMode: boolean = false) {
     try {
-      const response = await axios.post('/api/product-items', data)
+      // Add is_edit_mode parameter to bypass duplicate validation in edit scenarios
+      const payload = {
+        ...data,
+        is_edit_mode: isEditMode
+      }
+      
+      const response = await axios.post('/api/product-items', payload)
       return response.data
     } catch (error: any) {
       console.error('ProductItemsApi.create error:', error)

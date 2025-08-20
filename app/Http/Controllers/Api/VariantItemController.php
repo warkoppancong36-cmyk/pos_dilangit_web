@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\VariantItem;
 use App\Models\Variant;
 use App\Models\Item;
+use App\Traits\ApiResponseTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Validator;
 
 class VariantItemController extends Controller
 {
+    use ApiResponseTrait;
     public function index(Request $request): JsonResponse
     {
         try {
@@ -76,17 +78,10 @@ class VariantItemController extends Controller
             $perPage = $request->get('per_page', 15);
             $variantItems = $query->paginate($perPage);
 
-            return response()->json([
-                'success' => true,
-                'data' => $variantItems,
-                'message' => 'Variant items retrieved successfully'
-            ]);
+            return $this->paginatedResponse($variantItems, 'Variant items retrieved successfully');
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error retrieving variant items: ' . $e->getMessage()
-            ], 500);
+            return $this->serverErrorResponse('Error retrieving variant items: ' . $e->getMessage());
         }
     }
 
@@ -95,17 +90,10 @@ class VariantItemController extends Controller
         try {
             $variantItem = VariantItem::with(['variant.product', 'item.inventory'])->findOrFail($id);
 
-            return response()->json([
-                'success' => true,
-                'data' => $variantItem,
-                'message' => 'Variant item retrieved successfully'
-            ]);
+            return $this->successResponse($variantItem, 'Variant item retrieved successfully');
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Variant item not found'
-            ], 404);
+            return $this->notFoundResponse('Variant item not found');
         }
     }
 
@@ -124,11 +112,7 @@ class VariantItemController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
+                return $this->validationErrorResponse($validator->errors());
             }
 
             // Check if combination already exists
@@ -137,10 +121,7 @@ class VariantItemController extends Controller
                                  ->exists();
 
             if ($exists) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Item already exists in this variant composition'
-                ], 422);
+                return $this->badRequestResponse('Item already exists in this variant composition');
             }
 
             $variantItemData = $request->all();
@@ -149,17 +130,10 @@ class VariantItemController extends Controller
             $variantItem = VariantItem::create($variantItemData);
             $variantItem->load(['variant.product', 'item.inventory']);
 
-            return response()->json([
-                'success' => true,
-                'data' => $variantItem,
-                'message' => 'Variant item created successfully'
-            ], 201);
+            return $this->createdResponse($variantItem, 'Variant item created successfully');
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error creating variant item: ' . $e->getMessage()
-            ], 500);
+            return $this->serverErrorResponse('Error creating variant item: ' . $e->getMessage());
         }
     }
 
@@ -180,11 +154,7 @@ class VariantItemController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
+                return $this->validationErrorResponse($validator->errors());
             }
 
             // Check if combination already exists (exclude current record)
@@ -194,10 +164,7 @@ class VariantItemController extends Controller
                                  ->exists();
 
             if ($exists) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Item already exists in this variant composition'
-                ], 422);
+                return $this->badRequestResponse('Item already exists in this variant composition');
             }
 
             $variantItemData = $request->all();
@@ -206,17 +173,10 @@ class VariantItemController extends Controller
             $variantItem->update($variantItemData);
             $variantItem->load(['variant.product', 'item.inventory']);
 
-            return response()->json([
-                'success' => true,
-                'data' => $variantItem,
-                'message' => 'Variant item updated successfully'
-            ]);
+            return $this->successResponse($variantItem, 'Variant item updated successfully');
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error updating variant item: ' . $e->getMessage()
-            ], 500);
+            return $this->serverErrorResponse('Error updating variant item: ' . $e->getMessage());
         }
     }
 
@@ -226,16 +186,10 @@ class VariantItemController extends Controller
             $variantItem = VariantItem::findOrFail($id);
             $variantItem->delete();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Variant item deleted successfully'
-            ]);
+            return $this->deletedResponse('Variant item deleted successfully');
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error deleting variant item: ' . $e->getMessage()
-            ], 500);
+            return $this->serverErrorResponse('Error deleting variant item: ' . $e->getMessage());
         }
     }
 
@@ -254,11 +208,7 @@ class VariantItemController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
+                return $this->validationErrorResponse($validator->errors());
             }
 
             DB::beginTransaction();
@@ -291,7 +241,6 @@ class VariantItemController extends Controller
             DB::commit();
 
             $response = [
-                'success' => true,
                 'data' => $variantItems,
                 'message' => count($variantItems) . ' variant items created successfully'
             ];
@@ -300,14 +249,11 @@ class VariantItemController extends Controller
                 $response['warnings'] = $errors;
             }
 
-            return response()->json($response, 201);
+            return $this->createdResponse($response['data'], $response['message']);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Error creating variant items: ' . $e->getMessage()
-            ], 500);
+            return $this->serverErrorResponse('Error creating variant items: ' . $e->getMessage());
         }
     }
 
@@ -326,11 +272,7 @@ class VariantItemController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
+                return $this->validationErrorResponse($validator->errors());
             }
 
             DB::beginTransaction();
@@ -351,18 +293,11 @@ class VariantItemController extends Controller
 
             DB::commit();
 
-            return response()->json([
-                'success' => true,
-                'data' => $updatedItems,
-                'message' => count($updatedItems) . ' variant items updated successfully'
-            ]);
+            return $this->successResponse($updatedItems, count($updatedItems) . ' variant items updated successfully');
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Error updating variant items: ' . $e->getMessage()
-            ], 500);
+            return $this->serverErrorResponse('Error updating variant items: ' . $e->getMessage());
         }
     }
 
@@ -375,26 +310,93 @@ class VariantItemController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
+                return $this->validationErrorResponse($validator->errors());
             }
 
             VariantItem::whereIn('id_variant_item', $request->variant_item_ids)->delete();
 
-            return response()->json([
-                'success' => true,
-                'message' => count($request->variant_item_ids) . ' variant items deleted successfully'
-            ]);
+            return $this->deletedResponse(count($request->variant_item_ids) . ' variant items deleted successfully');
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error deleting variant items: ' . $e->getMessage()
-            ], 500);
+            return $this->serverErrorResponse('Error deleting variant items: ' . $e->getMessage());
         }
+    }
+
+    public function getVariantsByProduct($productId): JsonResponse
+    {
+        try {
+            $variants = Variant::with(['variantItems.item.inventory'])
+                              ->where('id_product', $productId)
+                              ->where('active', true)
+                              ->orderBy('name', 'asc')
+                              ->get();
+
+            if ($variants->isEmpty()) {
+                return $this->successResponse([], 'No variants found for this product');
+            }
+
+            // Format data dengan informasi lengkap
+            $formattedVariants = $variants->map(function ($variant) {
+                return [
+                    'id_variant' => $variant->id_variant,
+                    'name' => $variant->name,
+                    'sku' => $variant->sku,
+                    'description' => $variant->description,
+                    'price' => $variant->price,
+                    'cost' => $variant->cost,
+                    'active' => $variant->active,
+                    'product' => [
+                        'id_product' => $variant->product->id_product ?? null,
+                        'name' => $variant->product->name ?? null,
+                        'sku' => $variant->product->sku ?? null
+                    ],
+                    'composition' => $variant->variantItems->map(function ($variantItem) {
+                        return [
+                            'id_variant_item' => $variantItem->id_variant_item,
+                            'quantity_needed' => $variantItem->quantity_needed,
+                            'unit' => $variantItem->unit,
+                            'cost_per_unit' => $variantItem->cost_per_unit,
+                            'total_cost' => $variantItem->total_cost,
+                            'is_critical' => $variantItem->is_critical,
+                            'notes' => $variantItem->notes,
+                            'item' => [
+                                'id_item' => $variantItem->item->id_item,
+                                'name' => $variantItem->item->name,
+                                'sku' => $variantItem->item->sku,
+                                'unit' => $variantItem->item->unit,
+                                'inventory' => [
+                                    'stock_quantity' => $variantItem->item->inventory->stock_quantity ?? 0,
+                                    'minimum_stock' => $variantItem->item->inventory->minimum_stock ?? 0,
+                                    'maximum_stock' => $variantItem->item->inventory->maximum_stock ?? null
+                                ]
+                            ]
+                        ];
+                    }),
+                    'summary' => [
+                        'total_items' => $variant->variantItems->count(),
+                        'critical_items' => $variant->variantItems->where('is_critical', true)->count(),
+                        'total_composition_cost' => $variant->variantItems->sum('total_cost'),
+                        'can_produce' => $this->checkCanProduce($variant)
+                    ]
+                ];
+            });
+
+            return $this->successResponse($formattedVariants, 'Variants retrieved successfully');
+
+        } catch (\Exception $e) {
+            return $this->serverErrorResponse('Error retrieving variants: ' . $e->getMessage());
+        }
+    }
+
+    private function checkCanProduce($variant): bool
+    {
+        foreach ($variant->variantItems as $variantItem) {
+            $stockQuantity = $variantItem->item->inventory->stock_quantity ?? 0;
+            if ($stockQuantity < $variantItem->quantity_needed) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public function getVariantComposition($variantId): JsonResponse
@@ -409,25 +411,20 @@ class VariantItemController extends Controller
 
             $variant = Variant::with(['product'])->find($variantId);
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'variant' => $variant,
-                    'composition' => $variantItems,
-                    'summary' => [
-                        'total_items' => $variantItems->count(),
-                        'critical_items' => $variantItems->where('is_critical', true)->count(),
-                        'total_cost' => $variantItems->sum('total_cost')
-                    ]
-                ],
-                'message' => 'Variant composition retrieved successfully'
-            ]);
+            $data = [
+                'variant' => $variant,
+                'composition' => $variantItems,
+                'summary' => [
+                    'total_items' => $variantItems->count(),
+                    'critical_items' => $variantItems->where('is_critical', true)->count(),
+                    'total_cost' => $variantItems->sum('total_cost')
+                ]
+            ];
+
+            return $this->successResponse($data, 'Variant composition retrieved successfully');
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error retrieving variant composition: ' . $e->getMessage()
-            ], 500);
+            return $this->serverErrorResponse('Error retrieving variant composition: ' . $e->getMessage());
         }
     }
 }

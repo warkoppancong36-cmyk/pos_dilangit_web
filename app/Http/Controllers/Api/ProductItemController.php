@@ -122,6 +122,14 @@ class ProductItemController extends Controller
     public function store(Request $request): JsonResponse
     {
         try {
+            // Log request details for debugging
+            \Log::info('ProductItemController@store called', [
+                'request_data' => $request->all(),
+                'user_agent' => $request->header('User-Agent'),
+                'referer' => $request->header('Referer'),
+                'user_id' => Auth::id()
+            ]);
+
             $validator = Validator::make($request->all(), [
                 'product_id' => 'required|exists:products,id_product',
                 'item_id' => 'required|exists:items,id_item',
@@ -131,6 +139,7 @@ class ProductItemController extends Controller
                 'is_critical' => 'boolean',
                 'notes' => 'nullable|string',
                 'active' => 'boolean',
+                'is_edit_mode' => 'boolean', // Add parameter to bypass duplicate check in edit mode
             ]);
 
             if ($validator->fails()) {
@@ -141,19 +150,39 @@ class ProductItemController extends Controller
                 ], 422);
             }
 
-            // Check if this product-item combination already exists
-            $exists = ProductItem::where('product_id', $request->product_id)
-                ->where('item_id', $request->item_id)
-                ->exists();
+            // Only check for duplicates if not in edit mode
+            $isEditMode = $request->boolean('is_edit_mode', false);
+            
+            \Log::info('ProductItemController@store duplicate check', [
+                'is_edit_mode' => $isEditMode,
+                'product_id' => $request->product_id,
+                'item_id' => $request->item_id
+            ]);
+            
+            if (!$isEditMode) {
+                // Check if this product-item combination already exists
+                $exists = ProductItem::where('product_id', $request->product_id)
+                    ->where('item_id', $request->item_id)
+                    ->exists();
 
-            if ($exists) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'This item is already assigned to this product'
-                ], 422);
+                if ($exists) {
+                    \Log::warning('ProductItemController@store duplicate detected', [
+                        'product_id' => $request->product_id,
+                        'item_id' => $request->item_id,
+                        'is_edit_mode' => $isEditMode
+                    ]);
+                    
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This item is already assigned to this product'
+                    ], 422);
+                }
+            } else {
+                \Log::info('ProductItemController@store duplicate check bypassed due to edit mode');
             }
 
             $validated = $validator->validated();
+            unset($validated['is_edit_mode']); // Remove is_edit_mode from data to be saved
             $validated['created_by'] = Auth::id();
 
             DB::beginTransaction();
@@ -164,6 +193,11 @@ class ProductItemController extends Controller
 
             $productItem->load(['product', 'item', 'creator']);
 
+            \Log::info('ProductItemController@store success', [
+                'product_item_id' => $productItem->id_product_item,
+                'is_edit_mode' => $isEditMode
+            ]);
+
             return response()->json([
                 'success' => true,
                 'data' => $productItem,
@@ -172,6 +206,12 @@ class ProductItemController extends Controller
 
         } catch (\Exception $e) {
             DB::rollback();
+            
+            \Log::error('ProductItemController@store error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Error creating product item: ' . $e->getMessage()

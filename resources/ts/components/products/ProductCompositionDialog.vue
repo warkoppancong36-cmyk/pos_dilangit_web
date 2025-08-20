@@ -800,9 +800,9 @@ const saveComposition = async () => {
           console.log('✏️ Updating item:', existingItem.id_product_item)
           await ProductItemsApi.update(parseInt(existingItem.id_product_item || '0'), apiData)
         } else {
-          // Create new item
-          console.log('➕ Creating new item')
-          await ProductItemsApi.create(apiData)
+          // Create new item - pass true for isEditMode to bypass duplicate validation during bulk edit
+          console.log('➕ Creating new item with edit mode flag')
+          await ProductItemsApi.create(apiData, true)
         }
       } catch (itemError: any) {
         console.error('❌ Error processing item:', itemError)

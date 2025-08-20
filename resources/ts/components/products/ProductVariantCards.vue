@@ -161,7 +161,7 @@ const getStockStatus = (variant: Variant) => {
   if (variant.current_stock <= variant.min_stock) {
     return { text: 'Stok Rendah', color: 'warning', value: 'low' }
   }
-  return { text: 'Stok Aman', color: 'success', value: 'safe' }
+  return { text: 'Stok Aman 123', color: 'success', value: 'safe' }
 }
 
 const getMarginColor = (price: number, cost: number) => {

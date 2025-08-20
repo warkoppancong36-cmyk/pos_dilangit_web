@@ -235,7 +235,7 @@ const saveProductItem = async () => {
     if (editMode.value && selectedProductItem.value)
       response = await ProductItemsApi.update(selectedProductItem.value.id_product_item, formData)
     else
-      response = await ProductItemsApi.create(formData)
+      response = await ProductItemsApi.create(formData, editMode.value) // Pass editMode flag
 
     if (response.success) {
       successMessage.value = editMode.value
