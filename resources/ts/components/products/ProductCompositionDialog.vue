@@ -702,12 +702,16 @@ const editItem = (item: CompositionItem, index: number) => {
   // Fill form with item data
   newItem.value = {
     itemId: itemId,
-    quantity: item.quantity_needed,
+    quantity: parseFloat(item.quantity_needed.toString()) || 0, // Ensure decimal parsing
     unit: item.unit,
     isCritical: item.is_critical
   }
   
-  console.log('📝 Form data set for edit:', newItem.value)
+  console.log('📝 Form data set for edit:', {
+    original_quantity: item.quantity_needed,
+    parsed_quantity: parseFloat(item.quantity_needed.toString()),
+    form_data: newItem.value
+  })
   
   // Verify that the itemId exists in available items
   const foundInAvailable = availableItems.value.find(ai => ai.id === itemId)
@@ -845,7 +849,7 @@ const saveComposition = async () => {
       const apiData: ProductItemFormData = {
         product_id: productId,
         item_id: parseInt(item.item?.id || '0'),
-        quantity_needed: item.quantity_needed,
+        quantity_needed: parseFloat(item.quantity_needed.toString()), // Ensure decimal is preserved
         unit: item.unit,
         is_critical: item.is_critical,
         notes: item.notes || ''
