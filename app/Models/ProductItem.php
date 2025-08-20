@@ -26,7 +26,7 @@ class ProductItem extends Model
     ];
 
     protected $casts = [
-        'quantity_needed' => 'integer',
+        'quantity_needed' => 'decimal:3', // Support 3 decimal places to match database schema
         'cost_per_unit' => 'decimal:2',
         'is_critical' => 'boolean',
         'created_at' => 'datetime',
