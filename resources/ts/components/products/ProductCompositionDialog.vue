@@ -780,8 +780,17 @@ const saveComposition = async () => {
     // Process each current item (create or update)
     for (const item of currentItems) {
       const existingItem = existingItems.find(existing => 
-        existing.id_product_item === item.id_product_item
+        existing.id_product_item === item.id_product_item ||
+        (existing.item?.id === item.item?.id && existing.product_id === productId)
       )
+      
+      console.log('🔍 Processing item:', {
+        item_name: item.item?.name,
+        item_id_product_item: item.id_product_item,
+        existing_found: !!existingItem,
+        existing_id: existingItem?.id_product_item,
+        is_temp: item.id_product_item?.toString().startsWith('temp_')
+      })
       
       const apiData: ProductItemFormData = {
         product_id: productId,
@@ -797,11 +806,21 @@ const saveComposition = async () => {
       try {
         if (existingItem && !item.id_product_item?.toString().startsWith('temp_')) {
           // Update existing item
-          console.log('✏️ Updating item:', existingItem.id_product_item)
+          console.log('✏️ Updating existing item:', {
+            id: existingItem.id_product_item,
+            item_name: item.item?.name,
+            stock: item.item?.stock
+          })
           await ProductItemsApi.update(parseInt(existingItem.id_product_item || '0'), apiData)
         } else {
           // Create new item
-          console.log('➕ Creating new item')
+          console.log('➕ Creating new item:', {
+            item_name: item.item?.name,
+            stock: item.item?.stock,
+            id_product_item: item.id_product_item,
+            is_temp: item.id_product_item?.toString().startsWith('temp_'),
+            existing_item_found: !!existingItem
+          })
           await ProductItemsApi.create(apiData)
         }
       } catch (itemError: any) {
