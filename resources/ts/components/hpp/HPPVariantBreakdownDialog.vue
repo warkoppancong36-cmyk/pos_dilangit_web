@@ -337,14 +337,27 @@ const applyPriceSuggestion = async () => {
         await nextTick()
       }
 
-      // Reload HPP breakdown after price update
-      await loadHPPBreakdown()
+      // Reload only HPP breakdown (without variant target price reload) after price update
+      if (props.variantId) {
+        await getVariantHPPBreakdown(props.variantId, selectedMethod.value)
+        // Skip loadVariantTargetPrice() since we already have updated price from response
+      }
 
       // Show success message
       successMessage.value = `Price successfully updated to ${formatCurrency(response?.data?.new_price || targetPrice.value)}!`
       successSnackbar.value = true
 
-      emit('price-updated')
+      // Emit price-updated event to parent
+      emit('price-updated', {
+        variantId: props.variantId,
+        oldPrice: response?.data?.old_price,
+        newPrice: response?.data?.new_price,
+        hpp: response?.data?.hpp,
+        markupPercentage: response?.data?.markup_percentage
+      })
+      
+      // Don't auto-close dialog - let user see the success message and close manually
+      console.log('✅ Price update successful - dialog remains open for user confirmation')
     }
     catch (error: any) {
       console.error('Error applying price suggestion:', error)

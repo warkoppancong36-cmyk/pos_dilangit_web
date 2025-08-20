@@ -371,7 +371,7 @@
       :variant-id="selectedVariant?.id_variant"
       :variant-name="selectedVariant?.name"
       @hpp-updated="loadVariants"
-      @price-updated="loadVariants"
+      @price-updated="handlePriceUpdated"
     />
 
     <!-- Create Variant Dialog -->
@@ -562,6 +562,32 @@ const filteredGroupedVariants = computed(() => {
 // Methods
 const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
   // Implement toast notifications here if needed
+}
+
+// Handle price update from HPP dialog - update specific variant without closing dialog
+const handlePriceUpdated = async (priceData: any) => {
+  try {
+    console.log('🔄 Updating variant price from HPP dialog:', priceData)
+    
+    // Find and update the specific variant in the list
+    const variantIndex = variants.value.findIndex(v => v.id_variant === priceData.variantId)
+    if (variantIndex !== -1) {
+      variants.value[variantIndex] = {
+        ...variants.value[variantIndex],
+        price: priceData.newPrice,
+        cost: priceData.hpp
+      }
+      console.log('✅ Variant price updated locally without reloading')
+    }
+    
+    // Show success notification without closing dialog
+    showNotification(`Price updated to ${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(priceData.newPrice)}`, 'success')
+    
+  } catch (error) {
+    console.error('Error handling price update:', error)
+    // Fallback to full reload if local update fails
+    await loadVariants()
+  }
 }
 
 const loadVariants = async () => {
