@@ -615,6 +615,19 @@ watch(targetPrice, (newValue) => {
           </VCardText>
         </VCard>
       </VCardText>
+
+      <!-- Dialog Actions -->
+      <VCardActions class="pa-4">
+        <VSpacer />
+        <VBtn
+          variant="outlined"
+          color="grey"
+          prepend-icon="mdi-close"
+          @click="$emit('update:modelValue', false)"
+        >
+          Batal
+        </VBtn>
+      </VCardActions>
     </VCard>
   </VDialog>
 

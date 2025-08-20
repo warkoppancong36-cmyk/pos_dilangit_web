@@ -7,9 +7,11 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 interface Item {
   id_item: number | null
   quantity: number
+  unit: string // Unit dari item yang dipilih
   unit_cost: number
   unit_cost_display: string
   total_cost: number
+  total_cost_display: string // Input field untuk total cost
 }
 
 interface PurchaseData {
@@ -165,20 +167,44 @@ const loadItems = async () => {
   }
 }
 
-const calculateItemTotal = (index: number) => {
+const calculateUnitCost = (index: number) => {
   try {
     const item = formData.value.items[index]
     if (!item) {
       console.warn('Item not found at index:', index)
-
       return
     }
 
-    item.total_cost = (item.quantity || 0) * (item.unit_cost || 0)
-    console.log(`Item ${index} total calculated:`, item.total_cost)
+    // Calculate unit cost from total cost ÷ quantity
+    if (item.quantity > 0 && item.total_cost > 0) {
+      item.unit_cost = item.total_cost / item.quantity
+      item.unit_cost_display = formatCurrency(item.unit_cost).replace('Rp ', '').replace(/\./g, '')
+    } else {
+      item.unit_cost = 0
+      item.unit_cost_display = '0'
+    }
+    
+    console.log(`Item ${index} unit cost calculated:`, item.unit_cost)
   }
   catch (error) {
-    console.error('Error in calculateItemTotal:', error)
+    console.error('Error in calculateUnitCost:', error)
+  }
+}
+
+const onItemChange = (index: number, itemId: number | null) => {
+  try {
+    const item = formData.value.items[index]
+    if (!item || !itemId) return
+
+    // Find selected item to get unit
+    const selectedItem = items.value.find(i => i.id_item === itemId)
+    if (selectedItem) {
+      item.unit = selectedItem.unit || ''
+      console.log(`Item ${index} unit set to:`, item.unit)
+    }
+  }
+  catch (error) {
+    console.error('Error in onItemChange:', error)
   }
 }
 
@@ -190,9 +216,11 @@ const addItem = () => {
     const newItem = {
       id_item: null,
       quantity: 0,
+      unit: '',
       unit_cost: 0,
       unit_cost_display: '0',
       total_cost: 0,
+      total_cost_display: '0',
     }
 
     formData.value.items.push(newItem)
@@ -205,12 +233,6 @@ const addItem = () => {
 
 const removeItem = (index: number) => {
   formData.value.items.splice(index, 1)
-}
-
-// VARIANT REMOVED - No longer need to reset variant when item changes
-const onItemChange = (index: number, _: any) => {
-  // Additional logic can be added here if needed
-  calculateItemTotal(index)
 }
 
 // VARIANT REMOVED - getProductVariants function no longer needed
@@ -228,12 +250,12 @@ const formatQuantity = (index: number, event: Event) => {
   const item = formData.value.items[index]
   
   if (value === '' || value === null || value === undefined) {
-    item.quantity = ''
+    item.quantity = 0
   } else {
     item.quantity = Number.parseInt(value) || 1
   }
   
-  calculateItemTotal(index)
+  calculateUnitCost(index)
 }
 
 const formatUnitCost = (index: number, event: Event) => {
@@ -249,6 +271,23 @@ const formatUnitCost = (index: number, event: Event) => {
     item.unit_cost = Number.parseInt(numericValue)
     item.unit_cost_display = new Intl.NumberFormat('id-ID').format(item.unit_cost)
   }
+}
+
+const formatTotalCost = (index: number, event: Event) => {
+  const value = (event.target as HTMLInputElement)?.value
+  const numericValue = value?.replace(/\D/g, '') || ''
+  const item = formData.value.items[index]
+
+  if (numericValue === '') {
+    item.total_cost = 0
+    item.total_cost_display = '0'
+  }
+  else {
+    item.total_cost = Number.parseInt(numericValue)
+    item.total_cost_display = new Intl.NumberFormat('id-ID').format(item.total_cost)
+  }
+  
+  calculateUnitCost(index)
 }
 
 const formatDiscountAmount = (event: Event) => {
@@ -535,20 +574,22 @@ onMounted(() => {
             <VTable>
               <thead>
                 <tr>
-                  <th style="inline-size: 45%;">
+                  <th style="inline-size: 35%;">
                     Item
                   </th>
-                  <!-- VARIANT COLUMN REMOVED -->
-                  <th style="inline-size: 15%;">
+                  <th style="inline-size: 12%;">
                     Quantity
                   </th>
-                  <th style="inline-size: 15%;">
-                    Unit Cost
-                  </th>
-                  <th style="inline-size: 15%;">
-                    Total
-                  </th>
                   <th style="inline-size: 10%;">
+                    Unit
+                  </th>
+                  <th style="inline-size: 15%;">
+                    Total Harga
+                  </th>
+                  <th style="inline-size: 15%;">
+                    Harga Satuan
+                  </th>
+                  <th style="inline-size: 13%;">
                     Action
                   </th>
                 </tr>
@@ -588,7 +629,6 @@ onMounted(() => {
                       </template>
                     </VAutocomplete>
                   </td>
-                  <!-- VARIANT COLUMN REMOVED -->
                   <td>
                     <VTextField
                       v-model="item.quantity"
@@ -599,22 +639,29 @@ onMounted(() => {
                       variant="outlined"
                       density="compact"
                       @input="formatQuantity(index, $event)"
-                      @blur="calculateItemTotal(index)"
+                      @blur="calculateUnitCost(index)"
                     />
+                  </td>
+                  <td>
+                    <div class="text-center font-weight-medium">
+                      {{ item.unit || '-' }}
+                    </div>
                   </td>
                   <td>
                     <VTextField
-                      v-model="item.unit_cost_display"
-                      label="Harga Satuan"
+                      v-model="item.total_cost_display"
+                      label="Total Harga"
                       variant="outlined"
                       density="compact"
                       prefix="Rp"
-                      @input="formatUnitCost(index, $event)"
-                      @blur="calculateItemTotal(index)"
+                      @input="formatTotalCost(index, $event)"
+                      @blur="calculateUnitCost(index)"
                     />
                   </td>
                   <td>
-                    <span class="font-weight-medium">{{ formatCurrency(item.total_cost) }}</span>
+                    <div class="text-center font-weight-medium">
+                      {{ formatCurrency(item.unit_cost) }}
+                    </div>
                   </td>
                   <td>
                     <VBtn
