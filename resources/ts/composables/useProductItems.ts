@@ -232,10 +232,13 @@ const saveProductItem = async () => {
   try {
     let response
 
-    if (editMode.value && selectedProductItem.value)
+    if (editMode.value && selectedProductItem.value) {
+      // For existing items, use regular update
       response = await ProductItemsApi.update(selectedProductItem.value.id_product_item, formData)
-    else
-      response = await ProductItemsApi.create(formData, editMode.value) // Pass editMode flag
+    } else {
+      // For new items that might have conflicts, use upsert (safer)
+      response = await ProductItemsApi.upsert(formData)
+    }
 
     if (response.success) {
       successMessage.value = editMode.value

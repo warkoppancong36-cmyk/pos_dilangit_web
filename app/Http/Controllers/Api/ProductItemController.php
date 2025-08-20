@@ -159,17 +159,47 @@ class ProductItemController extends Controller
                 'item_id' => $request->item_id
             ]);
             
-            if (!$isEditMode) {
-                // Check if this product-item combination already exists
-                $exists = ProductItem::where('product_id', $request->product_id)
-                    ->where('item_id', $request->item_id)
-                    ->exists();
+            // Always check for existing record, regardless of edit mode
+            $existingItem = ProductItem::where('product_id', $request->product_id)
+                ->where('item_id', $request->item_id)
+                ->first();
 
-                if ($exists) {
-                    \Log::warning('ProductItemController@store duplicate detected', [
+            if ($existingItem) {
+                if ($isEditMode) {
+                    // In edit mode, update the existing record instead of creating new one
+                    \Log::info('ProductItemController@store updating existing item in edit mode', [
+                        'existing_id' => $existingItem->id_product_item,
                         'product_id' => $request->product_id,
-                        'item_id' => $request->item_id,
-                        'is_edit_mode' => $isEditMode
+                        'item_id' => $request->item_id
+                    ]);
+                    
+                    $validated = $validator->validated();
+                    unset($validated['is_edit_mode'], $validated['product_id'], $validated['item_id']); // Remove fields that shouldn't be updated
+                    $validated['updated_by'] = Auth::id();
+                    
+                    DB::beginTransaction();
+                    
+                    $existingItem->update($validated);
+                    $existingItem->load(['product', 'item', 'creator', 'updater']);
+                    
+                    DB::commit();
+                    
+                    \Log::info('ProductItemController@store existing item updated successfully', [
+                        'product_item_id' => $existingItem->id_product_item
+                    ]);
+                    
+                    return response()->json([
+                        'success' => true,
+                        'data' => $existingItem,
+                        'message' => 'Product item updated successfully'
+                    ]);
+                    
+                } else {
+                    // In normal mode, return error for duplicates
+                    \Log::warning('ProductItemController@store duplicate detected in normal mode', [
+                        'existing_id' => $existingItem->id_product_item,
+                        'product_id' => $request->product_id,
+                        'item_id' => $request->item_id
                     ]);
                     
                     return response()->json([
@@ -177,8 +207,6 @@ class ProductItemController extends Controller
                         'message' => 'This item is already assigned to this product'
                     ], 422);
                 }
-            } else {
-                \Log::info('ProductItemController@store duplicate check bypassed due to edit mode');
             }
 
             $validated = $validator->validated();
@@ -187,22 +215,34 @@ class ProductItemController extends Controller
 
             DB::beginTransaction();
             
-            $productItem = ProductItem::create($validated);
+            // Use updateOrCreate to handle both insert and update scenarios safely
+            $productItem = ProductItem::updateOrCreate(
+                [
+                    'product_id' => $validated['product_id'],
+                    'item_id' => $validated['item_id']
+                ],
+                array_merge($validated, [
+                    'updated_by' => Auth::id()
+                ])
+            );
             
             DB::commit();
 
-            $productItem->load(['product', 'item', 'creator']);
+            $productItem->load(['product', 'item', 'creator', 'updater']);
 
-            \Log::info('ProductItemController@store success', [
+            \Log::info('ProductItemController@store success via updateOrCreate', [
                 'product_item_id' => $productItem->id_product_item,
+                'was_recently_created' => $productItem->wasRecentlyCreated,
                 'is_edit_mode' => $isEditMode
             ]);
+
+            $message = $productItem->wasRecentlyCreated ? 'Product item created successfully' : 'Product item updated successfully';
 
             return response()->json([
                 'success' => true,
                 'data' => $productItem,
-                'message' => 'Product item created successfully'
-            ], 201);
+                'message' => $message
+            ], $productItem->wasRecentlyCreated ? 201 : 200);
 
         } catch (\Exception $e) {
             DB::rollback();
@@ -377,6 +417,96 @@ class ProductItemController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error calculating production capacity: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Upsert product item - create or update based on product_id and item_id combination
+     * This is safer for edit operations to avoid constraint violations
+     */
+    public function upsert(Request $request): JsonResponse
+    {
+        try {
+            // Log request details for debugging
+            \Log::info('ProductItemController@upsert called', [
+                'request_data' => $request->all(),
+                'user_agent' => $request->header('User-Agent'),
+                'referer' => $request->header('Referer'),
+                'user_id' => Auth::id()
+            ]);
+
+            $validator = Validator::make($request->all(), [
+                'product_id' => 'required|exists:products,id_product',
+                'item_id' => 'required|exists:items,id_item',
+                'quantity_needed' => 'required|numeric|min:0.01',
+                'unit' => 'required|string|max:50',
+                'cost_per_unit' => 'nullable|numeric|min:0',
+                'is_critical' => 'boolean',
+                'notes' => 'nullable|string',
+                'active' => 'boolean',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $validated = $validator->validated();
+
+            DB::beginTransaction();
+            
+            // Check if record already exists to determine created_by logic
+            $existingRecord = ProductItem::where('product_id', $validated['product_id'])
+                                       ->where('item_id', $validated['item_id'])
+                                       ->first();
+            
+            // Use updateOrCreate to handle both insert and update scenarios safely
+            $productItem = ProductItem::updateOrCreate(
+                [
+                    'product_id' => $validated['product_id'],
+                    'item_id' => $validated['item_id']
+                ],
+                array_merge($validated, [
+                    'created_by' => $existingRecord ? $existingRecord->created_by : Auth::id(), // Keep original creator if updating
+                    'updated_by' => Auth::id()
+                ])
+            );
+            
+            DB::commit();
+
+            $productItem->load(['product', 'item', 'creator', 'updater']);
+
+            \Log::info('ProductItemController@upsert success', [
+                'product_item_id' => $productItem->id_product_item,
+                'was_recently_created' => $productItem->wasRecentlyCreated,
+                'product_id' => $validated['product_id'],
+                'item_id' => $validated['item_id']
+            ]);
+
+            $message = $productItem->wasRecentlyCreated ? 'Product item created successfully' : 'Product item updated successfully';
+
+            return response()->json([
+                'success' => true,
+                'data' => $productItem,
+                'message' => $message,
+                'was_created' => $productItem->wasRecentlyCreated
+            ], $productItem->wasRecentlyCreated ? 201 : 200);
+
+        } catch (\Exception $e) {
+            DB::rollback();
+            
+            \Log::error('ProductItemController@upsert error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error upserting product item: ' . $e->getMessage()
             ], 500);
         }
     }

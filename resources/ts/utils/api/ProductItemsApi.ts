@@ -41,6 +41,17 @@ export const ProductItemsApi = {
     }
   },
 
+  // Upsert product item (create or update) - safer for edit operations
+  async upsert(data: ProductItemFormData) {
+    try {
+      const response = await axios.post('/api/product-items/upsert', data)
+      return response.data
+    } catch (error: any) {
+      console.error('ProductItemsApi.upsert error:', error)
+      throw error.response?.data || error
+    }
+  },
+
   // Update existing product item
   async update(id: number, data: ProductItemFormData) {
     try {

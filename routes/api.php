@@ -377,6 +377,7 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
     Route::prefix('product-items')->group(function () {
         Route::get('/', [ProductItemController::class, 'index']);
         Route::post('/', [ProductItemController::class, 'store']);
+        Route::post('/upsert', [ProductItemController::class, 'upsert']); // Safe upsert for edit operations
         Route::get('/{id}', [ProductItemController::class, 'show']);
         Route::put('/{id}', [ProductItemController::class, 'update']);
         Route::delete('/{id}', [ProductItemController::class, 'destroy']);
