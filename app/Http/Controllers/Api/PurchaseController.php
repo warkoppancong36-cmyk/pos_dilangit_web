@@ -96,8 +96,9 @@ class PurchaseController extends Controller
                 $subtotal += $item['quantity'] * $item['unit_cost'];
             }
 
-            $taxRate = 0.11; // 11% PPN
-            $taxAmount = $subtotal * $taxRate;
+            // $taxRate = 0.11; // 11% PPN
+            // $taxAmount = $subtotal * $taxRate;
+            $taxAmount = $subtotal;
             $discountAmount = $request->get('discount_amount', 0);
             $totalAmount = $subtotal + $taxAmount - $discountAmount;
 
@@ -207,8 +208,9 @@ class PurchaseController extends Controller
                 $subtotal += $item['quantity'] * $item['unit_cost'];
             }
 
-            $taxRate = 0.11; // 11% PPN
-            $taxAmount = $subtotal * $taxRate;
+            // $taxRate = 0.11; // 11% PPN
+            // $taxAmount = $subtotal * $taxRate;
+            $taxAmount = $subtotal;
             $discountAmount = $request->get('discount_amount', 0);
             $totalAmount = $subtotal + $taxAmount - $discountAmount;
 
