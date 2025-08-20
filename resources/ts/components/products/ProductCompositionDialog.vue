@@ -777,19 +777,50 @@ const saveComposition = async () => {
     const existingItems = props.items || []
     const currentItems = compositionItems.value
     
+    console.log('🔄 Comparing items for save:', {
+      existing_count: existingItems.length,
+      current_count: currentItems.length,
+      existing_items: existingItems.map(item => ({
+        id: item.id_product_item,
+        item_id: item.item?.id,
+        item_name: item.item?.name
+      })),
+      current_items: currentItems.map(item => ({
+        id: item.id_product_item,
+        item_id: item.item?.id,
+        item_name: item.item?.name
+      }))
+    })
+    
     // Process each current item (create or update)
     for (const item of currentItems) {
-      const existingItem = existingItems.find(existing => 
-        existing.id_product_item === item.id_product_item ||
-        (existing.item?.id === item.item?.id && existing.product_id === productId)
-      )
+      const existingItem = existingItems.find(existing => {
+        // Try multiple matching strategies
+        if (existing.id_product_item === item.id_product_item) {
+          return true // Exact ID match
+        }
+        
+        // If item has a valid (non-temp) ID but no direct match, 
+        // try matching by item_id and product_id
+        if (item.id_product_item && 
+            !item.id_product_item.toString().startsWith('temp_') &&
+            existing.item?.id === item.item?.id &&
+            existing.product_id === productId) {
+          return true // Same item in same product
+        }
+        
+        return false
+      })
       
       console.log('🔍 Processing item:', {
         item_name: item.item?.name,
         item_id_product_item: item.id_product_item,
         existing_found: !!existingItem,
         existing_id: existingItem?.id_product_item,
-        is_temp: item.id_product_item?.toString().startsWith('temp_')
+        is_temp: item.id_product_item?.toString().startsWith('temp_'),
+        matching_strategy: existingItem ? 
+          (existingItem.id_product_item === item.id_product_item ? 'exact_id' : 'item_product_match') : 
+          'no_match'
       })
       
       const apiData: ProductItemFormData = {
