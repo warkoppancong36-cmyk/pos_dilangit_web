@@ -98,9 +98,9 @@ class PurchaseController extends Controller
 
             // $taxRate = 0.11; // 11% PPN
             // $taxAmount = $subtotal * $taxRate;
-            $taxAmount = $subtotal;
+            // $taxAmount = $subtotal;
             $discountAmount = $request->get('discount_amount', 0);
-            $totalAmount = $subtotal + $taxAmount - $discountAmount;
+            $totalAmount = $subtotal - $discountAmount;
 
             // Create purchase
             $purchase = Purchase::create([
@@ -210,9 +210,9 @@ class PurchaseController extends Controller
 
             // $taxRate = 0.11; // 11% PPN
             // $taxAmount = $subtotal * $taxRate;
-            $taxAmount = $subtotal;
+            // $taxAmount = $subtotal;
             $discountAmount = $request->get('discount_amount', 0);
-            $totalAmount = $subtotal + $taxAmount - $discountAmount;
+            $totalAmount = $subtotal  - $discountAmount;
 
             // Update purchase
             $purchase->update([

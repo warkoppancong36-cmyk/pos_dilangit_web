@@ -172,10 +172,10 @@
                   <span>Diskon:</span>
                   <span class="text-success">-{{ formatCurrency(purchase.discount_amount) }}</span>
                 </div>
-                <div class="d-flex justify-space-between mb-2">
+                <!-- <div class="d-flex justify-space-between mb-2">
                   <span>PPN (11%):</span>
                   <span>{{ formatCurrency(purchase.tax_amount) }}</span>
-                </div>
+                </div> -->
                 <VDivider class="my-3" />
                 <div class="d-flex justify-space-between">
                   <span class="text-h6 font-weight-bold">Total:</span>
