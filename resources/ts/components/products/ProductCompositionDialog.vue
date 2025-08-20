@@ -468,6 +468,9 @@ const newItem = ref<NewItemForm>({
 const availableItems = ref<AvailableItem[]>([])
 const loadingItems = ref(false)
 
+// Initial composition data for comparison during save
+const initialCompositionItems = ref<CompositionItem[]>([])
+
 // Fetch product composition from API
 const fetchProductComposition = async () => {
   if (!props.product) return
@@ -485,6 +488,9 @@ const fetchProductComposition = async () => {
     
     if (response.success && response.data?.data) {
       compositionItems.value = response.data.data
+      // Store initial data for comparison during save
+      initialCompositionItems.value = JSON.parse(JSON.stringify(response.data.data))
+      console.log('✅ Initial composition loaded:', initialCompositionItems.value.length, 'items')
     }
   } catch (error) {
     console.error('Error fetching product composition:', error)
@@ -774,7 +780,8 @@ const saveComposition = async () => {
     const productId = parseInt(String(props.product?.id_product || props.product?.id || '0'))
     
     // Get existing items to determine which are new, updated, or deleted
-    const existingItems = props.items || []
+    // Use initialCompositionItems (from API) instead of props.items (which might be empty)
+    const existingItems = initialCompositionItems.value || []
     const currentItems = compositionItems.value
     
     console.log('🔄 Comparing items for save:', {
@@ -801,12 +808,11 @@ const saveComposition = async () => {
         }
         
         // If item has a valid (non-temp) ID but no direct match, 
-        // try matching by item_id and product_id
+        // try matching by item_id only (since all are for same product)
         if (item.id_product_item && 
             !item.id_product_item.toString().startsWith('temp_') &&
-            existing.item?.id === item.item?.id &&
-            existing.product_id === productId) {
-          return true // Same item in same product
+            existing.item?.id === item.item?.id) {
+          return true // Same item
         }
         
         return false
@@ -840,14 +846,14 @@ const saveComposition = async () => {
           console.log('✏️ Updating existing item:', {
             id: existingItem.id_product_item,
             item_name: item.item?.name,
-            stock: item.item?.stock
+            current_stock: item.item?.inventory?.current_stock
           })
           await ProductItemsApi.update(parseInt(existingItem.id_product_item || '0'), apiData)
         } else {
           // Create new item
           console.log('➕ Creating new item:', {
             item_name: item.item?.name,
-            stock: item.item?.stock,
+            current_stock: item.item?.inventory?.current_stock,
             id_product_item: item.id_product_item,
             is_temp: item.id_product_item?.toString().startsWith('temp_'),
             existing_item_found: !!existingItem
