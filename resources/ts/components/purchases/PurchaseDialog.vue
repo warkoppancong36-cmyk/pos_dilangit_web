@@ -73,10 +73,14 @@ const title = computed(() => {
 })
 
 const totals = computed(() => {
-  const subtotal = formData.value.items.reduce((sum, item) => sum + (item.total_cost || 0), 0)
-  const discount = Number.parseFloat(formData.value.discount_amount_display.replace(/\D/g, '')) || 0
+  const subtotal = formData.value.items.reduce((sum, item) => {
+    return sum + (item.total_cost || 0)
+  }, 0)
+  const discount = Number.parseFloat(String(formData.value.discount_amount_display).replace(/\D/g, '')) || 0
   const tax = 0 //(subtotal - discount) * 0.11 // 11% PPN
   const total = subtotal - discount + tax
+
+  console.log('💰 Totals calculation:', { subtotal, discount, tax, total })
 
   return {
     subtotal,
@@ -191,6 +195,30 @@ const calculateUnitCost = (index: number) => {
   }
 }
 
+const calculateTotalCost = (index: number) => {
+  try {
+    const item = formData.value.items[index]
+    if (!item) {
+      console.warn('Item not found at index:', index)
+      return
+    }
+
+    // Calculate total cost from quantity × unit cost
+    if (item.quantity > 0 && item.unit_cost > 0) {
+      item.total_cost = item.quantity * item.unit_cost
+      item.total_cost_display = new Intl.NumberFormat('id-ID').format(item.total_cost)
+    } else {
+      item.total_cost = 0
+      item.total_cost_display = '0'
+    }
+    
+    console.log(`Item ${index} total cost calculated:`, item.total_cost)
+  }
+  catch (error) {
+    console.error('Error in calculateTotalCost:', error)
+  }
+}
+
 const onItemChange = (index: number, itemId: number | null) => {
   try {
     const item = formData.value.items[index]
@@ -252,10 +280,10 @@ const formatQuantity = (index: number, event: Event) => {
   if (value === '' || value === null || value === undefined) {
     item.quantity = 0
   } else {
-    item.quantity = Number.parseInt(value) || 1
+    item.quantity = Number.parseFloat(value) || 1
   }
   
-  calculateUnitCost(index)
+  calculateTotalCost(index)
 }
 
 const formatUnitCost = (index: number, event: Event) => {
@@ -268,9 +296,11 @@ const formatUnitCost = (index: number, event: Event) => {
     item.unit_cost_display = '0'
   }
   else {
-    item.unit_cost = Number.parseInt(numericValue)
+    item.unit_cost = Number.parseFloat(numericValue)
     item.unit_cost_display = new Intl.NumberFormat('id-ID').format(item.unit_cost)
   }
+  
+  calculateTotalCost(index)
 }
 
 const formatTotalCost = (index: number, event: Event) => {
@@ -283,7 +313,7 @@ const formatTotalCost = (index: number, event: Event) => {
     item.total_cost_display = '0'
   }
   else {
-    item.total_cost = Number.parseInt(numericValue)
+    item.total_cost = Number.parseFloat(numericValue)
     item.total_cost_display = new Intl.NumberFormat('id-ID').format(item.total_cost)
   }
   
@@ -366,12 +396,26 @@ const initializeForm = () => {
         console.log('🔄 Mapping item:', item)
         console.log('📊 Item quantity_ordered:', item.quantity_ordered)
         console.log('📊 Item quantity:', item.quantity)
+        
+        const quantity = Number.parseFloat(item.quantity_ordered || item.quantity || 0) || 0
+        const unitCost = Number.parseFloat(item.unit_cost || 0) || 0
+        const totalCost = quantity * unitCost
+        
+        console.log('📊 Calculated - quantity:', quantity, 'unitCost:', unitCost, 'totalCost:', totalCost)
+        console.log('🏷️ Item unit debug:', {
+          item_unit: item.item?.unit,
+          direct_unit: item.unit,
+          item_id: item.item?.id_item || item.id_item
+        })
+        
         return {
           id_item: item.item?.id_item || item.id_item,
-          quantity: Number.parseInt(item.quantity_ordered || item.quantity || 0) || 0,
-          unit_cost: item.unit_cost,
-          unit_cost_display: new Intl.NumberFormat('id-ID').format(item.unit_cost),
-          total_cost: item.total_cost,
+          quantity: quantity,
+          unit: item.item?.unit || item.unit || '',
+          unit_cost: unitCost,
+          unit_cost_display: new Intl.NumberFormat('id-ID').format(unitCost),
+          total_cost: totalCost,
+          total_cost_display: new Intl.NumberFormat('id-ID').format(totalCost),
         }
       }) || [],
     }
@@ -442,6 +486,19 @@ const closeDialog = () => {
   localDialog.value = false
 }
 
+// Method to update units for existing items after items data is loaded
+const updateItemUnits = () => {
+  formData.value.items.forEach((formItem, index) => {
+    if (formItem.id_item && !formItem.unit) {
+      const masterItem = items.value.find(item => item.id_item === formItem.id_item)
+      if (masterItem) {
+        formItem.unit = masterItem.unit
+        console.log(`🔄 Updated unit for item ${index}:`, formItem.unit)
+      }
+    }
+  })
+}
+
 // Watchers
 watch(() => props.modelValue, async (newValue) => {
   if (newValue) {
@@ -449,6 +506,8 @@ watch(() => props.modelValue, async (newValue) => {
     await Promise.all([loadSuppliers(), loadItems()])
     await nextTick()
     initializeForm()
+    // Update units after initialization
+    updateItemUnits()
   }
 })
 
@@ -464,6 +523,8 @@ watch(() => props.purchase, async (newPurchase) => {
     }
     await nextTick()
     initializeForm()
+    // Update units after initialization
+    updateItemUnits()
   }
 }, { deep: true, immediate: true })
 
@@ -484,7 +545,12 @@ onMounted(() => {
       <VCardTitle class="d-flex align-center justify-space-between">
         <div class="d-flex align-center gap-2">
           <VIcon>mdi-cart-plus</VIcon>
-          <span>{{ title }}</span>
+          <div class="d-flex flex-column">
+            <span>{{ title }}</span>
+            <span v-if="props.mode === 'edit' && props.purchase?.purchase_number" class="text-caption text-medium-emphasis">
+              No. Order: {{ props.purchase.purchase_number }}
+            </span>
+          </div>
         </div>
         <VBtn
           icon="mdi-close"
