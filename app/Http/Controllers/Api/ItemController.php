@@ -16,6 +16,9 @@ class ItemController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
+            // Debug: Log all request parameters
+            \Log::info('Items API Request Parameters:', $request->all());
+            
             $query = Item::with(['creator', 'updater', 'inventory'])
                 ->orderBy('created_at', 'desc');
 
@@ -53,6 +56,7 @@ class ItemController extends Controller
 
             // Search functionality
             if ($request->has('search') && !empty($request->search)) {
+                \Log::info('Applying search filter:', ['search' => $request->search]);
                 $query->search($request->search);
             }
 

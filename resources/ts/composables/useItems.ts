@@ -185,6 +185,7 @@ const fetchItemsList = async () => {
     })
 
     console.log('Fetching items with params:', params) // Debug log
+    console.log('Filters state:', filters) // Debug log
 
     const response = await ItemsApi.getAll(params)
     
@@ -374,7 +375,11 @@ const onItemsPerPageChange = (newItemsPerPage: number) => {
 }
 
 // Filters
-const handleFiltersUpdate = () => {
+const handleFiltersUpdate = (newFilters?: ItemFilters) => {
+  if (newFilters) {
+    Object.assign(filters, newFilters)
+    console.log('useItems - Filters updated:', filters)
+  }
   currentPage.value = 1
   fetchItemsList()
 }

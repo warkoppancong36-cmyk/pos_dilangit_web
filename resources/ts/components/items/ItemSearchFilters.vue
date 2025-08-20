@@ -35,6 +35,7 @@ const stockOptions = [
 ]
 
 const onFilterChange = () => {
+  console.log('ItemSearchFilters - onFilterChange called with:', localFilters.value)
   emit('update:filters', { ...localFilters.value })
 }
 
