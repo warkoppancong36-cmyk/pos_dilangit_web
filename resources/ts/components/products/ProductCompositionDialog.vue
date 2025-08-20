@@ -484,8 +484,6 @@ const fetchProductComposition = async () => {
     })
     
     if (response.success && response.data?.data) {
-      console.log('📦 Raw composition items from API:', response.data.data.slice(0, 2))
-      console.log('📦 Sample composition item structure:', JSON.stringify(response.data.data[0], null, 2))
       compositionItems.value = response.data.data
     }
   } catch (error) {
