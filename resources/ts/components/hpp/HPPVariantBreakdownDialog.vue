@@ -39,6 +39,7 @@ const {
 const selectedMethod = ref<'current' | 'latest' | 'average'>('latest')
 const markupPercentage = ref(0) // Will be calculated from target price
 const targetPrice = ref(0) // User input for desired selling price
+const targetPriceFormatted = ref('') // Formatted display value
 const markupKey = ref(0) // Key untuk force re-render TextField
 
 // Snackbar state
@@ -63,6 +64,33 @@ const breakdownHeaders = [
   { title: 'Notes', value: 'notes' },
 ]
 
+// Helper functions for currency formatting
+const formatRupiahInput = (value: number): string => {
+  if (!value || value === 0) return ''
+  return new Intl.NumberFormat('id-ID').format(value)
+}
+
+const parseRupiahInput = (value: string): number => {
+  if (!value) return 0
+  // Remove all non-digit characters except decimal separator
+  const cleanValue = value.replace(/[^\d]/g, '')
+  return parseInt(cleanValue) || 0
+}
+
+const updateTargetPriceFromInput = (inputValue: string) => {
+  const numericValue = parseRupiahInput(inputValue)
+  targetPrice.value = numericValue
+  targetPriceFormatted.value = formatRupiahInput(numericValue)
+  
+  // Auto-calculate markup percentage
+  if (currentHPPBreakdown.value?.total_hpp && numericValue > 0) {
+    const hpp = currentHPPBreakdown.value.total_hpp
+    markupPercentage.value = hpp > 0 ? Math.round(((numericValue - hpp) / hpp) * 100) : 0
+  } else {
+    markupPercentage.value = 0
+  }
+}
+
 // Methods
 const loadVariantTargetPrice = async () => {
   if (props.variantId) {
@@ -82,12 +110,21 @@ const loadVariantTargetPrice = async () => {
         // Load current price as target price
         if (variant.price && variant.price > 0) {
           targetPrice.value = Number(variant.price)
+          targetPriceFormatted.value = formatRupiahInput(Number(variant.price))
         }
         else {
           // Default fallback - calculate from HPP if available
           if (currentHPPBreakdown.value?.total_hpp) {
-            targetPrice.value = Math.round(currentHPPBreakdown.value.total_hpp * 1.2) // 20% markup as default
+            const defaultPrice = Math.round(currentHPPBreakdown.value.total_hpp * 1.2) // 20% markup as default
+            targetPrice.value = defaultPrice
+            targetPriceFormatted.value = formatRupiahInput(defaultPrice)
           }
+        }
+
+        // Auto-calculate markup percentage
+        if (currentHPPBreakdown.value?.total_hpp && targetPrice.value > 0) {
+          const hpp = currentHPPBreakdown.value.total_hpp
+          markupPercentage.value = hpp > 0 ? Math.round(((targetPrice.value - hpp) / hpp) * 100) : 0
         }
 
         markupKey.value += 1 // Force re-render
@@ -135,10 +172,6 @@ const updateHPP = async () => {
 const calculateSuggestion = async () => {
   if (props.variantId && currentHPPBreakdown.value?.total_hpp && targetPrice.value) {
     try {
-      // Calculate markup percentage from target price and HPP
-      const hpp = currentHPPBreakdown.value.total_hpp
-      markupPercentage.value = hpp > 0 ? ((targetPrice.value - hpp) / hpp) * 100 : 0
-      
       await calculateSuggestedPrice(props.variantId, markupPercentage.value)
       
       // Show success message for calculation
@@ -168,13 +201,14 @@ const applyPriceSuggestion = async () => {
       // Update target price and markup from response
       if (response?.data?.new_price) {
         targetPrice.value = response.data.new_price
+        targetPriceFormatted.value = formatRupiahInput(response.data.new_price)
         
         if (response?.data?.markup_percentage !== undefined) {
           markupPercentage.value = response.data.markup_percentage
         } else {
           // Calculate markup from response data
           const hpp = currentHPPBreakdown.value.total_hpp
-          markupPercentage.value = hpp > 0 ? ((response.data.new_price - hpp) / hpp) * 100 : 0
+          markupPercentage.value = hpp > 0 ? Math.round(((response.data.new_price - hpp) / hpp) * 100) : 0
         }
         
         markupKey.value += 1
@@ -209,6 +243,29 @@ watch(() => props.modelValue, newValue => {
 watch(() => props.variantId, newValue => {
   if (newValue && props.modelValue)
     loadHPPBreakdown()
+})
+
+watch(selectedMethod, async () => {
+  if (props.variantId) {
+    await loadHPPBreakdown()
+  }
+})
+
+// Auto-calculate markup when HPP or target price changes
+watch([() => currentHPPBreakdown.value?.total_hpp, targetPrice], () => {
+  if (currentHPPBreakdown.value?.total_hpp && targetPrice.value > 0) {
+    const hpp = currentHPPBreakdown.value.total_hpp
+    markupPercentage.value = hpp > 0 ? Math.round(((targetPrice.value - hpp) / hpp) * 100) : 0
+  } else {
+    markupPercentage.value = 0
+  }
+})
+
+// Format target price when it changes
+watch(targetPrice, (newValue) => {
+  if (newValue !== parseRupiahInput(targetPriceFormatted.value)) {
+    targetPriceFormatted.value = formatRupiahInput(newValue)
+  }
 })
 </script>
 
@@ -422,15 +479,13 @@ watch(() => props.variantId, newValue => {
               >
                 <VTextField
                   :key="markupKey"
-                  v-model="targetPrice"
+                  v-model="targetPriceFormatted"
                   label="Target Selling Price"
                   variant="outlined"
-                  type="number"
-                  min="0"
-                  step="1000"
                   prefix="Rp"
                   :hint="`Current HPP: ${formatCurrency(currentHPPBreakdown.total_hpp)}`"
                   persistent-hint
+                  @update:model-value="updateTargetPriceFromInput"
                 />
               </VCol>
               <VCol
@@ -454,7 +509,7 @@ watch(() => props.variantId, newValue => {
             </VRow>
 
             <VRow class="mt-2">
-              <VCol
+              <!-- <VCol
                 cols="12"
                 md="6"
               >
@@ -468,10 +523,10 @@ watch(() => props.variantId, newValue => {
                 >
                   Calculate Suggestion
                 </VBtn>
-              </VCol>
+              </VCol> -->
               <VCol
                 cols="12"
-                md="6"
+                md="12"
               >
                 <VBtn
                   color="success"

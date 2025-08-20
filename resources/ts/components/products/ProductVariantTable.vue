@@ -195,7 +195,7 @@
         </template>
 
         <!-- Stock Column -->
-        <template #item.current_stock="{ item }">
+        <!-- <template #item.current_stock="{ item }">
           <VChip
             :color="getStockStatus(item).color"
             size="small"
@@ -203,7 +203,7 @@
           >
             {{ item.current_stock || 0 }} unit
           </VChip>
-        </template>
+        </template> -->
 
         <!-- Status Column -->
         <template #item.is_active="{ item }">
@@ -436,7 +436,7 @@ const filters = ref({
 const tableHeaders = [
   { title: 'Variant', key: 'name', sortable: true },
   { title: 'Harga', key: 'price', sortable: true },
-  { title: 'Stok', key: 'current_stock', sortable: true },
+  // { title: 'Stok', key: 'current_stock', sortable: true },
   { title: 'Status', key: 'is_active', sortable: true },
   { title: 'Komposisi', key: 'composition', sortable: false },
   { title: 'Aksi', key: 'actions', sortable: false }
