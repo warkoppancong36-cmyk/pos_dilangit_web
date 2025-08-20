@@ -25,29 +25,12 @@ export const ProductItemsApi = {
   },
 
   // Create new product item
-  async create(data: ProductItemFormData, isEditMode: boolean = false) {
+  async create(data: ProductItemFormData) {
     try {
-      // Add is_edit_mode parameter to bypass duplicate validation in edit scenarios
-      const payload = {
-        ...data,
-        is_edit_mode: isEditMode
-      }
-      
-      const response = await axios.post('/api/product-items', payload)
+      const response = await axios.post('/api/product-items', data)
       return response.data
     } catch (error: any) {
       console.error('ProductItemsApi.create error:', error)
-      throw error.response?.data || error
-    }
-  },
-
-  // Upsert product item (create or update) - safer for edit operations
-  async upsert(data: ProductItemFormData) {
-    try {
-      const response = await axios.post('/api/product-items/upsert', data)
-      return response.data
-    } catch (error: any) {
-      console.error('ProductItemsApi.upsert error:', error)
       throw error.response?.data || error
     }
   },

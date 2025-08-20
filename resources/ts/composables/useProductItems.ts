@@ -236,8 +236,8 @@ const saveProductItem = async () => {
       // For existing items, use regular update
       response = await ProductItemsApi.update(selectedProductItem.value.id_product_item, formData)
     } else {
-      // For new items that might have conflicts, use upsert (safer)
-      response = await ProductItemsApi.upsert(formData)
+      // For new items, use regular create
+      response = await ProductItemsApi.create(formData)
     }
 
     if (response.success) {

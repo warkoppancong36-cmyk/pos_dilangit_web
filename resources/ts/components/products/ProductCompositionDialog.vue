@@ -800,9 +800,9 @@ const saveComposition = async () => {
           console.log('✏️ Updating item:', existingItem.id_product_item)
           await ProductItemsApi.update(parseInt(existingItem.id_product_item || '0'), apiData)
         } else {
-          // Use upsert for safer create/update operation - no duplicate key errors
-          console.log('🔄 Upserting item (create or update)')
-          await ProductItemsApi.upsert(apiData)
+          // Create new item
+          console.log('➕ Creating new item')
+          await ProductItemsApi.create(apiData)
         }
       } catch (itemError: any) {
         console.error('❌ Error processing item:', itemError)
