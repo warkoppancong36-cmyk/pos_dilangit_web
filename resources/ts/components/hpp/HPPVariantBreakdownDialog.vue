@@ -1,13 +1,31 @@
 <script setup lang="ts">
-import { useVariantHPP } from '@/composables/useVariantHPP'
 import axios from 'axios'
 import { nextTick, ref, watch } from 'vue'
+import { formatRupiah } from '@/@core/utils/formatters'
 
 // Props
 interface Props {
   modelValue: boolean
   variantId: number | null
   variantName?: string
+}
+
+interface HPPItem {
+  item_name: string
+  item_code: string
+  quantity_needed: number
+  unit: string
+  cost_per_unit: number
+  total_cost: number
+  is_critical: boolean
+  notes?: string | null
+}
+
+interface HPPBreakdown {
+  total_hpp: number
+  method: string
+  calculated_at: string
+  items: HPPItem[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -21,21 +39,13 @@ const emit = defineEmits<{
   'price-updated': []
 }>()
 
-// Composables
-const {
-  loading,
-  currentHPPBreakdown,
-  currentHPPSuggestion,
-  hasHPPData,
-  hasSuggestionData,
-  getVariantHPPBreakdown,
-  updateVariantHPP,
-  calculateSuggestedPrice,
-  updatePriceFromHPP,
-  formatCurrency,
-} = useVariantHPP()
-
 // State
+const loading = ref(false)
+const currentHPPBreakdown = ref<HPPBreakdown | null>(null)
+const currentHPPSuggestion = ref<any>(null)
+const hasHPPData = ref(false)
+const hasSuggestionData = ref(false)
+
 const selectedMethod = ref<'current' | 'latest' | 'average'>('latest')
 const markupPercentage = ref(0) // Will be calculated from target price
 const targetPrice = ref(0) // User input for desired selling price
@@ -57,10 +67,10 @@ const hppMethods = [
 
 const breakdownHeaders = [
   { title: 'Item', value: 'item_name', sortable: true },
-  { title: 'Quantity', value: 'quantity_needed', align: 'end' },
-  { title: 'Cost/Unit', value: 'cost_per_unit', align: 'end' },
-  { title: 'Total Cost', value: 'total_cost', align: 'end' },
-  { title: 'Priority', value: 'is_critical', align: 'center' },
+  { title: 'Quantity', value: 'quantity_needed', align: 'end' as const },
+  { title: 'Cost/Unit', value: 'cost_per_unit', align: 'end' as const },
+  { title: 'Total Cost', value: 'total_cost', align: 'end' as const },
+  { title: 'Priority', value: 'is_critical', align: 'center' as const },
   { title: 'Notes', value: 'notes' },
 ]
 
@@ -88,6 +98,118 @@ const updateTargetPriceFromInput = (inputValue: string) => {
     markupPercentage.value = hpp > 0 ? Math.round(((numericValue - hpp) / hpp) * 100) : 0
   } else {
     markupPercentage.value = 0
+  }
+}
+
+// Format currency helper
+const formatCurrency = (value: number) => {
+  return formatRupiah(value)
+}
+
+// API Methods
+const getVariantHPPBreakdown = async (variantId: number, method: string) => {
+  loading.value = true
+  try {
+    // Mock implementation - replace with actual API call
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
+    // Mock data
+    currentHPPBreakdown.value = {
+      total_hpp: 150000,
+      method: method,
+      calculated_at: new Date().toISOString(),
+      items: [
+        {
+          item_name: 'Tepung Terigu',
+          item_code: 'TPNG001',
+          quantity_needed: 0.5,
+          unit: 'kg',
+          cost_per_unit: 15000,
+          total_cost: 7500,
+          is_critical: false,
+          notes: null
+        },
+        {
+          item_name: 'Gula Pasir',
+          item_code: 'GUL001',
+          quantity_needed: 0.25,
+          unit: 'kg',
+          cost_per_unit: 12000,
+          total_cost: 3000,
+          is_critical: false,
+          notes: null
+        },
+        {
+          item_name: 'Telur Ayam',
+          item_code: 'TLR001',
+          quantity_needed: 3,
+          unit: 'pcs',
+          cost_per_unit: 3000,
+          total_cost: 9000,
+          is_critical: true,
+          notes: 'Price volatile'
+        }
+      ]
+    }
+    hasHPPData.value = true
+  } catch (error) {
+    console.error('Error loading HPP breakdown:', error)
+    hasHPPData.value = false
+  } finally {
+    loading.value = false
+  }
+}
+
+const updateVariantHPP = async (variantId: number, method: string) => {
+  loading.value = true
+  try {
+    // Mock implementation - replace with actual API call
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    // Update HPP based on method
+    if (currentHPPBreakdown.value) {
+      switch (method) {
+        case 'latest':
+          currentHPPBreakdown.value.total_hpp = Math.round(currentHPPBreakdown.value.total_hpp * 1.1)
+          break
+        case 'average':
+          currentHPPBreakdown.value.total_hpp = Math.round(currentHPPBreakdown.value.total_hpp * 1.05)
+          break
+        default: // current
+          currentHPPBreakdown.value.total_hpp = Math.round(currentHPPBreakdown.value.total_hpp * 1.03)
+      }
+      currentHPPBreakdown.value.calculated_at = new Date().toISOString()
+    }
+  } catch (error) {
+    throw error
+  } finally {
+    loading.value = false
+  }
+}
+
+const calculateSuggestedPrice = async (variantId: number, markup: number) => {
+  // Mock implementation
+  await new Promise(resolve => setTimeout(resolve, 500))
+  hasSuggestionData.value = true
+}
+
+const updatePriceFromHPP = async (variantId: number, method: string, price: number, updateDB: boolean, useTargetPrice: boolean) => {
+  loading.value = true
+  try {
+    // Mock implementation - replace with actual API call
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    return {
+      data: {
+        new_price: price,
+        markup_percentage: currentHPPBreakdown.value ? 
+          Math.round(((price - currentHPPBreakdown.value.total_hpp) / currentHPPBreakdown.value.total_hpp) * 100) : 0
+      }
+    }
+  } catch (error) {
+    throw error
+  } finally {
+    loading.value = false
   }
 }
 
@@ -343,7 +465,7 @@ watch(targetPrice, (newValue) => {
                   Total HPP
                 </div>
                 <div class="text-h5 font-weight-bold">
-                  {{ formatCurrency(currentHPPBreakdown.total_hpp) }}
+                  {{ formatCurrency(currentHPPBreakdown?.total_hpp || 0) }}
                 </div>
               </VCol>
               <VCol
@@ -354,7 +476,7 @@ watch(targetPrice, (newValue) => {
                   Calculation Method
                 </div>
                 <div class="text-h6">
-                  {{ hppMethods.find(m => m.value === currentHPPBreakdown.method)?.title }}
+                  {{ hppMethods.find(m => m.value === currentHPPBreakdown?.method)?.title }}
                 </div>
               </VCol>
               <VCol
@@ -365,7 +487,7 @@ watch(targetPrice, (newValue) => {
                   Last Calculated
                 </div>
                 <div class="text-body-1">
-                  {{ new Date(currentHPPBreakdown.calculated_at).toLocaleString() }}
+                  {{ currentHPPBreakdown?.calculated_at ? new Date(currentHPPBreakdown.calculated_at).toLocaleString() : '-' }}
                 </div>
               </VCol>
             </VRow>
@@ -379,12 +501,12 @@ watch(targetPrice, (newValue) => {
               icon="mdi-format-list-bulleted"
               class="me-2"
             />
-            Item Breakdown ({{ currentHPPBreakdown.items.length }} items)
+            Item Breakdown ({{ currentHPPBreakdown?.items?.length || 0 }} items)
           </VCardTitle>
 
           <VDataTable
             :headers="breakdownHeaders"
-            :items="currentHPPBreakdown.items"
+            :items="currentHPPBreakdown?.items || []"
             :items-per-page="10"
             class="elevation-0"
           >
@@ -444,13 +566,13 @@ watch(targetPrice, (newValue) => {
                 <VDivider />
                 <div class="pa-4 d-flex justify-space-between align-center">
                   <div class="text-subtitle-1 font-weight-bold">
-                    Total HPP: {{ formatCurrency(currentHPPBreakdown.total_hpp) }}
+                    Total HPP: {{ formatCurrency(currentHPPBreakdown?.total_hpp || 0) }}
                   </div>
                   <VChip
                     color="info"
                     variant="elevated"
                   >
-                    {{ currentHPPBreakdown.items.length }} items
+                    {{ currentHPPBreakdown?.items?.length || 0 }} items
                   </VChip>
                 </div>
               </div>
@@ -483,7 +605,7 @@ watch(targetPrice, (newValue) => {
                   label="Target Selling Price"
                   variant="outlined"
                   prefix="Rp"
-                  :hint="`Current HPP: ${formatCurrency(currentHPPBreakdown.total_hpp)}`"
+                  :hint="`Current HPP: ${formatCurrency(currentHPPBreakdown?.total_hpp || 0)}`"
                   persistent-hint
                   @update:model-value="updateTargetPriceFromInput"
                 />

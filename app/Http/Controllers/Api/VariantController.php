@@ -126,7 +126,7 @@ class VariantController extends Controller
             $validator = Validator::make($request->all(), [
                 'id_product' => 'required|exists:products,id_product',
                 'name' => 'required|string|max:255',
-                'variant_values' => 'required|array',
+                'variant_values' => 'nullable|array', // Made nullable instead of required
                 'price' => 'required|numeric|min:0',
                 'cost_price' => 'nullable|numeric|min:0',
                 'barcode' => 'nullable|string|unique:variants,barcode',
@@ -149,6 +149,11 @@ class VariantController extends Controller
             $variantData['created_by'] = Auth::id();
             $variantData['active'] = true;
 
+            // Set default empty array for variant_values if not provided
+            if (!isset($variantData['variant_values']) || empty($variantData['variant_values'])) {
+                $variantData['variant_values'] = [];
+            }
+
             // Handle image upload
             if ($request->hasFile('image')) {
                 $imagePath = $request->file('image')->store('variants', 'public');
@@ -157,7 +162,7 @@ class VariantController extends Controller
 
             // Generate SKU if not provided
             if (!$variantData['sku']) {
-                $variantData['sku'] = $this->generateUniqueSku($request->id_product, $request->variant_values);
+                $variantData['sku'] = $this->generateUniqueSku($request->id_product, $variantData['variant_values']);
             }
 
             $variant = Variant::create($variantData);
@@ -390,8 +395,13 @@ class VariantController extends Controller
         $baseCode = $product ? strtoupper(substr($product->name, 0, 3)) : 'VAR';
         
         $variantCode = '';
-        foreach ($variantValues as $key => $value) {
-            $variantCode .= strtoupper(substr($value, 0, 1));
+        if (is_array($variantValues) && !empty($variantValues)) {
+            foreach ($variantValues as $key => $value) {
+                $variantCode .= strtoupper(substr($value, 0, 1));
+            }
+        } else {
+            // Use timestamp-based code if no variant values
+            $variantCode = 'V' . substr(time(), -3);
         }
         
         $counter = 1;

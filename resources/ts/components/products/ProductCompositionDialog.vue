@@ -75,7 +75,7 @@
                   item-title="name"
                   item-value="id"
                   label="Pilih Item"
-                  placeholder="Cari item dengan stok..."
+                  placeholder="Cari item (termasuk yang stok kosong)..."
                   prepend-inner-icon="mdi-magnify"
                   variant="outlined"
                   clearable
@@ -84,27 +84,26 @@
                   <template #item="{ props, item }">
                     <VListItem 
                       v-bind="props"
-                      :disabled="getItemStock(item.raw) <= 0"
-                      :class="{ 'text-disabled': getItemStock(item.raw) <= 0 }"
+                      :class="{ 'text-medium-emphasis': getItemStock(item.raw) <= 0 }"
                     >
                       <template #prepend>
                         <VAvatar 
                           size="32" 
                           class="me-3"
-                          :color="getItemStock(item.raw) <= 0 ? 'grey-darken-2' : 'primary'"
+                          :color="getItemStock(item.raw) <= 0 ? 'warning' : 'primary'"
                           variant="tonal"
                         >
                           <VIcon 
                             icon="mdi-package-variant" 
-                            :color="getItemStock(item.raw) <= 0 ? 'grey-darken-2' : 'primary'" 
+                            :color="getItemStock(item.raw) <= 0 ? 'warning' : 'primary'" 
                           />
                         </VAvatar>
                       </template>
                       <VListItemTitle>{{ item.raw.name }}</VListItemTitle>
-                      <VListItemSubtitle :class="getItemStock(item.raw) <= 0 ? 'text-disabled' : 'text-medium-emphasis'">
-                        <span v-if="getItemStock(item.raw) <= 0" class="text-error">
+                      <VListItemSubtitle class="text-medium-emphasis">
+                        <span v-if="getItemStock(item.raw) <= 0" class="text-warning">
                           <VIcon icon="mdi-alert-circle" size="12" class="me-1" />
-                          Stok Habis
+                          Stok Kosong - Masih bisa digunakan
                         </span>
                         <span v-else>
                           Stok: {{ getItemStock(item.raw) }} {{ item.raw.unit }}
@@ -122,11 +121,11 @@
                         <VChip 
                           v-else
                           size="x-small" 
-                          color="error"
-                          variant="outlined"
-                          prepend-icon="mdi-close-circle"
+                          color="warning"
+                          variant="tonal"
+                          prepend-icon="mdi-alert"
                         >
-                          Habis
+                          Kosong
                         </VChip>
                       </template>
                     </VListItem>
@@ -185,6 +184,18 @@
                 </VBtn>
               </VCol>
             </VRow>
+            
+            <!-- Warning for out of stock items -->
+            <VAlert
+              v-if="isSelectedItemOutOfStock"
+              color="warning"
+              variant="tonal"
+              class="mt-4"
+              prepend-icon="mdi-alert"
+            >
+              <VAlertTitle>Item Stok Kosong</VAlertTitle>
+              <div>Item yang dipilih sedang kosong stok, namun masih bisa ditambahkan ke komposisi. Pastikan untuk memperbarui stok sebelum produksi.</div>
+            </VAlert>
           </VCardText>
         </VCard>
 
@@ -377,6 +388,16 @@ interface Product {
   sku?: string
   price?: number
   image_url?: string
+  id?: string // for backward compatibility
+  product_name?: string // for backward compatibility
+}
+
+interface AvailableItem {
+  id: string | number
+  name: string
+  unit: string
+  current_stock?: number
+  stock?: number
 }
 
 interface Props {
@@ -426,7 +447,7 @@ const newItem = ref({
 })
 
 // Available items from API
-const availableItems = ref([])
+const availableItems = ref<AvailableItem[]>([])
 const loadingItems = ref(false)
 
 // Fetch product composition from API
@@ -478,14 +499,7 @@ const fetchAvailableItems = async () => {
     console.error('Error fetching available items:', error)
     // Fallback to mock data if API fails
     availableItems.value = [
-      { id: '1', name: 'Kopi Arabica', current_stock: 100, unit: 'kg' },
-      { id: '2', name: 'Susu Segar', current_stock: 50, unit: 'liter' },
-      { id: '3', name: 'Gula Pasir', current_stock: 25, unit: 'kg' },
-      { id: '4', name: 'Whipped Cream', current_stock: 30, unit: 'pcs' },
-      { id: '5', name: 'Sirup Vanilla', current_stock: 20, unit: 'botol' },
-      { id: '6', name: 'Tepung Terigu', current_stock: 15, unit: 'kg' },
-      { id: '7', name: 'Mentega', current_stock: 10, unit: 'pack' },
-      { id: '8', name: 'Coklat Powder', current_stock: 8, unit: 'kg' },
+
     ]
   } finally {
     loadingItems.value = false
@@ -505,14 +519,24 @@ const selectedItemUnit = computed(() => {
   return selectedItem?.unit || null
 })
 
-// Filter items with stock > 0 only
+const selectedItemStock = computed(() => {
+  if (!newItem.value.itemId) return null
+  const selectedItem = availableItems.value.find(item => item.id === newItem.value.itemId)
+  return selectedItem ? getItemStock(selectedItem) : null
+})
+
+const isSelectedItemOutOfStock = computed(() => {
+  return selectedItemStock.value !== null && selectedItemStock.value <= 0
+})
+
+// Show all items including those with stock 0 or empty
 const availableItemsWithStock = computed(() => {
   if (!Array.isArray(availableItems.value)) return []
-  return availableItems.value.filter(item => getItemStock(item) > 0)
+  return availableItems.value // Remove filter to show all items
 })
 
 // Helper function to get item stock
-const getItemStock = (item: any): number => {
+const getItemStock = (item: AvailableItem): number => {
   return item.current_stock || item.stock || 0
 }
 
@@ -520,7 +544,6 @@ const getItemStock = (item: any): number => {
 const getNoDataText = (): string => {
   if (loadingItems.value) return 'Memuat items...'
   if (!availableItems.value || availableItems.value.length === 0) return 'Tidak ada item tersedia'
-  if (availableItemsWithStock.value.length === 0) return 'Semua item sedang stok habis'
   return 'Tidak ada item yang ditemukan'
 }
 
