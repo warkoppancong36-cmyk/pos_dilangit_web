@@ -795,11 +795,14 @@ const saveComposition = async () => {
       current_items: currentItems.map(item => ({
         id: item.id_product_item,
         item_id: item.item?.id,
-        item_name: item.item?.name
+        item_name: item.item?.name,
+        quantity: item.quantity_needed,
+        unit: item.unit
       }))
     })
     
     // Process each current item (create or update)
+    console.log('🔄 Starting to process', currentItems.length, 'items for save...')
     for (const item of currentItems) {
       const existingItem = existingItems.find(existing => {
         // Try multiple matching strategies
@@ -829,6 +832,16 @@ const saveComposition = async () => {
           'no_match'
       })
       
+      // Skip items with invalid item_id
+      if (!item.item?.id || parseInt(item.item.id) === 0) {
+        console.warn('⚠️ Skipping item with invalid item_id:', {
+          item_name: item.item?.name,
+          item_id: item.item?.id,
+          full_item: item
+        })
+        continue
+      }
+      
       const apiData: ProductItemFormData = {
         product_id: productId,
         item_id: parseInt(item.item?.id || '0'),
@@ -838,7 +851,17 @@ const saveComposition = async () => {
         notes: item.notes || ''
       }
       
-      console.log('📤 API Data:', apiData)
+      console.log('📤 API Data for item:', item.item?.name, {
+        raw_item_id: item.item?.id,
+        parsed_item_id: parseInt(item.item?.id || '0'),
+        api_data: apiData,
+        full_item_data: {
+          id_product_item: item.id_product_item,
+          item_name: item.item?.name,
+          quantity: item.quantity_needed,
+          unit: item.unit
+        }
+      })
       
       try {
         if (existingItem && !item.id_product_item?.toString().startsWith('temp_')) {
