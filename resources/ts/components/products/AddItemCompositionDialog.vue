@@ -103,10 +103,10 @@
                         <v-chip 
                           v-if="getItemStock(item.raw) > 0"
                           size="x-small" 
-                          :color="getStockColor(item.raw.inventory?.stock_status || item.raw.stock_status)"
-                          variant="dot"
+                          :color="getStockColor(item.raw.inventory?.stock_status || item.raw.stock_status || 'unknown')"
+                          variant="tonal"
                         >
-                          {{ getStockLabel(item.raw.inventory?.stock_status || item.raw.stock_status) }}
+                          {{ getStockLabel(item.raw.inventory?.stock_status || item.raw.stock_status || 'unknown') }}
                         </v-chip>
                         <v-chip 
                           v-else
@@ -247,9 +247,9 @@
                         <span class="font-weight-medium text-primary">Dibutuhkan: {{ item.quantity }} {{ item.unit }}</span> • 
                         <span 
                           :class="{
-                            'text-success': item.inventory?.current_stock > (item.inventory?.reorder_level || 0),
-                            'text-warning': item.inventory?.current_stock <= (item.inventory?.reorder_level || 0) && item.inventory?.current_stock > 0,
-                            'text-error': item.inventory?.current_stock <= 0
+                            'text-success': (item.inventory?.current_stock ?? 0) > (item.inventory?.reorder_level ?? 0),
+                            'text-warning': (item.inventory?.current_stock ?? 0) <= (item.inventory?.reorder_level ?? 0) && (item.inventory?.current_stock ?? 0) > 0,
+                            'text-error': (item.inventory?.current_stock ?? 0) <= 0
                           }"
                         >
                           Stok: {{ item.inventory?.current_stock || item.stock || 0 }} {{ item.unit }}
@@ -295,6 +295,7 @@
           variant="outlined"
           color="secondary"
           prepend-icon="mdi-wrench"
+          @click="openHPPDialog"
         >
           Setting HPP
         </v-btn>
@@ -317,6 +318,14 @@
       </v-card-actions>
     </v-card>
   </v-dialog>
+
+  <!-- HPP Breakdown Dialog -->
+  <HPPVariantBreakdownDialog
+    v-model="hppDialog"
+    :variant-id="variant?.id || variant?.id_variant"
+    :variant-name="variant?.name"
+    @hpp-updated="emit('save')"
+  />
 
   <!-- Delete Confirmation Dialog -->
   <v-dialog v-model="deleteDialog" max-width="400px" persistent>
@@ -422,6 +431,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import axios from 'axios'
+import HPPVariantBreakdownDialog from '@/components/hpp/HPPVariantBreakdownDialog.vue'
 
 interface Variant {
   id?: number
@@ -443,6 +453,7 @@ interface Item {
     current_stock: number
     available_stock: number
     stock_status: string
+    reorder_level?: number
   } | null
 }
 
@@ -496,6 +507,9 @@ const successDialog = ref(false)
 const successMessage = ref('')
 const successTitle = ref('')
 const successType = ref<'success' | 'info' | 'warning'>('success')
+
+// HPP Dialog state
+const hppDialog = ref(false)
 
 // Dialog state
 const dialog = computed({
@@ -560,9 +574,12 @@ const availableItemsWithStock = computed(() => {
   return availableItems.value.filter(item => getItemStock(item) > 0)
 })
 
-// Helper function to get item stock
+// Helper function to get item stock - prioritize inventory data
 const getItemStock = (item: Item): number => {
-  return item.inventory?.current_stock || item.current_stock || 0
+  // Priority: inventory.current_stock > inventory.available_stock > item.current_stock > 0
+  return item.inventory?.current_stock || 
+         item.inventory?.available_stock || 
+         item.current_stock || 0
 }
 
 // Get no data text based on loading state and available items
@@ -632,8 +649,8 @@ const loadAvailableItems = async () => {
   loadingItems.value = true
   console.log('Loading available items...')
   try {
-    // Use per_page=all to get all items without pagination
-    const response = await axios.get('/api/items?per_page=all')
+    // Use per_page=all to get all items without pagination, include inventory data
+    const response = await axios.get('/api/items?per_page=all&include=inventory')
     console.log('Items API response:', response.data)
     
     // API returns paginated data: response.data.data.data
@@ -641,10 +658,10 @@ const loadAvailableItems = async () => {
     availableItems.value = Array.isArray(items) ? items : []
     
     console.log('Available items loaded:', availableItems.value.length, 'items')
-    console.log('Sample items:', availableItems.value.slice(0, 3))
-  } catch (error) {
+    console.log('Sample items with inventory:', availableItems.value.slice(0, 3))
+  } catch (error: any) {
     console.error('Error loading items:', error)
-    if (error.response) {
+    if (error?.response) {
       console.error('API Error Status:', error.response.status)
       console.error('API Error Data:', error.response.data)
     }
@@ -680,7 +697,11 @@ const loadCompositionItems = async () => {
       name: item.item?.name || item.name,
       quantity: parseFloat(item.quantity_needed || item.quantity || item.qty || '1'),
       unit: item.unit || item.item?.unit || 'pcs',
-      stock: item.item?.inventory?.current_stock || item.item?.current_stock || item.stock || 0,
+      // Prioritize inventory data for stock
+      stock: item.item?.inventory?.current_stock || 
+             item.item?.inventory?.available_stock || 
+             item.item?.current_stock || 
+             item.stock || 0,
       price: parseFloat(item.item?.cost_per_unit || item.item?.price || item.price || '0'),
       is_critical: item.is_critical || false,
       inventory: item.item?.inventory ? {
@@ -692,9 +713,9 @@ const loadCompositionItems = async () => {
     }))
     
     console.log('Composition items loaded:', compositionItems.value)
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error loading composition items:', error)
-    if (error.response) {
+    if (error?.response) {
       console.error('API Error Status:', error.response.status)
       console.error('API Error Data:', error.response.data)
     }
@@ -770,9 +791,19 @@ const handleSave = async () => {
         name: selectedItemName,
         quantity: quantityToSet,
         unit: selectedItem.value.unit,
-        stock: selectedItem.value.inventory?.current_stock || selectedItem.value.current_stock || 0,
+        // Prioritize inventory data for stock
+        stock: selectedItem.value.inventory?.current_stock || 
+               selectedItem.value.inventory?.available_stock || 
+               selectedItem.value.current_stock || 0,
         price: selectedItem.value.cost_per_unit || 0,
-        is_critical: formData.value.is_critical
+        is_critical: formData.value.is_critical,
+        // Include inventory data if available
+        inventory: selectedItem.value.inventory ? {
+          current_stock: selectedItem.value.inventory.current_stock || 0,
+          available_stock: selectedItem.value.inventory.available_stock || 0,
+          stock_status: selectedItem.value.inventory.stock_status || 'unknown',
+          reorder_level: selectedItem.value.inventory.reorder_level || 0
+        } : null
       }
 
       compositionItems.value.push(newItem)
@@ -1025,6 +1056,11 @@ const saveComposition = async () => {
   } finally {
     loading.value = false
   }
+}
+
+// HPP Dialog functions
+const openHPPDialog = () => {
+  hppDialog.value = true
 }
 
 const closeDialog = () => {

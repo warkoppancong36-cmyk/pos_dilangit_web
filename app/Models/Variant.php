@@ -23,6 +23,8 @@ class Variant extends Model
         'variant_values',
         'price',
         'cost_price',
+        'hpp_method',
+        'hpp_calculated_at',
         'barcode',
         'image',
         'active',

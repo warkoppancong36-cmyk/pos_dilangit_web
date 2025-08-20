@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\ProductItemController;
 use App\Http\Controllers\Api\ItemPurchaseController;
 use App\Http\Controllers\Api\ProductRecipeController;
 use App\Http\Controllers\Api\HPPController;
+use App\Http\Controllers\VariantHPPController;
 
 
 // Test route to create sample inventory movement
@@ -229,6 +230,14 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
         Route::get('/{id}', [App\Http\Controllers\Api\VariantItemController::class, 'show']);
         Route::put('/{id}', [App\Http\Controllers\Api\VariantItemController::class, 'update']);
         Route::delete('/{id}', [App\Http\Controllers\Api\VariantItemController::class, 'destroy']);
+    });
+
+    // VARIANT HPP ROUTES - Variant HPP Management
+    Route::prefix('variants')->group(function () {
+        Route::get('/{variantId}/hpp-breakdown', [App\Http\Controllers\VariantHPPController::class, 'getHPPBreakdown']);
+        Route::post('/{variantId}/hpp-update', [App\Http\Controllers\VariantHPPController::class, 'updateHPP']);
+        Route::post('/{variantId}/hpp-suggestion', [App\Http\Controllers\VariantHPPController::class, 'calculatePriceSuggestion']);
+        Route::post('/{variantId}/hpp-price-update', [App\Http\Controllers\VariantHPPController::class, 'updatePriceFromHPP']);
     });
 
     // VARIANT ATTRIBUTES ROUTES - Product Attribute Management
