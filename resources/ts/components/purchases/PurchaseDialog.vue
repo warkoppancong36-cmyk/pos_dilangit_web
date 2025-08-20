@@ -122,6 +122,7 @@ const loadSuppliers = async () => {
 
     suppliers.value = response.data.data || []
     console.log('📋 Suppliers loaded:', suppliers.value.length, 'suppliers')
+    console.log('📋 First supplier sample:', suppliers.value[0])
   }
   catch (error: any) {
     console.error('Error loading suppliers:', error)
@@ -365,6 +366,12 @@ const initializeForm = () => {
                       props.purchase.supplier?.id_supplier ||
                       props.purchase.supplier?.id
     
+    console.log('🎯 Raw supplier ID:', supplierId, 'type:', typeof supplierId)
+    
+    // Convert to number to match with VSelect item-value
+    const supplierIdNumber = supplierId ? Number.parseInt(String(supplierId)) : null
+    console.log('🎯 Converted supplier ID:', supplierIdNumber)
+    
     console.log('📦 Items from purchase:', props.purchase.items)
     
     // Debug first item structure
@@ -379,7 +386,6 @@ const initializeForm = () => {
       })
     }
     
-    console.log('🎯 Resolved supplier ID:', supplierId)
     console.log('📅 Original purchase_date:', props.purchase.purchase_date)
     console.log('📅 Purchase_date type:', typeof props.purchase.purchase_date)
     
@@ -387,7 +393,7 @@ const initializeForm = () => {
     console.log('📅 Formatted purchase_date:', formattedDate)
     
     formData.value = {
-      id_supplier: supplierId,
+      id_supplier: supplierIdNumber,
       purchase_date: formattedDate,
       notes: props.purchase.notes || '',
       discount_amount: props.purchase.discount_amount || 0,
