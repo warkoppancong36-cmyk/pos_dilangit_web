@@ -1,5 +1,5 @@
 <template>
-  <v-dialog v-model="dialog" max-width="800px" persistent>
+  <v-dialog v-model="dialog" max-width="1000px" persistent>
     <v-card>
       <!-- Header with variant info -->
       <v-card-title class="d-flex align-center justify-space-between" style="background-color: #D4A574; color: white;">
@@ -35,11 +35,11 @@
         </div>
 
         <!-- Add Item Form Section -->
-        <div class="pa-4">
+        <div class="pa-4 add-item-form">
           <div class="d-flex align-center justify-space-between mb-4">
             <div class="d-flex align-center gap-2">
               <v-icon icon="mdi-plus-circle" color="success" />
-              <h4 class="text-h6">Tambah Item Komposisi</h4>
+              <h4 class="text-h6">{{ isEditMode ? 'Edit Item Komposisi' : 'Tambah Item Komposisi' }}</h4>
             </div>
             
           </div>
@@ -190,20 +190,33 @@
                 />
               </v-col>
 
-              <!-- Add Button -->
-              <v-col cols="12" md="2" class="d-flex align-center">
+              <!-- Add/Edit Button -->
+              <v-col cols="12" md="2" class="d-flex flex-column gap-2">
                 <v-btn
-                  :color="existingCompositionItem ? 'warning' : '#D4A574'"
+                  :color="isEditMode ? 'primary' : (existingCompositionItem ? 'warning' : '#D4A574')"
                   @click="handleSave"
                   :loading="loading"
                   :disabled="!formData.item_id || !formData.quantity"
                   block
                 >
                   <v-icon 
-                    :icon="existingCompositionItem ? 'mdi-plus-box-multiple' : 'mdi-plus'" 
+                    :icon="isEditMode ? 'mdi-content-save' : (existingCompositionItem ? 'mdi-plus-box-multiple' : 'mdi-plus')" 
                     class="me-1" 
                   />
-                  {{ existingCompositionItem ? 'Akumulasi' : 'Tambah' }}
+                  {{ isEditMode ? 'Update' : (existingCompositionItem ? 'Akumulasi' : 'Tambah') }}
+                </v-btn>
+                
+                <!-- Cancel Edit Button - di bawah tombol utama -->
+                <v-btn
+                  v-if="isEditMode"
+                  color="grey"
+                  variant="outlined"
+                  @click="cancelEdit"
+                  size="small"
+                  block
+                >
+                  <v-icon icon="mdi-close" class="me-1" />
+                  Batal
                 </v-btn>
               </v-col>
             </v-row>
@@ -469,6 +482,10 @@ const loadingItems = ref(false)
 const availableItems = ref<Item[]>([])
 const compositionItems = ref<CompositionItem[]>([])
 
+// Edit mode state
+const isEditMode = ref(false)
+const editingItemIndex = ref<number | null>(null)
+
 // Delete confirmation dialog state
 const deleteDialog = ref(false)
 const itemToDelete = ref<{item: CompositionItem, index: number} | null>(null)
@@ -511,6 +528,9 @@ const selectedItem = computed(() => {
 const existingCompositionItem = computed(() => {
   if (!selectedItem.value) return null
   
+  // Jika dalam mode edit, jangan anggap sebagai existing item
+  if (isEditMode.value && editingItemIndex.value !== null) return null
+  
   return compositionItems.value.find(item => 
     item.name === selectedItem.value?.name ||
     (item.id && selectedItem.value?.id_item && item.id === selectedItem.value.id_item)
@@ -520,6 +540,11 @@ const existingCompositionItem = computed(() => {
 // Generate helper text for quantity field
 const quantityHelperText = computed(() => {
   if (!selectedItem.value) return ''
+  
+  // Jika dalam mode edit, tampilkan info edit
+  if (isEditMode.value && editingItemIndex.value !== null) {
+    return `Mode Edit: Mengubah quantity item yang dipilih`
+  }
   
   if (existingCompositionItem.value) {
     const existing = existingCompositionItem.value
@@ -686,48 +711,73 @@ const handleSave = async () => {
 
   const selectedItemName = selectedItem.value.name
   const selectedItemId = selectedItem.value.id_item
-  const quantityToAdd = formData.value.quantity
+  const quantityToSet = formData.value.quantity
 
-  console.log('🔍 Checking for existing item:', selectedItemName, 'ID:', selectedItemId)
+  console.log('🔍 Handle save - Mode:', isEditMode.value ? 'EDIT' : 'ADD')
+  console.log('🔍 Item:', selectedItemName, 'ID:', selectedItemId)
+  console.log('🔍 Quantity:', quantityToSet)
 
-  // Check if item already exists in composition list
-  const existingItemIndex = compositionItems.value.findIndex(item => 
-    item.name === selectedItemName || 
-    (item.id && selectedItemId && item.id === selectedItemId)
-  )
-
-  if (existingItemIndex !== -1) {
-    // Item already exists, accumulate quantity
-    const existingItem = compositionItems.value[existingItemIndex]
+  if (isEditMode.value && editingItemIndex.value !== null) {
+    // MODE EDIT: Update existing item dengan quantity baru (tidak akumulasi)
+    console.log('✏️ Edit mode: Updating existing item at index', editingItemIndex.value)
+    
+    const existingItem = compositionItems.value[editingItemIndex.value]
     const oldQuantity = existingItem.quantity
-    const newQuantity = oldQuantity + quantityToAdd
     
-    console.log('📦 Item already exists! Accumulating quantity:')
-    console.log(`   - Item: ${selectedItemName}`)
+    console.log(`📝 Updating item "${selectedItemName}":`)
     console.log(`   - Old quantity: ${oldQuantity}`)
-    console.log(`   - Adding: ${quantityToAdd}`)
-    console.log(`   - New quantity: ${newQuantity}`)
+    console.log(`   - New quantity: ${quantityToSet}`)
     
-    // Update existing item quantity
-    compositionItems.value[existingItemIndex].quantity = newQuantity
+    // Update existing item quantity (replace, not accumulate)
+    compositionItems.value[editingItemIndex.value].quantity = quantityToSet
+    compositionItems.value[editingItemIndex.value].is_critical = formData.value.is_critical
+    
+    console.log('✅ Item updated successfully in edit mode')
+    
+    // Reset edit mode
+    isEditMode.value = false
+    editingItemIndex.value = null
     
   } else {
-    // Item doesn't exist, add new item
-    console.log('➕ Adding new item to composition:', selectedItemName)
+    // MODE ADD: Check if item already exists
+    console.log('➕ Add mode: Checking for existing item')
     
-    const newItem: CompositionItem = {
-      name: selectedItemName,
-      quantity: quantityToAdd,
-      unit: selectedItem.value.unit,
-      stock: selectedItem.value.inventory?.current_stock || selectedItem.value.current_stock || 0,
-      price: selectedItem.value.cost_per_unit || 0,
-      is_critical: formData.value.is_critical
-    }
+    const existingItemIndex = compositionItems.value.findIndex(item => 
+      item.name === selectedItemName || 
+      (item.id && selectedItemId && item.id === selectedItemId)
+    )
 
-    compositionItems.value.push(newItem)
-    console.log('✅ New item added successfully')
-    
-    
+    if (existingItemIndex !== -1) {
+      // Item already exists, accumulate quantity
+      const existingItem = compositionItems.value[existingItemIndex]
+      const oldQuantity = existingItem.quantity
+      const newQuantity = oldQuantity + quantityToSet
+      
+      console.log('📦 Item already exists! Accumulating quantity:')
+      console.log(`   - Item: ${selectedItemName}`)
+      console.log(`   - Old quantity: ${oldQuantity}`)
+      console.log(`   - Adding: ${quantityToSet}`)
+      console.log(`   - New quantity: ${newQuantity}`)
+      
+      // Update existing item quantity
+      compositionItems.value[existingItemIndex].quantity = newQuantity
+      
+    } else {
+      // Item doesn't exist, add new item
+      console.log('➕ Adding new item to composition:', selectedItemName)
+      
+      const newItem: CompositionItem = {
+        name: selectedItemName,
+        quantity: quantityToSet,
+        unit: selectedItem.value.unit,
+        stock: selectedItem.value.inventory?.current_stock || selectedItem.value.current_stock || 0,
+        price: selectedItem.value.cost_per_unit || 0,
+        is_critical: formData.value.is_critical
+      }
+
+      compositionItems.value.push(newItem)
+      console.log('✅ New item added successfully')
+    }
   }
   
   // Reset form
@@ -746,14 +796,20 @@ const editItem = (item: CompositionItem, index: number) => {
   if (foundItem) {
     console.log('✅ Found item in available items:', foundItem)
     
-    // Set form data menggunakan formData (bukan newItem)
+    // Aktifkan mode edit
+    isEditMode.value = true
+    editingItemIndex.value = index
+    
+    // Set form data untuk edit (quantity tidak diakumulasi)
     formData.value = {
       item_id: foundItem.id_item,
-      quantity: item.quantity,
+      quantity: item.quantity, // Gunakan quantity yang ada, bukan akumulasi
       is_critical: item.is_critical || false
     }
     
+    console.log('📝 Edit mode activated!')
     console.log('📝 Form data set:', formData.value)
+    console.log('📝 Editing item at index:', index)
     
     // Scroll to form
     setTimeout(() => {
@@ -767,6 +823,14 @@ const editItem = (item: CompositionItem, index: number) => {
     console.log('Available items:', availableItems.value.map(ai => ({ id: ai.id_item, name: ai.name })))
     console.log('Looking for item:', { id: item.id, name: item.name })
   }
+}
+
+// Cancel edit mode
+const cancelEdit = () => {
+  console.log('❌ Edit mode cancelled')
+  isEditMode.value = false
+  editingItemIndex.value = null
+  formData.value = defaultFormData()
 }
 
 // Show delete confirmation dialog
@@ -967,6 +1031,9 @@ const closeDialog = () => {
   dialog.value = false
   formData.value = defaultFormData()
   compositionItems.value = []
+  // Reset edit mode state
+  isEditMode.value = false
+  editingItemIndex.value = null
 }
 
 // Watchers
@@ -975,6 +1042,10 @@ watch(() => props.modelValue, (newVal) => {
     formData.value = defaultFormData()
     loadAvailableItems()
     loadCompositionItems()
+  } else {
+    // Reset edit mode when dialog closes
+    isEditMode.value = false
+    editingItemIndex.value = null
   }
 })
 
