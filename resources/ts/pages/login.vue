@@ -65,23 +65,7 @@ const handleLogin = async () => {
   }
 }
 
-// Fill demo data
-const fillDemo = (role: string) => {
-  switch (role) {
-    case 'admin':
-      form.value.login = 'admin'
-      form.value.password = 'admin123'
-      break
-    case 'manager':
-      form.value.login = 'manager'
-      form.value.password = 'manager123'
-      break
-    case 'kasir':
-      form.value.login = 'kasir001'
-      form.value.password = 'kasir123'
-      break
-  }
-}
+
 </script>
 
 <template>
@@ -89,7 +73,7 @@ const fillDemo = (role: string) => {
     <div class="auth-logo d-flex align-center gap-x-3">
       <VNodeRenderer :nodes="themeConfig.app.logo" />
       <h1 class="auth-title">
-        {{ themeConfig.app.title }}
+        Dilangit
       </h1>
     </div>
   </a>
@@ -136,7 +120,7 @@ const fillDemo = (role: string) => {
       >
         <VCardText>
           <h4 class="text-h4 mb-1">
-            Welcome to <span class="text-capitalize">{{ themeConfig.app.title }}</span>! 👋🏻
+            Welcome to <span class="text-capitalize"> Dilangit </span>! 👋🏻
           </h4>
           <p class="mb-0">
             Please sign-in to your account and start the adventure
@@ -234,51 +218,6 @@ const fillDemo = (role: string) => {
                 <AuthProvider />
               </VCol>
               
-              <!-- Demo Accounts -->
-              <VCol cols="12">
-                <VCard 
-                  variant="outlined" 
-                  color="info"
-                  class="mt-4"
-                >
-                  <VCardTitle class="text-h6">Demo Accounts</VCardTitle>
-                  <VCardText>
-                    <div class="mb-2">
-                      <strong>Super Admin:</strong> admin / admin123
-                      <VBtn 
-                        size="small" 
-                        variant="text" 
-                        color="primary"
-                        @click="fillDemo('admin')"
-                      >
-                        Use
-                      </VBtn>
-                    </div>
-                    <div class="mb-2">
-                      <strong>Manager:</strong> manager / manager123
-                      <VBtn 
-                        size="small" 
-                        variant="text" 
-                        color="primary"
-                        @click="fillDemo('manager')"
-                      >
-                        Use
-                      </VBtn>
-                    </div>
-                    <div>
-                      <strong>Kasir:</strong> kasir001 / kasir123
-                      <VBtn 
-                        size="small" 
-                        variant="text" 
-                        color="primary"
-                        @click="fillDemo('kasir')"
-                      >
-                        Use
-                      </VBtn>
-                    </div>
-                  </VCardText>
-                </VCard>
-              </VCol>
             </VRow>
           </VForm>
         </VCardText>

@@ -84,7 +84,7 @@ const handleRegister = async () => {
     <div class="auth-logo d-flex align-center gap-x-3">
       <VNodeRenderer :nodes="themeConfig.app.logo" />
       <h1 class="auth-title">
-        {{ themeConfig.app.title }}
+        Dilangit
       </h1>
     </div>
   </a>
