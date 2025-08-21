@@ -245,6 +245,9 @@ export const useInventory = () => {
       console.log('Fetching inventory with params:', params)
       const response = await InventoryApi.getAll(params)
       
+      console.log('🔍 Full Inventory API Response:', response) // Debug full response
+      console.log('📄 Response Data Structure:', response.data) // Debug data structure
+      
       if (response.success) {
         // API mengembalikan data dalam structure: response.data.data (Laravel pagination)
         inventoryList.value = response.data.data || []
@@ -258,17 +261,18 @@ export const useInventory = () => {
         // Log untuk debugging
         console.log('Inventory data loaded:', {
           total: response.data.total,
-          itemsLength: response.data.data.length,
-          currentPage: response.data.current_page,
-          perPage: response.data.per_page,
-          lastPage: response.data.last_page,
-          from: response.data.from,
-          to: response.data.to,
-          requestedPage: currentPage.value,
-          requestedPerPage: itemsPerPage.value,
-          hasNextPage: response.data.current_page < response.data.last_page,
-          hasPrevPage: response.data.current_page > 1
+          current_page: response.data.current_page,
+          per_page: response.data.per_page,
+          last_page: response.data.last_page,
+          itemsLength: inventoryList.value.length
         })
+        
+        console.log('📊 Final Inventory State Values:', {
+          inventoryListLength: inventoryList.value.length,
+          totalItemsValue: totalItems.value,
+          currentPageValue: currentPage.value,
+          itemsPerPageValue: itemsPerPage.value
+        }) // Debug final state
       } else {
         throw new Error(response.message || 'Gagal mengambil data inventory')
       }

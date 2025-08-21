@@ -2,7 +2,7 @@
 import InventoryMovementsDialog from '@/components/InventoryMovementsDialog.vue'
 import { useInventory } from '@/composables/useInventory'
 import { useStockMovements } from '@/composables/useStockMovements'
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useDisplay } from 'vuetify'
 
 // Vuetify display composable for responsive design
@@ -150,6 +150,12 @@ onMounted(() => {
   fetchStats()
   fetchLowStockAlerts()
 })
+
+// Debug watcher for totalItems
+watch(totalItems, (newValue, oldValue) => {
+  console.log('🔍 totalItems changed:', { oldValue, newValue })
+  console.log('📊 VDataTable will receive server-items-length:', newValue)
+}, { immediate: true })
 </script>
 
 <template>
@@ -506,7 +512,7 @@ onMounted(() => {
 
           <VDivider />
 
-          <VDataTable
+          <VDataTableServer
             :headers="[
               { title: 'Produk/Variant', key: 'item_name', sortable: false },
               { title: 'SKU', key: 'sku', sortable: false },
@@ -520,7 +526,7 @@ onMounted(() => {
             ]"
             :items="inventoryList"
             :loading="loading"
-            :server-items-length="totalItems"
+            :items-length="totalItems"
             :items-per-page="itemsPerPage"
             :page="currentPage"
             :items-per-page-options="[10, 15, 25, 50, 100]"
@@ -722,7 +728,7 @@ onMounted(() => {
                 </div>
               </div>
             </template>
-          </VDataTable>
+          </VDataTableServer>
           
           <!-- Total Data Info -->
           <VCardText 

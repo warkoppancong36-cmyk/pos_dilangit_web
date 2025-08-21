@@ -78,7 +78,25 @@ class InventoryController extends Controller
 
             // Pagination
             $perPage = $request->get('per_page', 15);
+            
+            // Debug logging
+            \Log::info('Inventory API Request:', [
+                'all_params' => $request->all(),
+                'per_page' => $perPage,
+                'page' => $request->get('page', 1)
+            ]);
+            
             $inventory = $query->paginate($perPage);
+            
+            // Debug the paginated result
+            \Log::info('Inventory Pagination Result:', [
+                'total' => $inventory->total(),
+                'count' => $inventory->count(),
+                'current_page' => $inventory->currentPage(),
+                'last_page' => $inventory->lastPage(),
+                'per_page' => $inventory->perPage(),
+                'items_in_data' => count($inventory->items())
+            ]);
 
             return $this->successResponse($inventory, 'Inventory data retrieved successfully');
 

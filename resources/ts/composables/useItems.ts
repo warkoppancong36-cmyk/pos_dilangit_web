@@ -189,8 +189,12 @@ const fetchItemsList = async () => {
 
     const response = await ItemsApi.getAll(params)
     
+    console.log('🔍 Full API Response:', response) // Debug full response
+    
     if (response.success && response.data) {
       const paginatedData = response.data as PaginatedResponse<Item>
+      console.log('📄 Paginated Data Object:', paginatedData) // Debug paginated data
+      
       itemsList.value = paginatedData.data || []
       totalItems.value = paginatedData.total || 0
       currentPage.value = paginatedData.current_page || 1
@@ -198,8 +202,17 @@ const fetchItemsList = async () => {
       console.log('Items fetched:', {
         data: paginatedData.data?.length,
         total: paginatedData.total,
-        current_page: paginatedData.current_page
+        current_page: paginatedData.current_page,
+        per_page: paginatedData.per_page,
+        last_page: paginatedData.last_page
       }) // Debug log
+      
+      console.log('📊 Final State Values:', {
+        itemsListLength: itemsList.value.length,
+        totalItemsValue: totalItems.value,
+        currentPageValue: currentPage.value,
+        itemsPerPageValue: itemsPerPage.value
+      }) // Debug final state
     }
   } catch (error: any) {
     console.error('Error fetching items:', error)
