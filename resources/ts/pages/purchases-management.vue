@@ -287,8 +287,98 @@
     <PurchaseReceiveDialog
       v-model="receiveDialogOpen"
       :purchase="selectedPurchase"
-      @success="handleReceiveSuccess"
+      @success="onReceiveSuccess"
     />
+
+    <!-- Delete Confirmation Dialog -->
+    <VDialog
+      v-model="deleteDialogOpen"
+      max-width="500"
+    >
+      <VCard>
+        <VCardTitle class="text-h5 d-flex align-center">
+          <VIcon color="error" class="me-2">mdi-delete-alert</VIcon>
+          Konfirmasi Hapus Purchase
+        </VCardTitle>
+        
+        <VCardText>
+          <VAlert
+            type="warning"
+            variant="tonal"
+            class="mb-4"
+          >
+            <VAlertTitle>Peringatan!</VAlertTitle>
+            Tindakan ini tidak dapat dibatalkan. Purchase yang sudah dihapus tidak dapat dikembalikan.
+          </VAlert>
+          
+          <p class="text-body-1">
+            Apakah Anda yakin ingin menghapus purchase berikut?
+          </p>
+          
+          <div class="bg-grey-lighten-4 pa-3 rounded mt-3" v-if="purchaseToDelete">
+            <div class="d-flex justify-space-between mb-2">
+              <span class="font-weight-medium">Purchase Number:</span>
+              <span>{{ purchaseToDelete.purchase_number }}</span>
+            </div>
+            <div class="d-flex justify-space-between mb-2">
+              <span class="font-weight-medium">Supplier:</span>
+              <span>{{ purchaseToDelete.supplier?.name }}</span>
+            </div>
+            <div class="d-flex justify-space-between mb-2">
+              <span class="font-weight-medium">Total Item:</span>
+              <span>{{ getTotalItems(purchaseToDelete) }} item</span>
+            </div>
+            <div class="d-flex justify-space-between mb-2">
+              <span class="font-weight-medium">Total Harga:</span>
+              <span>{{ formatCurrency(purchaseToDelete.total_amount) }}</span>
+            </div>
+            <div class="d-flex justify-space-between">
+              <span class="font-weight-medium">Status:</span>
+              <VChip 
+                :color="getStatusColor(purchaseToDelete.status)" 
+                size="small"
+              >
+                {{ getStatusLabel(purchaseToDelete.status) }}
+              </VChip>
+            </div>
+            
+            <!-- Items breakdown -->
+            <VDivider class="my-3" />
+            <div class="text-caption text-medium-emphasis mb-2">Detail Items:</div>
+            <div class="max-height-150 overflow-y-auto">
+              <div 
+                v-for="item in purchaseToDelete.items" 
+                :key="item.id_purchase_item"
+                class="d-flex justify-space-between text-caption mb-1"
+              >
+                <span>{{ item.item?.name || 'Unknown Item' }}</span>
+                <span>{{ item.quantity_ordered }} x {{ formatCurrency(item.unit_cost) }}</span>
+              </div>
+            </div>
+          </div>
+        </VCardText>
+        
+        <VCardActions>
+          <VSpacer />
+          <VBtn
+            color="grey"
+            variant="text"
+            @click="deleteDialogOpen = false"
+          >
+            Batal
+          </VBtn>
+          <VBtn
+            color="error"
+            variant="flat"
+            :loading="deleteLoading"
+            @click="confirmDeletePurchase"
+          >
+            <VIcon start>mdi-delete</VIcon>
+            Hapus Purchase
+          </VBtn>
+        </VCardActions>
+      </VCard>
+    </VDialog>
 
     <!-- Snackbar -->
     <VSnackbar
@@ -330,7 +420,10 @@ const snackbar = ref({
 const dialogOpen = ref(false)
 const viewDialogOpen = ref(false)
 const receiveDialogOpen = ref(false)
+const deleteDialogOpen = ref(false)
 const selectedPurchase = ref<any>(null)
+const purchaseToDelete = ref<any>(null)
+const deleteLoading = ref(false)
 const dialogMode = ref<'create' | 'edit' | 'view'>('create')
 
 // Filters
@@ -479,11 +572,16 @@ const receivePurchase = (purchase) => {
   receiveDialogOpen.value = true
 }
 
-const deletePurchase = async (purchase) => {
-  if (!confirm(`Apakah Anda yakin ingin menghapus purchase ${purchase.purchase_number}?`)) {
-    return
-  }
+const deletePurchase = (purchase) => {
+  purchaseToDelete.value = purchase
+  deleteDialogOpen.value = true
+}
 
+const confirmDeletePurchase = async () => {
+  if (!purchaseToDelete.value) return
+  
+  deleteLoading.value = true
+  
   try {
     const token = getAuthToken()
     const headers = {
@@ -495,14 +593,30 @@ const deletePurchase = async (purchase) => {
       headers['Authorization'] = `Bearer ${token}`
     }
 
-    await axios.delete(`/api/purchases/${purchase.id_purchase}`, { headers })
+    await axios.delete(`/api/purchases/${purchaseToDelete.value.id_purchase}`, { headers })
     
+    // Show success message
+    snackbar.value = {
+      show: true,
+      message: `Purchase ${purchaseToDelete.value.purchase_number} berhasil dihapus`,
+      color: 'success'
+    }
+    
+    // Close dialog and refresh data
+    deleteDialogOpen.value = false
+    purchaseToDelete.value = null
     loadPurchases()
     loadStatistics()
     
   } catch (error) {
     console.error('Error deleting purchase:', error)
-    alert('Error deleting purchase: ' + (error.response?.data?.message || error.message))
+    snackbar.value = {
+      show: true,
+      message: 'Error menghapus purchase: ' + (error.response?.data?.message || error.message),
+      color: 'error'
+    }
+  } finally {
+    deleteLoading.value = false
   }
 }
 
@@ -588,6 +702,24 @@ const formatDate = (date) => {
   return new Date(date).toLocaleDateString('id-ID')
 }
 
+const getTotalItems = (purchase) => {
+  if (!purchase.items || !Array.isArray(purchase.items)) {
+    return 0
+  }
+  const total = purchase.items.reduce((total, item) => {
+    const quantity = parseInt(item.quantity_ordered) || 0
+    return total + quantity
+  }, 0)
+  return total
+}
+
+const getTotalVariety = (purchase) => {
+  if (!purchase.items || !Array.isArray(purchase.items)) {
+    return 0
+  }
+  return purchase.items.length
+}
+
 const getStatusColor = (status) => {
   const colors = {
     pending: 'warning',
@@ -611,11 +743,14 @@ const getStatusLabel = (status) => {
 }
 
 const canEdit = (purchase) => {
-  return ['pending', 'ordered'].includes(purchase.status)
+  // Allow edit for pending, ordered, and completed status
+  return ['pending', 'ordered', 'completed'].includes(purchase.status)
 }
 
 const canDelete = (purchase) => {
-  return purchase.status === 'pending'
+  // Allow delete for pending and completed status
+  // Don't allow delete for 'ordered' (in process) or 'received' (partially completed)
+  return ['pending', 'completed'].includes(purchase.status)
 }
 
 // Watchers
@@ -635,5 +770,9 @@ onMounted(() => {
 <style scoped>
 .v-data-table {
   background-color: transparent;
+}
+
+.max-height-150 {
+  max-height: 150px;
 }
 </style>

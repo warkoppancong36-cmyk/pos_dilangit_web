@@ -92,10 +92,10 @@ const totals = computed(() => {
 
 const canSave = computed(() => {
   return formValid.value
-         && formData.value.items.length > 0
-         && formData.value.items.every(item =>
-           item.id_item && item.quantity > 0 && item.unit_cost > 0,
-         )
+         && (formData.value.items.length === 0 || 
+             formData.value.items.every(item =>
+               item.id_item && item.quantity > 0 && item.unit_cost > 0,
+             ))
 })
 
 // Validation rules

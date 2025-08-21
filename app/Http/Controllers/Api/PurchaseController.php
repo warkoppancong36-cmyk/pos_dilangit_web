@@ -171,11 +171,12 @@ class PurchaseController extends Controller
         try {
             $purchase = Purchase::findOrFail($id);
 
-            // Only allow updates for pending or ordered status
-            if (!in_array($purchase->status, ['pending', 'ordered'])) {
+            // Allow updates for pending, ordered, and completed status
+            // Only restrict updates for cancelled status
+            if ($purchase->status === 'cancelled') {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Cannot update purchase with status: ' . $purchase->status
+                    'message' => 'Cannot update cancelled purchase'
                 ], 422);
             }
 
@@ -183,7 +184,7 @@ class PurchaseController extends Controller
                 'supplier_id' => 'required|exists:suppliers,id_supplier',
                 'purchase_date' => 'required|date',
                 'expected_delivery_date' => 'nullable|date|after_or_equal:purchase_date',
-                'items' => 'required|array|min:1',
+                'items' => 'nullable|array',
                 'items.*.id_item' => 'required|exists:items,id_item',
                 'items.*.quantity' => 'required|numeric|min:1',
                 'items.*.unit_cost' => 'required|numeric|min:0',
@@ -202,7 +203,8 @@ class PurchaseController extends Controller
 
             // Calculate new totals
             $subtotal = 0;
-            foreach ($request->items as $item) {
+            $items = $request->items ?? [];
+            foreach ($items as $item) {
                 $subtotal += $item['quantity'] * $item['unit_cost'];
             }
 
@@ -226,10 +228,25 @@ class PurchaseController extends Controller
             ]);
 
             // Delete existing items and create new ones
+            // For completed purchases, we need to handle inventory changes carefully
+            if ($purchase->status === 'completed') {
+                $existingItems = $purchase->items()->get();
+                
+                // First, reverse inventory changes from old items
+                foreach ($existingItems as $existingItem) {
+                    if ($existingItem->quantity_received > 0) {
+                        $inventory = Inventory::where('id_item', $existingItem->item_id)->first();
+                        if ($inventory) {
+                            $inventory->decrement('current_stock', $existingItem->quantity_received);
+                        }
+                    }
+                }
+            }
+            
             PurchaseItem::where('purchase_id', $purchase->id_purchase)->delete();
 
-            foreach ($request->items as $item) {
-                PurchaseItem::create([
+            foreach ($items as $item) {
+                $newItem = PurchaseItem::create([
                     'purchase_id' => $purchase->id_purchase,
                     'item_id' => $item['id_item'],
                     'quantity_ordered' => $item['quantity'],
@@ -237,6 +254,20 @@ class PurchaseController extends Controller
                     'total_cost' => $item['quantity'] * $item['unit_cost'],
                     'unit' => $item['unit'] ?? 'pcs' // Default unit if not provided
                 ]);
+                
+                // For completed purchases, auto-receive and update inventory
+                if ($purchase->status === 'completed') {
+                    $newItem->update([
+                        'quantity_received' => $item['quantity'],
+                        'status' => 'received'
+                    ]);
+                    
+                    // Apply new inventory changes
+                    $inventory = Inventory::where('id_item', $item['id_item'])->first();
+                    if ($inventory) {
+                        $inventory->increment('current_stock', $item['quantity']);
+                    }
+                }
             }
 
             DB::commit();
@@ -400,12 +431,35 @@ class PurchaseController extends Controller
         try {
             $purchase = Purchase::findOrFail($id);
 
-            // Only allow deletion for pending status
-            if ($purchase->status !== 'pending') {
+            // Allow deletion for pending and completed status
+            // Don't allow deletion for 'ordered' (in process) or 'received' (partially completed)
+            if (!in_array($purchase->status, ['pending', 'completed'])) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Cannot delete purchase with status: ' . $purchase->status . '. Only pending purchases can be deleted.'
+                    'message' => 'Cannot delete purchase with status: ' . $purchase->status . '. Only pending and completed purchases can be deleted.'
                 ], 422);
+            }
+
+            DB::beginTransaction();
+
+            // If purchase is completed, we need to reverse inventory changes
+            if ($purchase->status === 'completed') {
+                foreach ($purchase->items as $item) {
+                    if ($item->quantity_received > 0) {
+                        // Find inventory record and decrease stock
+                        $inventory = Inventory::where('id_item', $item->item_id)->first();
+                        if ($inventory) {
+                            $inventory->decrement('current_stock', $item->quantity_received);
+                            
+                            // Log inventory reverse movement
+                            \Log::info('Reversed inventory stock for deleted purchase', [
+                                'purchase_id' => $purchase->id_purchase,
+                                'item_id' => $item->item_id,
+                                'quantity_reversed' => $item->quantity_received
+                            ]);
+                        }
+                    }
+                }
             }
 
             // Soft delete purchase items first (cascade will happen via model events)
@@ -414,12 +468,15 @@ class PurchaseController extends Controller
             // Soft delete purchase
             $purchase->delete();
 
+            DB::commit();
+
             return response()->json([
                 'success' => true,
                 'message' => 'Purchase deleted successfully (soft delete - can be restored)'
             ]);
 
         } catch (\Exception $e) {
+            DB::rollback();
             return response()->json([
                 'success' => false,
                 'message' => 'Error deleting purchase: ' . $e->getMessage()
