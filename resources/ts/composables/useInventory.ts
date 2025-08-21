@@ -175,6 +175,19 @@ export const useInventory = () => {
   const totalStockValue = computed(() => stats.value.total_stock_value)
   const lowStockCount = computed(() => stats.value.low_stock_items)
   const outOfStockCount = computed(() => stats.value.out_of_stock_items)
+  
+  // Pagination computed properties
+  const totalPages = computed(() => Math.ceil(totalItems.value / itemsPerPage.value))
+  const hasNextPage = computed(() => currentPage.value < totalPages.value)
+  const hasPrevPage = computed(() => currentPage.value > 1)
+  const paginationInfo = computed(() => ({
+    currentPage: currentPage.value,
+    totalPages: totalPages.value,
+    totalItems: totalItems.value,
+    itemsPerPage: itemsPerPage.value,
+    hasNext: hasNextPage.value,
+    hasPrev: hasPrevPage.value
+  }))
 
   // Validation rules
   const quantityRules = [
@@ -234,9 +247,13 @@ export const useInventory = () => {
       
       if (response.success) {
         // API mengembalikan data dalam structure: response.data.data (Laravel pagination)
-        inventoryList.value = response.data.data
-        totalItems.value = response.data.total
-        currentPage.value = response.data.current_page
+        inventoryList.value = response.data.data || []
+        totalItems.value = response.data.total || 0
+        
+        // Update current page dari response untuk memastikan sinkronisasi
+        if (response.data.current_page) {
+          currentPage.value = response.data.current_page
+        }
         
         // Log untuk debugging
         console.log('Inventory data loaded:', {
@@ -247,7 +264,10 @@ export const useInventory = () => {
           lastPage: response.data.last_page,
           from: response.data.from,
           to: response.data.to,
-          requestedPerPage: itemsPerPage.value
+          requestedPage: currentPage.value,
+          requestedPerPage: itemsPerPage.value,
+          hasNextPage: response.data.current_page < response.data.last_page,
+          hasPrevPage: response.data.current_page > 1
         })
       } else {
         throw new Error(response.message || 'Gagal mengambil data inventory')
@@ -425,16 +445,20 @@ export const useInventory = () => {
 
   // Pagination and filters
   const onPageChange = (page: number) => {
-    console.log('Page changed to:', page)
-    currentPage.value = page
-    fetchInventoryList()
+    console.log('Page changed to:', page, 'Current total items:', totalItems.value)
+    if (page !== currentPage.value) {
+      currentPage.value = page
+      fetchInventoryList()
+    }
   }
 
   const onItemsPerPageChange = (itemsPerPageValue: number) => {
     console.log('Items per page changed to:', itemsPerPageValue)
-    itemsPerPage.value = itemsPerPageValue
-    currentPage.value = 1 // Reset to first page when changing items per page
-    fetchInventoryList()
+    if (itemsPerPageValue !== itemsPerPage.value) {
+      itemsPerPage.value = itemsPerPageValue
+      currentPage.value = 1 // Reset to first page when changing items per page
+      fetchInventoryList()
+    }
   }
 
   const handleFiltersUpdate = (newFilters: Partial<InventoryFilters>) => {
@@ -540,6 +564,11 @@ export const useInventory = () => {
     formatCurrency,
     getStockStatusColor,
     getStockStatusText,
-    getMovementTypeColor
+    getMovementTypeColor,
+    // Pagination computed
+    totalPages,
+    hasNextPage,
+    hasPrevPage,
+    paginationInfo
   }
 }

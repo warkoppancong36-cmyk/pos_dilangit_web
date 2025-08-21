@@ -59,6 +59,11 @@ const {
   formatCurrency,
   getStockStatusColor,
   getStockStatusText,
+  // Pagination computed
+  totalPages,
+  hasNextPage,
+  hasPrevPage,
+  paginationInfo
 } = useInventory()
 
 // Stock movements for enhanced functionality
@@ -519,6 +524,10 @@ onMounted(() => {
             :loading="loading"
             :items-per-page-options="[10, 15, 25, 50, 100]"
             :items-length="totalItems"
+            :show-current-page="true"
+            :items-per-page-text="'Items per page:'"
+            :page-text="'{0}-{1} of {2}'"
+            :no-data-text="'Tidak ada data inventory'"
             class="text-no-wrap"
             @update:page="onPageChange"
             @update:items-per-page="onItemsPerPageChange"
@@ -715,6 +724,22 @@ onMounted(() => {
               </div>
             </template>
           </VDataTable>
+          
+          <!-- Total Data Info -->
+          <VCardText 
+            v-if="!loading && inventoryList.length > 0"
+            class="text-center py-2 text-caption text-medium-emphasis"
+          >
+            Menampilkan {{ inventoryList.length }} dari {{ totalItems }} total produk inventory
+            <span v-if="filters.search || filters.stock_status !== 'all'">
+              (hasil pencarian/filter)
+            </span>
+            <br>
+            <small class="text-xs text-info">
+              Debug: Page {{ currentPage }}/{{ totalPages }} | Items per page: {{ itemsPerPage }} | 
+              Has Next: {{ hasNextPage }} | Has Prev: {{ hasPrevPage }}
+            </small>
+          </VCardText>
         </VCard>
 
         <!-- Stock Update Dialog -->
