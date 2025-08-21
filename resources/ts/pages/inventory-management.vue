@@ -388,7 +388,7 @@ watch(totalItems, (newValue, oldValue) => {
 
         <!-- Info Card saat tidak ada data -->
         <VCard
-          v-if="!loading && inventoryList.length === 0 && !errorMessage"
+          v-if="!loading && inventoryList.length === 0 && !errorMessage && !filters.search && filters.stock_status === 'all'"
           class="mb-6"
         >
           <VCardText class="text-center py-6">
@@ -402,6 +402,54 @@ watch(totalItems, (newValue, oldValue) => {
             </div>
             <div class="text-body-2 text-medium-emphasis">
               Buat produk dan variant terlebih dahulu untuk mulai melacak inventory.
+            </div>
+          </VCardText>
+        </VCard>
+
+        <!-- No Search Results Card -->
+        <VCard
+          v-if="!loading && inventoryList.length === 0 && !errorMessage && (filters.search || filters.stock_status !== 'all')"
+          class="mb-6"
+        >
+          <VCardText class="text-center py-6">
+            <VIcon
+              icon="tabler-search-off"
+              size="48"
+              class="text-warning mb-3"
+            />
+            <div class="text-h6 mb-2">
+              Tidak Ada Hasil Pencarian
+            </div>
+            <div class="text-body-2 text-medium-emphasis">
+              <span v-if="filters.search">
+                Tidak ditemukan inventory dengan kata kunci "<strong>{{ filters.search }}</strong>"
+              </span>
+              <span v-if="filters.search && filters.stock_status !== 'all'">
+                dan
+              </span>
+              <span v-if="filters.stock_status !== 'all'">
+                status stok "<strong>{{ stockStatusOptions.find(opt => opt.value === filters.stock_status)?.title || filters.stock_status }}</strong>"
+              </span>
+            </div>
+            <div class="text-body-2 text-medium-emphasis mt-2">
+              Coba gunakan kata kunci yang berbeda atau hapus filter untuk melihat semua data.
+            </div>
+            <div class="d-flex justify-center gap-3 mt-4">
+              <VBtn
+                color="primary"
+                variant="outlined"
+                prepend-icon="tabler-filter-off"
+                @click="handleFiltersUpdate({ search: '', stock_status: 'all' })"
+              >
+                Hapus Filter
+              </VBtn>
+              <VBtn
+                variant="outlined"
+                prepend-icon="tabler-refresh"
+                @click="fetchInventoryList(); fetchStats(); fetchLowStockAlerts()"
+              >
+                Refresh Data
+              </VBtn>
             </div>
           </VCardText>
         </VCard>
