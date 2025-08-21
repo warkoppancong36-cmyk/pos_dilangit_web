@@ -16,7 +16,7 @@ class OrderItem extends Model
     protected $fillable = [
         'id_order',
         'id_product',
-        // 'id_variant', // REMOVED - Variant system disabled
+        'id_variant', // ENABLED - Variant system for order items
         'item_name',
         'item_sku',
         'quantity',
@@ -53,11 +53,10 @@ class OrderItem extends Model
         return $this->belongsTo(Product::class, 'id_product', 'id_product');
     }
 
-    // DISABLED - Variant system removed
-    // public function variant(): BelongsTo
-    // {
-    //     return $this->belongsTo(Variant::class, 'id_variant', 'id_variant');
-    // }
+    public function variant(): BelongsTo
+    {
+        return $this->belongsTo(Variant::class, 'id_variant', 'id_variant');
+    }
 
     // Accessors
     public function getFormattedUnitPriceAttribute(): string

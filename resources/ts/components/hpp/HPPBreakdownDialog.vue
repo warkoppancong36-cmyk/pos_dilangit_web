@@ -340,7 +340,7 @@ watch(() => props.productId, newValue => {
 
             <template #item.quantity_needed="{ item }">
               <span class="font-weight-medium">
-                {{ item.quantity_needed }} {{ item.unit }}
+                {{ parseFloat(item.quantity_needed) }} {{ item.unit }}
               </span>
             </template>
 

@@ -93,6 +93,9 @@ const {
 // Local state
 const activeTab = ref('products')
 
+// Component refs
+const productTableRef = ref()
+
 // Composition dialog state
 const compositionDialog = ref(false)
 const selectedCompositionProduct = ref(null)
@@ -143,6 +146,25 @@ const getProductCompositionItems = (product: any) => {
   return productItemsList.value.filter(item => 
     item.product?.id_product === productId || item.product_id === productId
   ) || []
+}
+
+// Handle composition dialog save/refresh
+const handleCompositionRefresh = async () => {
+  // Refresh product items for composition
+  await fetchProductItemsForComposition({
+    page: 1,
+    per_page: 50,
+    critical_only: false
+  })
+  
+  // Refresh products list to get updated data
+  await fetchProductsList()
+  
+  // Refresh HPP data for the updated product
+  if (selectedCompositionProduct.value && productTableRef.value) {
+    const productId = selectedCompositionProduct.value.id_product || selectedCompositionProduct.value.id
+    await productTableRef.value.refreshHPPData(productId)
+  }
 }
 
 const handleFiltersUpdate = (newFilters: any) => {
@@ -267,6 +289,7 @@ onMounted(() => {
         />
 
         <ProductTable
+          ref="productTableRef"
           :products="productsList"
           :loading="loading"
           :current-page="currentPage"
@@ -353,8 +376,8 @@ onMounted(() => {
       v-model="compositionDialog"
       :product="selectedCompositionProduct"
       :items="getProductCompositionItems(selectedCompositionProduct)"
-      @save="() => { fetchProductsList(); compositionDialog = false }"
-      @refresh="fetchProductsList"
+      @save="handleCompositionRefresh"
+      @refresh="handleCompositionRefresh"
     />
 
     <!-- Product Variant Dialog -->

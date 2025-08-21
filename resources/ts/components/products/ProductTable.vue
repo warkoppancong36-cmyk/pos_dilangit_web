@@ -130,8 +130,14 @@
           <div class="font-weight-medium">
             {{ formatCurrency(item.price) }}
           </div>
-          <div v-if="item.cost" class="text-caption text-medium-emphasis">
-            HPP: {{ formatCurrency(item.cost) }}
+          <div class="text-caption text-medium-emphasis d-flex align-center justify-end gap-1">
+            <span>HPP: {{ formatCurrency(getProductHPP(item)) }}</span>
+            <VProgressCircular
+              v-if="hppLoading[item.id_product || item.id] && getProductHPP(item) > 0"
+              indeterminate
+              size="12"
+              width="2"
+            />
           </div>
         </div>
       </template>
@@ -140,22 +146,12 @@
       <template #item.profit_margin="{ item }">
         <div class="text-center profit-margin-container">
           <VChip
-            v-if="item.cost && item.cost > 0 && item.profit_margin !== undefined"
-            :color="getMarginColor(item.profit_margin)"
+            :color="getMarginColor(getProductMargin(item))"
             size="small"
             variant="tonal"
             class="profit-margin-chip"
           >
-            {{ Math.round(item.profit_margin) }}%
-          </VChip>
-          <VChip
-            v-else
-            color="grey"
-            size="small"
-            variant="tonal"
-            class="profit-margin-chip"
-          >
-            -
+            {{ getProductMargin(item) }}%
           </VChip>
         </div>
       </template>
@@ -164,11 +160,11 @@
       <template #item.stock="{ item }">
         <div class="text-center">
           <VChip
-            :color="getStockColor(item.stock, item.min_stock)"
+            :color="item.stock_status === 'out_of_stock' ? 'error' : item.stock_status === 'low_stock' ? 'warning' : 'success'"
             size="small"
             variant="tonal"
           >
-            {{ item.stock }} {{ item.unit || 'pcs' }}
+            {{ item.stock_status === 'out_of_stock' ? 'Habis' : item.stock_status === 'low_stock' ? 'Rendah' : 'Aman' }}
           </VChip>
           <div v-if="item.min_stock" class="text-caption text-medium-emphasis mt-1">
             Min: {{ item.min_stock }}
@@ -321,10 +317,12 @@
 </template>
 
 <script setup lang="ts">
-import { Product } from '@/composables/useProducts';
+import { computed, onMounted, ref, watchEffect } from 'vue'
+import { Product } from '@/composables/useProducts'
+import { useHPP } from '@/composables/useHPP'
 
 // Props
-defineProps<{
+const props = defineProps<{
   products: Product[]
   totalItems: number
   loading: boolean
@@ -352,6 +350,190 @@ defineEmits<{
   'update:sort-by': [sortBy: any]
   'update:selected-products': [selectedProducts: number[]]
 }>()
+
+// HPP Composable
+const { currentHPPBreakdown, getProductHPPBreakdown } = useHPP()
+
+// Store for HPP data per product with caching
+const hppData = ref<Record<number, number>>({})
+const hppLoading = ref<Record<number, boolean>>({})
+const hppCache = ref<Record<number, { data: number; timestamp: number; attempted: boolean }>>({})
+
+// Cache duration in milliseconds (5 minutes)
+const CACHE_DURATION = 5 * 60 * 1000
+const BATCH_DELAY = 1000 // 1 second delay for batching
+
+// Track which products we've already attempted to load
+const loadAttempted = ref<Set<number>>(new Set())
+const loadQueue = ref<Set<number>>(new Set())
+let batchTimeout: NodeJS.Timeout | null = null
+
+// Check if cache is still valid
+const isCacheValid = (productId: number): boolean => {
+  const cached = hppCache.value[productId]
+  if (!cached) return false
+  return Date.now() - cached.timestamp < CACHE_DURATION
+}
+
+// Process queued products in batch
+const processBatch = async () => {
+  if (loadQueue.value.size === 0) return
+
+  const productsToLoad = Array.from(loadQueue.value)
+  loadQueue.value.clear()
+
+  console.log(`Loading HPP for ${productsToLoad.length} products in batch`)
+
+  // Process in smaller batches to avoid overwhelming the server
+  const concurrencyLimit = 3 // Reduced from 5
+  for (let i = 0; i < productsToLoad.length; i += concurrencyLimit) {
+    const batch = productsToLoad.slice(i, i + concurrencyLimit)
+    const batchPromises = batch.map(async (productId) => {
+      if (hppLoading.value[productId] || isCacheValid(productId)) {
+        return // Skip if already loading or cached
+      }
+
+      hppLoading.value[productId] = true
+      loadAttempted.value.add(productId)
+
+      try {
+        await getProductHPPBreakdown(productId, 'latest')
+        if (currentHPPBreakdown.value?.total_hpp) {
+          const hppValue = currentHPPBreakdown.value.total_hpp
+          hppData.value[productId] = hppValue
+          hppCache.value[productId] = {
+            data: hppValue,
+            timestamp: Date.now(),
+            attempted: true
+          }
+        } else {
+          // Mark as attempted even if no data found
+          hppCache.value[productId] = {
+            data: 0,
+            timestamp: Date.now(),
+            attempted: true
+          }
+        }
+      } catch (error) {
+        console.warn(`Could not load HPP for product ${productId}:`, error)
+        // Mark as attempted to avoid retrying immediately
+        hppCache.value[productId] = {
+          data: 0,
+          timestamp: Date.now(),
+          attempted: true
+        }
+      } finally {
+        hppLoading.value[productId] = false
+      }
+    })
+    
+    // Wait for current batch to complete before starting next batch
+    await Promise.all(batchPromises)
+    
+    // Add small delay between batches
+    if (i + concurrencyLimit < productsToLoad.length) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+  }
+}
+
+// Queue product for HPP loading
+const queueProductForHPP = (productId: number) => {
+  // Skip if already cached and valid
+  if (isCacheValid(productId)) {
+    hppData.value[productId] = hppCache.value[productId].data
+    return
+  }
+
+  // Skip if already attempted recently (within cache duration)
+  if (loadAttempted.value.has(productId)) {
+    return
+  }
+
+  // Add to queue
+  loadQueue.value.add(productId)
+
+  // Clear existing timeout and set new one
+  if (batchTimeout) {
+    clearTimeout(batchTimeout)
+  }
+
+  batchTimeout = setTimeout(() => {
+    processBatch()
+  }, BATCH_DELAY)
+}
+
+// Load HPP for visible products with smart caching
+const loadHPPForProducts = () => {
+  for (const product of props.products) {
+    const productId = product.id_product || product.id
+    if (productId) {
+      // Check cache first
+      if (isCacheValid(productId)) {
+        hppData.value[productId] = hppCache.value[productId].data
+      } else if (!loadAttempted.value.has(productId) && !hppLoading.value[productId]) {
+        queueProductForHPP(productId)
+      }
+    }
+  }
+}
+
+// Helper function to get real-time HPP
+const getProductHPP = (product: Product): number => {
+  const productId = product.id_product || product.id
+  return hppData.value[productId] || product.cost || 0
+}
+
+// Helper function to get real-time margin
+const getProductMargin = (product: Product): number => {
+  const hpp = getProductHPP(product)
+  const price = product.price || 0
+  if (price <= 0 || hpp <= 0) return 0
+  return Math.round(((price - hpp) / price) * 100)
+}
+
+// Watch for products changes and load HPP with throttling
+watchEffect(() => {
+  if (props.products && props.products.length > 0) {
+    loadHPPForProducts()
+  }
+})
+
+// Load HPP on mount
+onMounted(() => {
+  if (props.products && props.products.length > 0) {
+    loadHPPForProducts()
+  }
+})
+
+// Expose method to refresh HPP data with cache invalidation
+const refreshHPPData = async (productId?: number) => {
+  if (productId) {
+    // Clear cache for specific product
+    delete hppCache.value[productId]
+    delete hppData.value[productId]
+    loadAttempted.value.delete(productId)
+    
+    const product = props.products.find(p => (p.id_product || p.id) === productId)
+    if (product) {
+      queueProductForHPP(productId)
+    }
+  } else {
+    // Clear all cache
+    hppCache.value = {}
+    hppData.value = {}
+    loadAttempted.value.clear()
+    loadQueue.value.clear()
+    
+    // Reload all products
+    loadHPPForProducts()
+  }
+}
+
+// Expose the refresh function to parent component
+defineExpose({
+  refreshHPPData
+})
 
 // Table headers
 const headers = [

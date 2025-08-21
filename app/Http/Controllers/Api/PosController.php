@@ -978,8 +978,8 @@ class PosController extends Controller
      */
     public function processDirectPayment(Request $request): JsonResponse
     {
-        // Check if this is a pending order creation
-        $isPendingOrder = $request->has('status') && $request->status === 'pending';
+        // Check if this is a pending order creation (Open Bill)
+        $isPendingOrder = $request->has('payment_method') && $request->payment_method === 'pending';
         
         if ($isPendingOrder) {
             return $this->createPendingOrder($request);
@@ -993,7 +993,7 @@ class PosController extends Controller
             'cart_items.*.subtotal' => 'required|numeric|min:0',
             'order_type' => 'required|string|in:dine_in,takeaway,delivery',
             'customer_id' => 'nullable|integer|exists:customers,id_customer',
-            'payment_method' => 'required|string|in:cash,card,qris,digital_wallet,bank_transfer',
+            'payment_method' => 'required|string|in:cash,card,qris,digital_wallet,bank_transfer,pending',
             'subtotal_amount' => 'required|numeric|min:0',
             'discount_amount' => 'nullable|numeric|min:0',
             'discount_type' => 'nullable|string|in:amount,percentage',
@@ -1410,17 +1410,66 @@ class PosController extends Controller
     }
 
     /**
+     * Reserve inventory for pending orders (like consumeRecipeItems but only reserves)
+     */
+    private function reserveRecipeItems(Product $product, int $quantity, int $orderId): void
+    {
+        // If product has no recipe items, try to reserve directly
+        if ($product->productItems->isEmpty()) {
+            $directInventory = Inventory::where('id_item', $product->id_product)->first();
+            if ($directInventory) {
+                // For pending orders, we just log the reservation - no actual stock movement
+                \Log::info("Reserved direct product for pending order", [
+                    'product_id' => $product->id_product,
+                    'product_name' => $product->name,
+                    'quantity' => $quantity,
+                    'order_id' => $orderId
+                ]);
+            }
+            return;
+        }
+
+        // Reserve recipe items
+        foreach ($product->productItems as $productItem) {
+            $item = $productItem->item;
+            $inventory = $item->inventory;
+            
+            if ($inventory) {
+                $reserveQuantity = $productItem->quantity_needed * $quantity;
+                
+                // For pending orders, we don't actually move stock but log the reservation
+                \Log::info("Reserved recipe item for pending order", [
+                    'item_id' => $item->id_item,
+                    'item_name' => $item->name,
+                    'product_name' => $product->name,
+                    'reserve_quantity' => $reserveQuantity,
+                    'order_id' => $orderId,
+                    'current_stock' => $inventory->current_stock
+                ]);
+            }
+        }
+    }
+
+    /**
      * Create pending order (open bill)
      */
     private function createPendingOrder(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            // 'order_type' => 'required|string|in:dine_in,takeaway,delivery',
-            // 'customer_id' => 'nullable|integer|exists:customers,id_customer',
+            'cart_items' => 'required|array|min:1',
+            'cart_items.*.product_id' => 'required|integer',
+            'cart_items.*.quantity' => 'required|integer|min:1',
+            'cart_items.*.unit_price' => 'required|numeric|min:0',
+            'cart_items.*.subtotal' => 'required|numeric|min:0',
+            'order_type' => 'required|string|in:dine_in,takeaway,delivery',
+            'customer_id' => 'nullable|integer|exists:customers,id_customer',
+            'subtotal_amount' => 'required|numeric|min:0',
+            'discount_amount' => 'nullable|numeric|min:0',
+            'total_amount' => 'required|numeric|min:0',
             'notes' => 'nullable|string|max:500',
             'cashier_id' => 'required|integer',
-            // 'table_number' => 'nullable|string|max:50',
-            // 'guest_count' => 'nullable|integer|min:1',
+            'table_number' => 'nullable|string|max:50',
+            'guest_count' => 'nullable|integer|min:1',
         ]);
 
         if ($validator->fails()) {
@@ -1440,19 +1489,49 @@ class PosController extends Controller
                 'status' => 'pending',
                 'id_user' => $request->cashier_id,
                 'id_customer' => $request->customer_id,
-                'subtotal' => 0,
-                'discount_amount' => 0,
-                'total_amount' => 0,
+                'subtotal' => $request->subtotal_amount,
+                'discount_amount' => $request->discount_amount ?? 0,
+                'total_amount' => $request->total_amount,
                 'table_number' => $request->table_number,
                 'guest_count' => $request->guest_count ?? 1,
                 'notes' => $request->notes,
                 'order_date' => now(),
             ]);
 
+            // Create order items and check inventory
+            foreach ($request->cart_items as $item) {
+                // First, verify product exists
+                $product = Product::with(['productItems.item.inventory'])->find($item['product_id']);
+                if (!$product) {
+                    throw new \Exception("Product not found for product ID: {$item['product_id']}");
+                }
+
+                // Check stock availability based on recipe/items
+                $canProduce = $this->calculateProductAvailability($product, $item['quantity']);
+                
+                if (!$canProduce['available']) {
+                    throw new \Exception("Stock tidak mencukupi untuk produk: {$product->name}. {$canProduce['message']}");
+                }
+
+                // Create order item
+                OrderItem::create([
+                    'id_order' => $order->id_order,
+                    'id_product' => $item['product_id'],
+                    'item_name' => $product->name,
+                    'item_sku' => $product->sku ?? 'NO-SKU',
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $item['unit_price'],
+                    'total_price' => $item['subtotal'],
+                ]);
+
+                // Reserve stock (don't consume yet since it's pending payment)
+                $this->reserveRecipeItems($product, $item['quantity'], $order->id_order);
+            }
+
             DB::commit();
 
             // Load order with relationships for response
-            $order->load(['user', 'customer']);
+            $order->load(['user', 'customer', 'orderItems.product']);
 
             // Log successful pending order creation
             \Log::info("Pending order created successfully", [
@@ -1467,10 +1546,22 @@ class PosController extends Controller
                 'order_number' => $order->order_number,
                 'order_type' => $order->order_type,
                 'status' => $order->status,
+                'subtotal' => $order->subtotal,
+                'total_amount' => $order->total_amount,
                 'table_number' => $order->table_number,
                 'guest_count' => $order->guest_count,
                 'notes' => $order->notes,
                 'created_at' => $order->created_at,
+                'order_items' => $order->orderItems->map(function($item) {
+                    return [
+                        'id' => $item->id_order_item,
+                        'product_id' => $item->id_product,
+                        'product_name' => $item->item_name,
+                        'quantity' => $item->quantity,
+                        'unit_price' => $item->unit_price,
+                        'total_price' => $item->total_price,
+                    ];
+                }),
                 'cashier' => $order->user ? [
                     'name' => $order->user->name,
                     'email' => $order->user->email
@@ -1480,7 +1571,7 @@ class PosController extends Controller
                     'name' => $order->customer->name,
                     'phone' => $order->customer->phone
                 ] : null
-            ], 'Pending order created successfully', 201);
+            ], 'Open bill created successfully', 201);
 
         } catch (\Exception $e) {
             DB::rollback();
@@ -1489,7 +1580,7 @@ class PosController extends Controller
                 'stack_trace' => $e->getTraceAsString()
             ]);
 
-            return $this->errorResponse('Failed to create pending order: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Failed to create open bill: ' . $e->getMessage(), 500);
         }
     }
 

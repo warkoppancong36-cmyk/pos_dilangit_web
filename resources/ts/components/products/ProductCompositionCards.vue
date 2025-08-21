@@ -613,8 +613,16 @@ const getItemsText = (totalItems: number) => {
                           </VChip>
                           <span class="text-body-2">SKU: {{ selectedProductForDetail.sku || '-' }}</span>
                         </div>
-                        <div class="text-h6 text-primary font-weight-bold">
-                          {{ formatRupiah(selectedProductForDetail.price || 0) }}
+                        <div class="d-flex align-center gap-4">
+                          <div class="text-h6 text-primary font-weight-bold">
+                            {{ formatRupiah(selectedProductForDetail.price || 0) }}
+                          </div>
+                          <div class="text-body-2 text-info font-weight-medium">
+                            HPP: {{ formatRupiah(selectedProductForDetail.hpp || selectedProductForDetail.cost || 0) }}
+                          </div>
+                          <div class="text-body-2 text-success font-weight-medium" v-if="selectedProductForDetail.price && (selectedProductForDetail.hpp || selectedProductForDetail.cost)">
+                            Margin: {{ formatRupiah((selectedProductForDetail.price || 0) - (selectedProductForDetail.hpp || selectedProductForDetail.cost || 0)) }}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -743,32 +751,52 @@ const getItemsText = (totalItems: number) => {
 
             <!-- Summary Statistics -->
             <VRow class="mt-4">
-              <VCol cols="12" md="4">
+              <VCol cols="12" md="2">
                 <VCard variant="outlined" color="primary">
                   <VCardText class="text-center">
-                    <VIcon icon="mdi-format-list-bulleted" size="32" class="mb-2" />
+                    <VIcon icon="mdi-format-list-bulleted" size="24" class="mb-2" />
                     <div class="text-h6 font-weight-bold">{{ selectedProductForDetail.totalItems || 0 }}</div>
-                    <div class="text-body-2">Total Item</div>
+                    <div class="text-caption">Total Item</div>
                   </VCardText>
                 </VCard>
               </VCol>
-              <VCol cols="12" md="4">
+              <VCol cols="12" md="2">
                 <VCard variant="outlined" color="warning">
                   <VCardText class="text-center">
-                    <VIcon icon="mdi-alert" size="32" class="mb-2" />
+                    <VIcon icon="mdi-alert" size="24" class="mb-2" />
                     <div class="text-h6 font-weight-bold">
                       {{ selectedProductForDetail.items?.filter((item: ProductItem) => item.is_critical).length || 0 }}
                     </div>
-                    <div class="text-body-2">Item Kritis</div>
+                    <div class="text-caption">Item Kritis</div>
                   </VCardText>
                 </VCard>
               </VCol>
-              <VCol cols="12" md="4">
+              <VCol cols="12" md="3">
+                <VCard variant="outlined" color="info">
+                  <VCardText class="text-center">
+                    <VIcon icon="mdi-calculator" size="24" class="mb-2" />
+                    <div class="text-h6 font-weight-bold">{{ formatRupiah(selectedProductForDetail.hpp || selectedProductForDetail.cost || 0) }}</div>
+                    <div class="text-caption">HPP</div>
+                  </VCardText>
+                </VCard>
+              </VCol>
+              <VCol cols="12" md="3">
                 <VCard variant="outlined" color="success">
                   <VCardText class="text-center">
-                    <VIcon icon="mdi-currency-usd" size="32" class="mb-2" />
+                    <VIcon icon="mdi-currency-usd" size="24" class="mb-2" />
                     <div class="text-h6 font-weight-bold">{{ formatRupiah(selectedProductForDetail.price || 0) }}</div>
-                    <div class="text-body-2">Harga Jual</div>
+                    <div class="text-caption">Harga Jual</div>
+                  </VCardText>
+                </VCard>
+              </VCol>
+              <VCol cols="12" md="2">
+                <VCard variant="outlined" color="purple">
+                  <VCardText class="text-center">
+                    <VIcon icon="mdi-trending-up" size="24" class="mb-2" />
+                    <div class="text-h6 font-weight-bold">
+                      {{ formatRupiah((selectedProductForDetail.price || 0) - (selectedProductForDetail.hpp || selectedProductForDetail.cost || 0)) }}
+                    </div>
+                    <div class="text-caption">Margin</div>
                   </VCardText>
                 </VCard>
               </VCol>

@@ -40,9 +40,17 @@
                 <p class="text-body-2 text-medium-emphasis mb-1">
                   SKU: {{ product?.sku || 'SKU-' + product?.id_product }}
                 </p>
-                <p class="text-body-2 text-medium-emphasis mb-0">
-                  Harga: {{ formatRupiah(product?.price || 0) }}
-                </p>
+                <div class="d-flex align-center gap-4 mb-0">
+                  <p class="text-body-2 text-medium-emphasis mb-0">
+                    Harga: {{ formatRupiah(product?.price || 0) }}
+                  </p>
+                  <p class="text-body-2 text-info mb-0 font-weight-medium">
+                    HPP: {{ formatRupiah(productHPP) }}
+                  </p>
+                  <p class="text-body-2 text-success mb-0 font-weight-medium" v-if="product?.price && productHPP">
+                    Margin: {{ formatRupiah(productMargin) }}
+                  </p>
+                </div>
               </div>
               <VChip
                 :color="getStockStatusColor()"
@@ -53,6 +61,59 @@
             </div>
           </VCardText>
         </VCard>
+
+        <!-- Financial Summary Cards -->
+        <VRow class="mb-6">
+          <VCol cols="12" md="3">
+            <VCard variant="outlined" color="info">
+              <VCardText class="text-center pa-3">
+                <VIcon icon="mdi-calculator" size="20" class="mb-1" />
+                <div class="text-body-1 font-weight-bold">
+                  {{ formatRupiah(productHPP) }}
+                  <VProgressCircular
+                    v-if="hppLoading"
+                    indeterminate
+                    size="12"
+                    width="2"
+                    class="ml-1"
+                  />
+                </div>
+                <div class="text-caption">HPP</div>
+              </VCardText>
+            </VCard>
+          </VCol>
+          <VCol cols="12" md="3">
+            <VCard variant="outlined" color="primary">
+              <VCardText class="text-center pa-3">
+                <VIcon icon="mdi-currency-usd" size="20" class="mb-1" />
+                <div class="text-body-1 font-weight-bold">{{ formatRupiah(product?.price || 0) }}</div>
+                <div class="text-caption">Harga Jual</div>
+              </VCardText>
+            </VCard>
+          </VCol>
+          <VCol cols="12" md="3">
+            <VCard variant="outlined" color="success">
+              <VCardText class="text-center pa-3">
+                <VIcon icon="mdi-trending-up" size="20" class="mb-1" />
+                <div class="text-body-1 font-weight-bold">
+                  {{ formatRupiah(productMargin) }}
+                </div>
+                <div class="text-caption">Margin</div>
+              </VCardText>
+            </VCard>
+          </VCol>
+          <VCol cols="12" md="3">
+            <VCard variant="outlined" color="warning">
+              <VCardText class="text-center pa-3">
+                <VIcon icon="mdi-percent" size="20" class="mb-1" />
+                <div class="text-body-1 font-weight-bold">
+                  {{ productMarginPercentage }}%
+                </div>
+                <div class="text-caption">Margin %</div>
+              </VCardText>
+            </VCard>
+          </VCol>
+        </VRow>
 
         <!-- Add New Item Form -->
         <VCard class="mb-6" elevation="2">
@@ -354,7 +415,7 @@
     v-model="hppDialog"
     :product-id="parseInt(String(product?.id_product || product?.id || '0'))"
     :product-name="product?.product_name || product?.name"
-    @hpp-updated="emit('refresh')"
+    @hpp-updated="onHPPUpdated"
     @price-updated="emit('refresh')"
   />
 </template>
@@ -365,6 +426,7 @@ import { formatRupiah } from '@/@core/utils/formatters'
 import { ProductItemsApi } from '@/utils/api/ProductItemsApi'
 import { ItemsApi } from '@/utils/api/ItemsApi'
 import HPPBreakdownDialog from '@/components/hpp/HPPBreakdownDialog.vue'
+import { useHPP } from '@/composables/useHPP'
 
 interface CompositionItem {
   id?: string
@@ -455,6 +517,32 @@ const editIndex = ref(-1)
 
 // HPP Dialog state
 const hppDialog = ref(false)
+
+// HPP Composable
+const {
+  loading: hppLoading,
+  currentHPPBreakdown,
+  getProductHPPBreakdown,
+  formatCurrency,
+} = useHPP()
+
+// Computed HPP values
+const productHPP = computed(() => {
+  return currentHPPBreakdown.value?.total_hpp || props.product?.hpp || props.product?.cost || 0
+})
+
+const productMargin = computed(() => {
+  const price = props.product?.price || 0
+  const hpp = productHPP.value
+  return price - hpp
+})
+
+const productMarginPercentage = computed(() => {
+  const price = props.product?.price || 0
+  const hpp = productHPP.value
+  if (price <= 0) return 0
+  return Math.round(((price - hpp) / price) * 100)
+})
 
 // New item form
 const newItem = ref<NewItemForm>({
@@ -603,11 +691,25 @@ watch(() => props.items, (newItems) => {
 }, { immediate: true })
 
 // Watch for dialog opening to fetch composition data
-watch(() => props.modelValue, (isOpen) => {
+watch(() => props.modelValue, async (isOpen) => {
   if (isOpen && props.product) {
     fetchProductComposition()
+    // Load HPP data when dialog opens
+    await loadHPPData()
   }
 })
+
+// Load HPP Data
+const loadHPPData = async () => {
+  if (props.product && (props.product.id_product || props.product.id)) {
+    try {
+      const productId = parseInt(String(props.product.id_product || props.product.id))
+      await getProductHPPBreakdown(productId, 'latest') // Default to latest method
+    } catch (error) {
+      console.warn('Could not load HPP data:', error)
+    }
+  }
+}
 
 // Fetch available items when component mounts
 onMounted(() => {
@@ -617,6 +719,14 @@ onMounted(() => {
 // HPP Dialog functions
 const openHPPDialog = () => {
   hppDialog.value = true
+}
+
+// Handle HPP Update
+const onHPPUpdated = async () => {
+  // Reload HPP data after update
+  await loadHPPData()
+  // Emit refresh to parent
+  emit('refresh')
 }
 
 // Methods
