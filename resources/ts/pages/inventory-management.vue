@@ -54,6 +54,7 @@ const {
   closeMovementsDialog,
   clearModalError,
   onPageChange,
+  onItemsPerPageChange,
   handleFiltersUpdate,
   formatCurrency,
   getStockStatusColor,
@@ -515,10 +516,12 @@ onMounted(() => {
             :items="inventoryList"
             :loading="loading"
             :items-per-page="itemsPerPage"
+            :items-per-page-options="[10, 15, 25, 50, 100]"
             :page="currentPage"
             :server-items-length="totalItems"
             class="text-no-wrap"
             @update:page="onPageChange"
+            @update:items-per-page="onItemsPerPageChange"
           >
             <!-- Item Name -->
             <template #item.item_name="{ item }">

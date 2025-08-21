@@ -293,9 +293,19 @@ class PurchaseController extends Controller
 
             $purchase->update($updateData);
 
-            // If status is received or completed, update inventory
-            if (in_array($request->status, ['received', 'completed'])) {
-                $this->updateInventory($purchase);
+            // Only update inventory if status is completed AND items haven't been received yet
+            // This prevents double stock counting
+            if ($request->status === 'completed') {
+                // Check if items have already been received (have quantity_received)
+                $hasReceivedItems = $purchase->items()->where('quantity_received', '>', 0)->exists();
+                
+                if (!$hasReceivedItems) {
+                    // Items haven't been received yet, so update inventory with ordered quantities
+                    $this->updateInventory($purchase);
+                    \Log::info('Inventory updated on completion for purchase: ' . $purchase->purchase_number);
+                } else {
+                    \Log::info('Skipping inventory update - items already received for purchase: ' . $purchase->purchase_number);
+                }
             }
 
             return response()->json([

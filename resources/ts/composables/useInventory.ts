@@ -240,9 +240,13 @@ export const useInventory = () => {
         // Log untuk debugging
         console.log('Inventory data loaded:', {
           total: response.data.total,
-          items: response.data.data.length,
+          itemsLength: response.data.data.length,
           currentPage: response.data.current_page,
-          structure: 'Laravel paginated response'
+          perPage: response.data.per_page,
+          lastPage: response.data.last_page,
+          from: response.data.from,
+          to: response.data.to,
+          requestedPerPage: itemsPerPage.value
         })
       } else {
         throw new Error(response.message || 'Gagal mengambil data inventory')
@@ -424,6 +428,12 @@ export const useInventory = () => {
     fetchInventoryList()
   }
 
+  const onItemsPerPageChange = (itemsPerPageValue: number) => {
+    itemsPerPage.value = itemsPerPageValue
+    currentPage.value = 1 // Reset to first page
+    fetchInventoryList()
+  }
+
   const handleFiltersUpdate = (newFilters: Partial<InventoryFilters>) => {
     filters.value = { ...filters.value, ...newFilters }
     currentPage.value = 1
@@ -522,6 +532,7 @@ export const useInventory = () => {
     closeMovementsDialog,
     clearModalError,
     onPageChange,
+    onItemsPerPageChange,
     handleFiltersUpdate,
     formatCurrency,
     getStockStatusColor,
