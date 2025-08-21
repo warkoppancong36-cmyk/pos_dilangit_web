@@ -480,12 +480,6 @@ const loadHPPForProducts = () => {
   for (const product of props.products) {
     const productId = product.id_product || product.id
     if (productId) {
-      // Skip if product already has HPP from backend
-      if (product.hpp !== undefined && product.hpp !== null) {
-        console.log(`Product ${product.name} has HPP from backend: ${product.hpp}`)
-        continue
-      }
-      
       // Check cache first for products without backend HPP
       if (isCacheValid(productId)) {
         hppData.value[productId] = hppCache.value[productId].data
@@ -498,30 +492,12 @@ const loadHPPForProducts = () => {
 
 // Helper function to get real-time HPP
 const getProductHPP = (product: Product): number => {
-  // Priority 1: Use HPP from backend response (new)
-  if (product.hpp !== undefined && product.hpp !== null) {
-    return product.hpp
-  }
-  
-  // Priority 2: Use cached HPP data from API calls (existing)
   const productId = product.id_product || product.id
-  const cached = hppData.value[productId]
-  if (cached !== undefined && cached !== null) {
-    return cached
-  }
-  
-  // Priority 3: Fallback to product cost
-  return product.cost || 0
+  return hppData.value[productId] || product.cost || 0
 }
 
 // Helper function to get real-time margin
 const getProductMargin = (product: Product): number => {
-  // Priority 1: Use profit_percentage from backend response (new)
-  if (product.profit_percentage !== undefined && product.profit_percentage !== null) {
-    return Math.round(product.profit_percentage)
-  }
-  
-  // Priority 2: Calculate from HPP (existing logic)
   const hpp = getProductHPP(product)
   const price = product.price || 0
   if (price <= 0 || hpp <= 0) return 0

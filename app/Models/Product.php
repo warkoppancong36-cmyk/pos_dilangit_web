@@ -55,41 +55,10 @@ class Product extends Model
     ];
 
     protected $appends = [
-        'hpp',
-        'hpp_breakdown',
-        'profit_margin',
-        'profit_percentage',
         'image_url',
         'formatted_price',
         'formatted_cost',
     ];
-
-    /**
-     * Get HPP (Harga Pokok Produksi) accessor
-     */
-    public function getHppAttribute(): float
-    {
-        return $this->calculateHPPFromLatestPurchases();
-    }
-
-    /**
-     * Get HPP breakdown accessor
-     */
-    public function getHppBreakdownAttribute(): array
-    {
-        return $this->getHPPBreakdown('latest');
-    }
-
-    /**
-     * Get profit percentage accessor
-     */
-    public function getProfitPercentageAttribute(): float
-    {
-        if ($this->hpp <= 0) {
-            return 0;
-        }
-        return round((($this->price - $this->hpp) / $this->hpp) * 100, 2);
-    }
 
     protected $attributes = [
         'status' => 'draft',
