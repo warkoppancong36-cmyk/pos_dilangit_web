@@ -375,19 +375,31 @@ const isCacheValid = (productId: number): boolean => {
   return Date.now() - cached.timestamp < CACHE_DURATION
 }
 
-// Process queued products in batch
+// Process queued products in batch (only for products without backend HPP)
 const processBatch = async () => {
   if (loadQueue.value.size === 0) return
 
   const productsToLoad = Array.from(loadQueue.value)
   loadQueue.value.clear()
 
-  console.log(`Loading HPP for ${productsToLoad.length} products in batch`)
+  // Filter products that actually need HPP loading (don't have backend HPP)
+  const productsNeedingHPP = productsToLoad.filter(productId => {
+    const product = props.products.find(p => (p.id_product || p.id) === productId)
+    // Only load if product doesn't have HPP from backend
+    return product && (product.hpp === undefined || product.hpp === null)
+  })
+
+  if (productsNeedingHPP.length === 0) {
+    console.log('All products have HPP from backend, skipping API calls')
+    return
+  }
+
+  console.log(`Loading HPP for ${productsNeedingHPP.length}/${productsToLoad.length} products (others have backend HPP)`)
 
   // Process in smaller batches to avoid overwhelming the server
   const concurrencyLimit = 3 // Reduced from 5
-  for (let i = 0; i < productsToLoad.length; i += concurrencyLimit) {
-    const batch = productsToLoad.slice(i, i + concurrencyLimit)
+  for (let i = 0; i < productsNeedingHPP.length; i += concurrencyLimit) {
+    const batch = productsNeedingHPP.slice(i, i + concurrencyLimit)
     const batchPromises = batch.map(async (productId) => {
       if (hppLoading.value[productId] || isCacheValid(productId)) {
         return // Skip if already loading or cached
@@ -468,7 +480,13 @@ const loadHPPForProducts = () => {
   for (const product of props.products) {
     const productId = product.id_product || product.id
     if (productId) {
-      // Check cache first
+      // Skip if product already has HPP from backend
+      if (product.hpp !== undefined && product.hpp !== null) {
+        console.log(`Product ${product.name} has HPP from backend: ${product.hpp}`)
+        continue
+      }
+      
+      // Check cache first for products without backend HPP
       if (isCacheValid(productId)) {
         hppData.value[productId] = hppCache.value[productId].data
       } else if (!loadAttempted.value.has(productId) && !hppLoading.value[productId]) {
@@ -480,12 +498,30 @@ const loadHPPForProducts = () => {
 
 // Helper function to get real-time HPP
 const getProductHPP = (product: Product): number => {
+  // Priority 1: Use HPP from backend response (new)
+  if (product.hpp !== undefined && product.hpp !== null) {
+    return product.hpp
+  }
+  
+  // Priority 2: Use cached HPP data from API calls (existing)
   const productId = product.id_product || product.id
-  return hppData.value[productId] || product.cost || 0
+  const cached = hppData.value[productId]
+  if (cached !== undefined && cached !== null) {
+    return cached
+  }
+  
+  // Priority 3: Fallback to product cost
+  return product.cost || 0
 }
 
 // Helper function to get real-time margin
 const getProductMargin = (product: Product): number => {
+  // Priority 1: Use profit_percentage from backend response (new)
+  if (product.profit_percentage !== undefined && product.profit_percentage !== null) {
+    return Math.round(product.profit_percentage)
+  }
+  
+  // Priority 2: Calculate from HPP (existing logic)
   const hpp = getProductHPP(product)
   const price = product.price || 0
   if (price <= 0 || hpp <= 0) return 0

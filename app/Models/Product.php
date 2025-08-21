@@ -48,21 +48,48 @@ class Product extends Model
         'cost' => 'decimal:2',
         'markup_percentage' => 'decimal:2',
         'weight' => 'decimal:2',
-        'dimensions' => 'json',
-        'tags' => 'json',
         'active' => 'boolean',
         'featured' => 'boolean',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
-        'deleted_at' => 'datetime',
+        'tags' => 'array',
+        'dimensions' => 'array',
     ];
 
     protected $appends = [
+        'hpp',
+        'hpp_breakdown',
+        'profit_margin',
+        'profit_percentage',
         'image_url',
         'formatted_price',
         'formatted_cost',
-        'profit_margin',
     ];
+
+    /**
+     * Get HPP (Harga Pokok Produksi) accessor
+     */
+    public function getHppAttribute(): float
+    {
+        return $this->calculateHPPFromLatestPurchases();
+    }
+
+    /**
+     * Get HPP breakdown accessor
+     */
+    public function getHppBreakdownAttribute(): array
+    {
+        return $this->getHPPBreakdown('latest');
+    }
+
+    /**
+     * Get profit percentage accessor
+     */
+    public function getProfitPercentageAttribute(): float
+    {
+        if ($this->hpp <= 0) {
+            return 0;
+        }
+        return round((($this->price - $this->hpp) / $this->hpp) * 100, 2);
+    }
 
     protected $attributes = [
         'status' => 'draft',
@@ -327,8 +354,8 @@ class Product extends Model
         $productItems = $this->productItems()->with(['item'])->get();
         
         foreach ($productItems as $productItem) {
-            // Since purchase_items table structure is different, use fallback to item cost_per_unit
-            $itemCost = $productItem->item->cost_per_unit ?? 0;
+            // Use same logic as getHPPBreakdown('latest')
+            $itemCost = $this->getLatestPurchaseCost($productItem) ?? $productItem->item->cost_per_unit ?? 0;
             
             $itemTotalCost = $productItem->quantity_needed * $itemCost;
             $totalCost += $itemTotalCost;
@@ -347,8 +374,8 @@ class Product extends Model
         $productItems = $this->productItems()->with(['item'])->get();
         
         foreach ($productItems as $productItem) {
-            // Since purchase_items table structure is different, use fallback to item cost_per_unit
-            $itemCost = $productItem->item->cost_per_unit ?? 0;
+            // Use same logic as getHPPBreakdown('average')
+            $itemCost = $this->getAveragePurchaseCost($productItem) ?? $productItem->item->cost_per_unit ?? 0;
             
             $itemTotalCost = $productItem->quantity_needed * $itemCost;
             $totalCost += $itemTotalCost;
@@ -513,16 +540,11 @@ class Product extends Model
     }
 
     /**
-     * Get profit margin
+     * Get profit margin (price - hpp)
      */
     public function getProfitMarginAttribute(): float
     {
-        if (!$this->cost || $this->cost <= 0) {
-            return 0;
-        }
-        
-        $margin = (($this->price - $this->cost) / $this->cost) * 100;
-        return ceil($margin);
+        return round($this->price - $this->hpp, 2);
     }
 
     /**

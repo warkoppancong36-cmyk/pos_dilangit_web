@@ -63,6 +63,24 @@ export interface Product extends ProductFormData {
   formatted_cost?: string
   profit_margin?: number
   stock_value?: number
+  // HPP (Harga Pokok Produksi) fields from backend
+  hpp?: number
+  hpp_breakdown?: {
+    items: Array<{
+      item_name: string
+      item_code: string
+      quantity_needed: number
+      unit: string
+      cost_per_unit: number
+      total_cost: number
+      is_critical: boolean
+      notes?: string
+    }>
+    total_hpp: number
+    method: string
+    calculated_at: string
+  }
+  profit_percentage?: number
 }
 
 export interface ProductFilters {
