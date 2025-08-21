@@ -284,6 +284,7 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
         Route::put('/{purchase}', [PurchaseController::class, 'update']);
         Route::patch('/{purchase}/status', [PurchaseController::class, 'updateStatus']);
         Route::post('/{purchase}/receive', [PurchaseController::class, 'receiveItems']); // New route
+        Route::post('/{purchase}/complete-auto-receive', [PurchaseController::class, 'completeWithAutoReceive']); // Auto-complete route
         Route::delete('/{purchase}', [PurchaseController::class, 'destroy']);
         Route::post('/{purchase}/restore', [PurchaseController::class, 'restore']);
         Route::delete('/{purchase}/force', [PurchaseController::class, 'forceDelete']);

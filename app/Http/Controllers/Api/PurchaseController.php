@@ -300,9 +300,18 @@ class PurchaseController extends Controller
                 $hasReceivedItems = $purchase->items()->where('quantity_received', '>', 0)->exists();
                 
                 if (!$hasReceivedItems) {
-                    // Items haven't been received yet, so update inventory with ordered quantities
+                    // Auto-receive all items dengan quantity yang di-order
+                    foreach ($purchase->items as $item) {
+                        $item->update([
+                            'quantity_received' => $item->quantity_ordered,
+                            'status' => 'received',
+                            'delivery_date' => now()
+                        ]);
+                    }
+                    
+                    // Update inventory dengan stock yang baru
                     $this->updateInventory($purchase);
-                    \Log::info('Inventory updated on completion for purchase: ' . $purchase->purchase_number);
+                    \Log::info('Auto-received all items and updated inventory for purchase: ' . $purchase->purchase_number);
                 } else {
                     \Log::info('Skipping inventory update - items already received for purchase: ' . $purchase->purchase_number);
                 }
@@ -473,6 +482,59 @@ class PurchaseController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error loading statistics: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Complete purchase and auto-receive all items
+     */
+    public function completeWithAutoReceive(Request $request, $id)
+    {
+        try {
+            $purchase = Purchase::findOrFail($id);
+
+            if ($purchase->status === 'completed') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Purchase is already completed'
+                ], 400);
+            }
+
+            DB::beginTransaction();
+
+            // Update purchase status to completed
+            $purchase->update([
+                'status' => 'completed',
+                'completion_date' => now(),
+                'updated_by' => Auth::id()
+            ]);
+
+            // Auto-receive all items with ordered quantities
+            foreach ($purchase->items as $item) {
+                $item->update([
+                    'quantity_received' => $item->quantity_ordered,
+                    'status' => 'received',
+                    'delivery_date' => now()
+                ]);
+            }
+
+            // Update inventory
+            $this->updateInventory($purchase);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Purchase completed and all items received successfully',
+                'data' => $purchase->fresh(['items.item', 'supplier'])
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollback();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error completing purchase: ' . $e->getMessage()
             ], 500);
         }
     }

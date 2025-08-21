@@ -518,13 +518,12 @@ onMounted(() => {
               { title: 'Nilai Stok', key: 'stock_value', sortable: false },
               { title: 'Aksi', key: 'actions', sortable: false },
             ]"
-            v-model:page="currentPage"
-            v-model:items-per-page="itemsPerPage"
             :items="inventoryList"
             :loading="loading"
+            :server-items-length="totalItems"
+            :items-per-page="itemsPerPage"
+            :page="currentPage"
             :items-per-page-options="[10, 15, 25, 50, 100]"
-            :items-length="totalItems"
-            :show-current-page="true"
             :items-per-page-text="'Items per page:'"
             :page-text="'{0}-{1} of {2}'"
             :no-data-text="'Tidak ada data inventory'"
