@@ -743,14 +743,20 @@ const getStatusLabel = (status) => {
 }
 
 const canEdit = (purchase) => {
-  // Allow edit for pending, ordered, and completed status
-  return ['pending', 'ordered', 'completed'].includes(purchase.status)
+  // Allow edit for pending, ordered, received, and completed status
+  console.log('🔍 canEdit check for purchase:', purchase.purchase_number, 'status:', purchase.status)
+  const result = ['pending', 'ordered', 'received', 'completed'].includes(purchase.status)
+  console.log('✅ canEdit result:', result)
+  return result
 }
 
 const canDelete = (purchase) => {
-  // Allow delete for pending and completed status
-  // Don't allow delete for 'ordered' (in process) or 'received' (partially completed)
-  return ['pending', 'completed'].includes(purchase.status)
+  // Allow delete for pending, received, and completed status
+  // Don't allow delete for 'ordered' (in process)
+  console.log('🔍 canDelete check for purchase:', purchase.purchase_number, 'status:', purchase.status)
+  const result = ['pending', 'received', 'completed'].includes(purchase.status)
+  console.log('✅ canDelete result:', result)
+  return result
 }
 
 // Watchers

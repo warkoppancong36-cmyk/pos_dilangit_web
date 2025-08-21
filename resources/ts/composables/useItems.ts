@@ -364,14 +364,22 @@ const clearModalError = () => {
 
 // Pagination
 const onPageChange = (page: number) => {
-  currentPage.value = page
-  fetchItemsList()
+  console.log('🔄 Items onPageChange called with page:', page)
+  console.log('📄 Current state - currentPage:', currentPage.value, 'totalItems:', totalItems.value, 'itemsPerPage:', itemsPerPage.value)
+  if (page !== currentPage.value) {
+    currentPage.value = page
+    fetchItemsList()
+  }
 }
 
 const onItemsPerPageChange = (newItemsPerPage: number) => {
-  itemsPerPage.value = newItemsPerPage
-  currentPage.value = 1  // Reset to first page when changing items per page
-  fetchItemsList()
+  console.log('🔄 Items onItemsPerPageChange called with itemsPerPage:', newItemsPerPage)
+  console.log('📄 Current state - currentPage:', currentPage.value, 'totalItems:', totalItems.value)
+  if (newItemsPerPage !== itemsPerPage.value) {
+    itemsPerPage.value = newItemsPerPage
+    currentPage.value = 1  // Reset to first page when changing items per page
+    fetchItemsList()
+  }
 }
 
 // Filters
