@@ -229,6 +229,7 @@ export const useInventory = () => {
         }
       })
 
+      console.log('Fetching inventory with params:', params)
       const response = await InventoryApi.getAll(params)
       
       if (response.success) {
@@ -424,13 +425,15 @@ export const useInventory = () => {
 
   // Pagination and filters
   const onPageChange = (page: number) => {
+    console.log('Page changed to:', page)
     currentPage.value = page
     fetchInventoryList()
   }
 
   const onItemsPerPageChange = (itemsPerPageValue: number) => {
+    console.log('Items per page changed to:', itemsPerPageValue)
     itemsPerPage.value = itemsPerPageValue
-    currentPage.value = 1 // Reset to first page
+    currentPage.value = 1 // Reset to first page when changing items per page
     fetchInventoryList()
   }
 
