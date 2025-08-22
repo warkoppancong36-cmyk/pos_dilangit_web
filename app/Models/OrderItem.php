@@ -23,6 +23,9 @@ class OrderItem extends Model
         'unit_price',
         'total_price',
         'discount_amount',
+        'discount_type',
+        'discount_percentage',
+        'subtotal_before_discount',
         'notes',
         'customizations',
     ];
@@ -32,6 +35,8 @@ class OrderItem extends Model
         'unit_price' => 'decimal:2',
         'total_price' => 'decimal:2',
         'discount_amount' => 'decimal:2',
+        'discount_percentage' => 'decimal:2',
+        'subtotal_before_discount' => 'decimal:2',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -39,6 +44,7 @@ class OrderItem extends Model
     protected $appends = [
         'formatted_unit_price',
         'formatted_total_price',
+        'formatted_discount_amount',
         'item_code',
     ];
 
@@ -78,21 +84,59 @@ class OrderItem extends Model
     public function updateQuantity($quantity)
     {
         $this->quantity = $quantity;
-        $this->total_price = $this->quantity * $this->unit_price - $this->discount_amount;
+        $this->calculateTotalPrice();
         $this->save();
         
         // Recalculate order totals
         $this->order->calculateTotals();
     }
 
-    public function applyDiscount($amount)
+    public function applyDiscount($amount, $type = 'fixed')
     {
-        $this->discount_amount = $amount;
-        $this->total_price = ($this->quantity * $this->unit_price) - $amount;
+        $this->discount_type = $type;
+        
+        if ($type === 'percentage') {
+            $this->discount_percentage = $amount;
+            $subtotal = $this->quantity * $this->unit_price;
+            $this->discount_amount = ($subtotal * $amount) / 100;
+        } else {
+            $this->discount_amount = $amount;
+            $this->discount_percentage = null;
+        }
+        
+        $this->calculateTotalPrice();
         $this->save();
         
         // Recalculate order totals
         $this->order->calculateTotals();
+    }
+
+    public function calculateTotalPrice()
+    {
+        $subtotal = $this->quantity * $this->unit_price;
+        $this->subtotal_before_discount = $subtotal;
+        $this->total_price = $subtotal - $this->discount_amount;
+        
+        return $this->total_price;
+    }
+
+    public function getDiscountPercentageAttribute($value)
+    {
+        if ($this->discount_type === 'percentage') {
+            return $value;
+        }
+        
+        // Calculate percentage from fixed amount
+        if ($this->subtotal_before_discount > 0) {
+            return ($this->discount_amount / $this->subtotal_before_discount) * 100;
+        }
+        
+        return 0;
+    }
+
+    public function getFormattedDiscountAmountAttribute(): string
+    {
+        return 'Rp ' . number_format($this->discount_amount, 0, ',', '.');
     }
 
     // Boot method
@@ -100,11 +144,15 @@ class OrderItem extends Model
     {
         parent::boot();
 
+        static::saving(function ($orderItem) {
+            // Auto-calculate total price
+            $orderItem->calculateTotalPrice();
+        });
+
         static::saved(function ($orderItem) {
-            // Auto-calculate total price if not set
-            if (!$orderItem->total_price) {
-                $orderItem->total_price = ($orderItem->quantity * $orderItem->unit_price) - $orderItem->discount_amount;
-                $orderItem->saveQuietly(); // Prevent infinite loop
+            // Recalculate order totals
+            if ($orderItem->order) {
+                $orderItem->order->calculateTotals();
             }
         });
 

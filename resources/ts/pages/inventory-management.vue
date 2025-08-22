@@ -406,59 +406,8 @@ watch(totalItems, (newValue, oldValue) => {
           </VCardText>
         </VCard>
 
-        <!-- No Search Results Card -->
-        <VCard
-          v-if="!loading && inventoryList.length === 0 && !errorMessage && (filters.search || filters.stock_status !== 'all')"
-          class="mb-6"
-        >
-          <VCardText class="text-center py-6">
-            <VIcon
-              icon="tabler-search-off"
-              size="48"
-              class="text-warning mb-3"
-            />
-            <div class="text-h6 mb-2">
-              Tidak Ada Hasil Pencarian
-            </div>
-            <div class="text-body-2 text-medium-emphasis">
-              <span v-if="filters.search">
-                Tidak ditemukan inventory dengan kata kunci "<strong>{{ filters.search }}</strong>"
-              </span>
-              <span v-if="filters.search && filters.stock_status !== 'all'">
-                dan
-              </span>
-              <span v-if="filters.stock_status !== 'all'">
-                status stok "<strong>{{ stockStatusOptions.find(opt => opt.value === filters.stock_status)?.title || filters.stock_status }}</strong>"
-              </span>
-            </div>
-            <div class="text-body-2 text-medium-emphasis mt-2">
-              Coba gunakan kata kunci yang berbeda atau hapus filter untuk melihat semua data.
-            </div>
-            <div class="d-flex justify-center gap-3 mt-4">
-              <VBtn
-                color="primary"
-                variant="outlined"
-                prepend-icon="tabler-filter-off"
-                @click="handleFiltersUpdate({ search: '', stock_status: 'all' })"
-              >
-                Hapus Filter
-              </VBtn>
-              <VBtn
-                variant="outlined"
-                prepend-icon="tabler-refresh"
-                @click="fetchInventoryList(); fetchStats(); fetchLowStockAlerts()"
-              >
-                Refresh Data
-              </VBtn>
-            </div>
-          </VCardText>
-        </VCard>
-
-        <!-- Filters (only show when there's data or loading) -->
-        <VCard
-          v-if="loading || inventoryList.length > 0"
-          class="mb-6"
-        >
+        <!-- Search and Filters Section - ALWAYS SHOW -->
+        <VCard class="mb-6">
           <VCardText>
             <VRow>
               <VCol
@@ -478,65 +427,62 @@ watch(totalItems, (newValue, oldValue) => {
 
               <VCol
                 cols="12"
-                md="3"
+                md="4"
               >
                 <VSelect
                   v-model="filters.stock_status"
-                  label="Status Stok"
                   :items="stockStatusOptions"
+                  label="Status Stok"
+                  variant="outlined"
                   clearable
-                  variant="outlined"
-                  @update:model-value="handleFiltersUpdate({ stock_status: $event })"
+                  @update:model-value="handleFiltersUpdate({ stock_status: $event || 'all' })"
                 />
               </VCol>
 
               <VCol
                 cols="12"
-                md="2"
-              >
-                <VSelect
-                  v-model="filters.sort_by"
-                  label="Urutkan"
-                  :items="[
-                    { title: 'Stok Tersedia', value: 'current_stock' },
-                    { title: 'Nama Produk', value: 'product_name' },
-                    { title: 'Terakhir Diperbarui', value: 'updated_at' },
-                  ]"
-                  variant="outlined"
-                  @update:model-value="handleFiltersUpdate({ sort_by: $event })"
-                />
-              </VCol>
-
-              <VCol
-                cols="12"
-                md="2"
-              >
-                <VSelect
-                  v-model="filters.sort_order"
-                  label="Urutan"
-                  :items="[
-                    { title: 'A-Z / 0-9', value: 'asc' },
-                    { title: 'Z-A / 9-0', value: 'desc' },
-                  ]"
-                  variant="outlined"
-                  @update:model-value="handleFiltersUpdate({ sort_order: $event })"
-                />
-              </VCol>
-
-              <VCol
-                cols="12"
-                md="1"
+                md="4"
+                class="d-flex align-center gap-2"
               >
                 <VBtn
                   variant="outlined"
-                  color="secondary"
-                  block
-                  @click="handleFiltersUpdate({ search: '', stock_status: 'all', sort_by: 'current_stock', sort_order: 'asc' })"
+                  prepend-icon="tabler-refresh"
+                  @click="fetchInventoryList(); fetchStats(); fetchLowStockAlerts()"
                 >
-                  Reset
+                  Refresh
+                </VBtn>
+                
+                <VBtn
+                  v-if="filters.search || filters.stock_status !== 'all'"
+                  variant="outlined"
+                  color="warning"
+                  prepend-icon="tabler-filter-off"
+                  @click="handleFiltersUpdate({ search: '', stock_status: 'all' })"
+                >
+                  Clear
                 </VBtn>
               </VCol>
             </VRow>
+          </VCardText>
+        </VCard>
+
+        <!-- Empty State Card (only when no data exists at all) -->
+        <VCard
+          v-if="!loading && inventoryList.length === 0 && !errorMessage && !filters.search && filters.stock_status === 'all'"
+          class="mb-6"
+        >
+          <VCardText class="text-center py-6">
+            <VIcon
+              icon="tabler-package-off"
+              size="48"
+              class="text-disabled mb-3"
+            />
+            <div class="text-h6 mb-2">
+              Sistem Inventory Management Siap Digunakan
+            </div>
+            <div class="text-body-2 text-medium-emphasis">
+              Buat produk dan variant terlebih dahulu untuk mulai melacak inventory.
+            </div>
           </VCardText>
         </VCard>
 
@@ -733,19 +679,41 @@ watch(totalItems, (newValue, oldValue) => {
             <template #no-data>
               <div class="text-center py-12">
                 <VIcon
-                  icon="tabler-package-off"
+                  :icon="filters.search || filters.stock_status !== 'all' ? 'tabler-search-off' : 'tabler-package-off'"
                   size="64"
                   class="text-medium-emphasis mb-4"
                 />
                 <div class="text-h5 text-medium-emphasis mb-2">
-                  Belum Ada Data Inventory
+                  {{ filters.search || filters.stock_status !== 'all' ? 'Tidak Ada Hasil Pencarian' : 'Belum Ada Data Inventory' }}
                 </div>
                 <div class="text-body-1 text-medium-emphasis mb-4">
-                  Data inventory akan muncul setelah produk dan variant dibuat.<br>
-                  Silakan buat produk terlebih dahulu di menu <strong>Kelola Produk</strong>.
+                  <span v-if="filters.search || filters.stock_status !== 'all'">
+                    <span v-if="filters.search">
+                      Tidak ditemukan inventory dengan kata kunci "<strong>{{ filters.search }}</strong>"
+                    </span>
+                    <span v-if="filters.search && filters.stock_status !== 'all'"> dan </span>
+                    <span v-if="filters.stock_status !== 'all'">
+                      status stok "<strong>{{ stockStatusOptions.find(opt => opt.value === filters.stock_status)?.title || filters.stock_status }}</strong>"
+                    </span>
+                    <br>Coba kata kunci yang berbeda atau hapus filter.
+                  </span>
+                  <span v-else>
+                    Data inventory akan muncul setelah produk dan variant dibuat.<br>
+                    Silakan buat produk terlebih dahulu di menu <strong>Kelola Produk</strong>.
+                  </span>
                 </div>
                 <div class="d-flex justify-center gap-3">
                   <VBtn
+                    v-if="filters.search || filters.stock_status !== 'all'"
+                    color="warning"
+                    variant="outlined"
+                    prepend-icon="tabler-filter-off"
+                    @click="handleFiltersUpdate({ search: '', stock_status: 'all' })"
+                  >
+                    Hapus Filter
+                  </VBtn>
+                  <VBtn
+                    v-else
                     color="primary"
                     prepend-icon="tabler-plus"
                     to="/products-management"

@@ -162,6 +162,9 @@ class PosController extends Controller
             'quantity' => 'required|integer|min:1',
             'price' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string|max:255',
+            'discount_amount' => 'nullable|numeric|min:0',
+            'discount_type' => 'nullable|in:fixed,percentage',
+            'discount_percentage' => 'nullable|numeric|min:0|max:100',
         ]);
 
         if ($validator->fails()) {
@@ -201,6 +204,9 @@ class PosController extends Controller
                 'quantity' => $request->quantity,
                 'unit_price' => $request->unit_price ?? $product->unit_price,
                 'total_price' => $request->total_price ?? $product->total_price,
+                'discount_amount' => $request->discount_amount ?? 0,
+                'discount_type' => $request->discount_type,
+                'discount_percentage' => $request->discount_percentage ?? 0,
             ]);
 
             // Update inventory based on recipe consumption
@@ -249,6 +255,9 @@ class PosController extends Controller
         $validator = Validator::make($request->all(), [
             'quantity' => 'required|integer|min:1',
             'notes' => 'nullable|string|max:255',
+            'discount_amount' => 'nullable|numeric|min:0',
+            'discount_type' => 'nullable|in:fixed,percentage',
+            'discount_percentage' => 'nullable|numeric|min:0|max:100',
         ]);
 
         if ($validator->fails()) {
@@ -267,14 +276,22 @@ class PosController extends Controller
                 $inventory = Inventory::where('id_product', $orderItem->id_product)
                     ->first();
 
-                if (!$inventory || $inventory->available_stock < $quantityDiff) {
+                if (!$inventory) {
+                    // Create inventory if not exists
+                    $inventory = Inventory::create([
+                        'id_product' => $orderItem->id_product,
+                        'current_stock' => 1000, // Default stock
+                        'reserved_stock' => $quantityDiff,
+                        'reorder_level' => 10
+                    ]);
+                } else if ($inventory->available_stock < $quantityDiff) {
                     return $this->errorResponse('Insufficient stock available', 400);
+                } else {
+                    // Update reserved stock
+                    $inventory->update([
+                        'reserved_stock' => $inventory->reserved_stock + $quantityDiff
+                    ]);
                 }
-
-                // Update reserved stock
-                $inventory->update([
-                    'reserved_stock' => $inventory->reserved_stock + $quantityDiff
-                ]);
             } else if ($quantityDiff < 0) {
                 // Release reserved stock
                 $inventory = Inventory::where('id_product', $orderItem->id_product)
@@ -290,6 +307,9 @@ class PosController extends Controller
             // Update order item
             $orderItem->updateQuantity($newQuantity);
             $orderItem->notes = $request->notes;
+            $orderItem->discount_amount = $request->discount_amount ?? $orderItem->discount_amount;
+            $orderItem->discount_type = $request->discount_type ?? $orderItem->discount_type;
+            $orderItem->discount_percentage = $request->discount_percentage ?? $orderItem->discount_percentage;
             $orderItem->save();
 
             DB::commit();
@@ -300,6 +320,53 @@ class PosController extends Controller
         } catch (\Exception $e) {
             DB::rollback();
             return $this->serverErrorResponse('Failed to update item: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Update discount for specific order item
+     */
+    public function updateItemDiscount(Request $request, Order $order, OrderItem $orderItem): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'discount_amount' => 'nullable|numeric|min:0',
+            'discount_type' => 'nullable|in:fixed,percentage',
+            'discount_percentage' => 'nullable|numeric|min:0|max:100',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->validationErrorResponse($validator->errors());
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Apply discount using the model method
+            if ($request->discount_type === 'percentage') {
+                $orderItem->applyDiscount($request->discount_percentage, 'percentage');
+            } else if ($request->discount_type === 'fixed') {
+                $orderItem->applyDiscount($request->discount_amount, 'fixed');
+            } else {
+                // Clear discount
+                $orderItem->discount_amount = 0;
+                $orderItem->discount_type = null;
+                $orderItem->discount_percentage = 0;
+                $orderItem->calculateTotalPrice();
+                $orderItem->save();
+                $orderItem->order->calculateTotals();
+            }
+
+            DB::commit();
+
+            $order->load(['orderItems.product']);
+
+            return $this->successResponse([
+                'order_item' => $orderItem->fresh(),
+                'order' => $order->fresh()
+            ], 'Item discount updated successfully');
+        } catch (\Exception $e) {
+            DB::rollback();
+            return $this->serverErrorResponse('Failed to update item discount: ' . $e->getMessage());
         }
     }
 
@@ -991,6 +1058,9 @@ class PosController extends Controller
             'cart_items.*.quantity' => 'required|integer|min:1',
             'cart_items.*.unit_price' => 'required|numeric|min:0',
             'cart_items.*.subtotal' => 'required|numeric|min:0',
+            'cart_items.*.discount_amount' => 'nullable|numeric|min:0',
+            'cart_items.*.discount_type' => 'nullable|string|in:fixed,percentage',
+            'cart_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
             'order_type' => 'required|string|in:dine_in,takeaway,delivery',
             'customer_id' => 'nullable|integer|exists:customers,id_customer',
             'payment_method' => 'required|string|in:cash,card,qris,digital_wallet,bank_transfer,pending',
@@ -1071,6 +1141,10 @@ class PosController extends Controller
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
                     'total_price' => $item['subtotal'],
+                    'discount_amount' => $item['discount_amount'] ?? 0,
+                    'discount_type' => $item['discount_type'] ?? null,
+                    'discount_percentage' => $item['discount_percentage'] ?? null,
+                    'subtotal_before_discount' => $item['quantity'] * $item['unit_price'],
                 ]);
 
                 // Update inventory based on recipe consumption
@@ -1455,22 +1529,46 @@ class PosController extends Controller
      */
     private function createPendingOrder(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'cart_items' => 'required|array|min:1',
-            'cart_items.*.product_id' => 'required|integer',
-            'cart_items.*.quantity' => 'required|integer|min:1',
-            'cart_items.*.unit_price' => 'required|numeric|min:0',
-            'cart_items.*.subtotal' => 'required|numeric|min:0',
+        // Check if this is an empty open bill (no real items)
+        $isEmptyOpenBill = $request->has('cart_items') && 
+                          count($request->cart_items) == 1 && 
+                          ($request->cart_items[0]['quantity'] ?? 0) == 0;
+
+        $validationRules = [
             'order_type' => 'required|string|in:dine_in,takeaway,delivery',
             'customer_id' => 'nullable|integer|exists:customers,id_customer',
-            'subtotal_amount' => 'required|numeric|min:0',
-            'discount_amount' => 'nullable|numeric|min:0',
-            'total_amount' => 'required|numeric|min:0',
             'notes' => 'nullable|string|max:500',
             'cashier_id' => 'required|integer',
             'table_number' => 'nullable|string|max:50',
             'guest_count' => 'nullable|integer|min:1',
-        ]);
+        ];
+
+        // Add cart validation only if not empty open bill
+        if (!$isEmptyOpenBill) {
+            $validationRules = array_merge($validationRules, [
+                'cart_items' => 'required|array|min:1',
+                'cart_items.*.product_id' => 'required|integer',
+                'cart_items.*.quantity' => 'required|integer|min:1',
+                'cart_items.*.unit_price' => 'required|numeric|min:0',
+                'cart_items.*.subtotal' => 'nullable|numeric|min:0',
+                'cart_items.*.total_price' => 'nullable|numeric|min:0',
+                'cart_items.*.discount_amount' => 'nullable|numeric|min:0',
+                'cart_items.*.discount_type' => 'nullable|string|in:fixed,percentage',
+                'cart_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
+                'subtotal_amount' => 'required|numeric|min:0',
+                'total_amount' => 'required|numeric|min:0',
+            ]);
+        } else {
+            // For empty open bill, make amounts optional
+            $validationRules = array_merge($validationRules, [
+                'cart_items' => 'nullable|array',
+                'subtotal_amount' => 'nullable|numeric|min:0',
+                'discount_amount' => 'nullable|numeric|min:0',
+                'total_amount' => 'nullable|numeric|min:0',
+            ]);
+        }
+
+        $validator = Validator::make($request->all(), $validationRules);
 
         if ($validator->fails()) {
             return $this->validationErrorResponse($validator->errors());
@@ -1489,43 +1587,57 @@ class PosController extends Controller
                 'status' => 'pending',
                 'id_user' => $request->cashier_id,
                 'id_customer' => $request->customer_id,
-                'subtotal' => $request->subtotal_amount,
+                'subtotal' => $request->subtotal_amount ?? 0,
                 'discount_amount' => $request->discount_amount ?? 0,
-                'total_amount' => $request->total_amount,
+                'total_amount' => $request->total_amount ?? 0,
                 'table_number' => $request->table_number,
                 'guest_count' => $request->guest_count ?? 1,
                 'notes' => $request->notes,
                 'order_date' => now(),
             ]);
 
-            // Create order items and check inventory
-            foreach ($request->cart_items as $item) {
-                // First, verify product exists
-                $product = Product::with(['productItems.item.inventory'])->find($item['product_id']);
-                if (!$product) {
-                    throw new \Exception("Product not found for product ID: {$item['product_id']}");
+            // Create order items and check inventory (skip for empty open bill)
+            if (!$isEmptyOpenBill && !empty($request->cart_items)) {
+                foreach ($request->cart_items as $item) {
+                    // Skip empty items
+                    if (($item['quantity'] ?? 0) == 0) {
+                        continue;
+                    }
+
+                    // First, verify product exists
+                    $product = Product::with(['productItems.item.inventory'])->find($item['product_id']);
+                    if (!$product) {
+                        throw new \Exception("Product not found for product ID: {$item['product_id']}");
+                    }
+
+                    // Check stock availability based on recipe/items
+                    $canProduce = $this->calculateProductAvailability($product, $item['quantity']);
+                    
+                    if (!$canProduce['available']) {
+                        throw new \Exception("Stock tidak mencukupi untuk produk: {$product->name}. {$canProduce['message']}");
+                    }
+
+                    // Determine subtotal - check both field names
+                    $subtotal = $item['subtotal'] ?? $item['total_price'] ?? ($item['unit_price'] * $item['quantity']);
+
+                    // Create order item
+                    OrderItem::create([
+                        'id_order' => $order->id_order,
+                        'id_product' => $item['product_id'],
+                        'item_name' => $product->name,
+                        'item_sku' => $product->sku ?? 'NO-SKU',
+                        'quantity' => $item['quantity'],
+                        'unit_price' => $item['unit_price'],
+                        'total_price' => $subtotal,
+                        'discount_amount' => $item['discount_amount'] ?? 0,
+                        'discount_type' => $item['discount_type'] ?? null,
+                        'discount_percentage' => $item['discount_percentage'] ?? null,
+                        'subtotal_before_discount' => $item['quantity'] * $item['unit_price'],
+                    ]);
+
+                    // Reserve stock (don't consume yet since it's pending payment)
+                    $this->reserveRecipeItems($product, $item['quantity'], $order->id_order);
                 }
-
-                // Check stock availability based on recipe/items
-                $canProduce = $this->calculateProductAvailability($product, $item['quantity']);
-                
-                if (!$canProduce['available']) {
-                    throw new \Exception("Stock tidak mencukupi untuk produk: {$product->name}. {$canProduce['message']}");
-                }
-
-                // Create order item
-                OrderItem::create([
-                    'id_order' => $order->id_order,
-                    'id_product' => $item['product_id'],
-                    'item_name' => $product->name,
-                    'item_sku' => $product->sku ?? 'NO-SKU',
-                    'quantity' => $item['quantity'],
-                    'unit_price' => $item['unit_price'],
-                    'total_price' => $item['subtotal'],
-                ]);
-
-                // Reserve stock (don't consume yet since it's pending payment)
-                $this->reserveRecipeItems($product, $item['quantity'], $order->id_order);
             }
 
             DB::commit();

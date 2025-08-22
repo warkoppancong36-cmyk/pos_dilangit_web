@@ -38,6 +38,7 @@ class Order extends Model
         'completed_at',
         'created_by',
         'updated_by',
+        'keterangan_no_urut',
     ];
 
     protected $casts = [

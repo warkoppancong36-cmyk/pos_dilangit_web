@@ -350,6 +350,7 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
         Route::post('/orders/{order}/cancel', [PosController::class, 'cancelOrder']);
         Route::post('/orders/{order}/items', [PosController::class, 'addItem']);
         Route::put('/orders/{order}/items/{orderItem}', [PosController::class, 'updateItem']);
+        Route::put('/orders/{order}/items/{orderItem}/discount', [PosController::class, 'updateItemDiscount']);
         Route::delete('/orders/{order}/items/{orderItem}', [PosController::class, 'removeItem']);
         Route::post('/orders/{order}/discount', [PosController::class, 'applyDiscount']);
         Route::post('/orders/{order}/tax', [PosController::class, 'applyTax']);
