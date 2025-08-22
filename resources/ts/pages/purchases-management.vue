@@ -215,7 +215,7 @@
               @click="editPurchase(item)"
             />
             <VBtn
-              v-if="['ordered', 'received'].includes(item.status)"
+              v-if="['ordered', 'received', 'completed'].includes(item.status)"
               icon="mdi-truck-delivery"
               size="small"
               variant="text"
