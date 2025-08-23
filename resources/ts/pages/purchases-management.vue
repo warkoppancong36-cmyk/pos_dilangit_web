@@ -83,7 +83,8 @@
           <VCol cols="12" md="3">
             <VTextField
               v-model="filters.search"
-              label="Cari Purchase Number"
+              label="Cari Purchase Number atau Supplier"
+              placeholder="Masukkan nomor purchase atau nama supplier"
               prepend-inner-icon="mdi-magnify"
               variant="outlined"
               density="compact"

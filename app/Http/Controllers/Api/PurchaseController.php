@@ -41,9 +41,15 @@ class PurchaseController extends Controller
                 $query->whereDate('purchase_date', '<=', $request->end_date);
             }
 
-            // Search by purchase number
+            // Search by purchase number or supplier name
             if ($request->has('search') && !empty($request->search)) {
-                $query->where('purchase_number', 'like', '%' . $request->search . '%');
+                $searchTerm = $request->search;
+                $query->where(function($q) use ($searchTerm) {
+                    $q->where('purchase_number', 'like', '%' . $searchTerm . '%')
+                      ->orWhereHas('supplier', function($supplierQuery) use ($searchTerm) {
+                          $supplierQuery->where('name', 'like', '%' . $searchTerm . '%');
+                      });
+                });
             }
 
             $purchases = $query->paginate($request->get('per_page', 15));
