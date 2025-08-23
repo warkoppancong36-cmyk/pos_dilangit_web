@@ -1063,10 +1063,13 @@ class PosController extends Controller
             'cart_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
             'order_type' => 'required|string|in:dine_in,takeaway,delivery',
             'customer_id' => 'nullable|integer|exists:customers,id_customer',
-            'payment_method' => 'required|string|in:cash,card,qris,digital_wallet,bank_transfer,pending',
+            'payment_method' => 'required|string|in:cash,card,qris,digital_wallet,bank_transfer,pending,tunai', // Added 'tunai'
             'subtotal_amount' => 'required|numeric|min:0',
             'discount_amount' => 'nullable|numeric|min:0',
             'discount_type' => 'nullable|string|in:amount,percentage',
+            'discount_code' => 'nullable|string', // Added for Flutter compatibility
+            'discount_code_id' => 'nullable|integer', // Added for Flutter compatibility
+            'applied_promotions' => 'nullable|array', // Added for Flutter compatibility
             'tax_percentage' => 'nullable|numeric|min:0|max:100',
             'tax_amount' => 'nullable|numeric|min:0',
             'total_amount' => 'required|numeric|min:0',
@@ -1075,19 +1078,25 @@ class PosController extends Controller
             'reference_number' => 'nullable|string|max:255',
             'notes' => 'nullable|string|max:500',
             'cashier_id' => 'required|integer',
+            'transaction_date' => 'nullable|string', // Added for Flutter compatibility
         ]);
 
         if ($validator->fails()) {
+            Log::warning('Payment validation failed', [
+                'errors' => $validator->errors(),
+                'request_data' => $request->all()
+            ]);
             return $this->validationErrorResponse($validator->errors());
         }
 
-        // Validate payment amount for cash transactions
-        if ($request->payment_method === 'cash' && $request->paid_amount < $request->total_amount) {
+        // Validate payment amount for cash transactions (handle both 'cash' and 'tunai')
+        if (in_array($request->payment_method, ['cash', 'tunai']) && $request->paid_amount < $request->total_amount) {
             return $this->errorResponse('Jumlah bayar tidak mencukupi untuk pembayaran tunai', 422);
         }
 
         // Map frontend payment method to database enum values
         $paymentMethodMap = [
+            'tunai' => 'cash',  // Flutter app sends 'tunai' but we need 'cash'
             'card' => 'credit_card',
             'digital_wallet' => 'gopay', // default digital wallet
             // Add other mappings as needed
@@ -1541,6 +1550,12 @@ class PosController extends Controller
             'cashier_id' => 'required|integer',
             'table_number' => 'nullable|string|max:50',
             'guest_count' => 'nullable|integer|min:1',
+            // Flutter compatibility fields
+            'discount_code' => 'nullable|string',
+            'discount_code_id' => 'nullable|integer',
+            'applied_promotions' => 'nullable|array',
+            'transaction_date' => 'nullable|string',
+            'payment_method' => 'nullable|string',
         ];
 
         // Add cart validation only if not empty open bill
