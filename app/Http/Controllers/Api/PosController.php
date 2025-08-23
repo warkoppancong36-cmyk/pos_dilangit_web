@@ -1196,6 +1196,7 @@ class PosController extends Controller
             return $this->successResponse([
                 'id' => $order->id_order,
                 'transaction_number' => $order->order_number,
+                'table_number' => $order->table_number,
                 'total_amount' => $order->total_amount,
                 'paid_amount' => $request->paid_amount,
                 'change_amount' => $request->change_amount,
