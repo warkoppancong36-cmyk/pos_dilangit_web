@@ -160,6 +160,7 @@
                     prepend-inner-icon="tabler-package"
                     clearable
                     :error-messages="errors.ingredient_item_id"
+                    :color="isDuplicateIngredient ? 'warning' : 'primary'"
                     @update:model-value="updateSelectedIngredient"
                     :no-data-text="'Tidak ada item tersedia'"
                   >
@@ -178,6 +179,18 @@
                       </VListItem>
                     </template>
                   </VAutocomplete>
+                  
+                  <!-- Duplicate Warning -->
+                  <VAlert
+                    v-if="isDuplicateIngredient"
+                    type="warning"
+                    variant="tonal"
+                    density="compact"
+                    class="mt-2"
+                  >
+                    <VIcon icon="mdi-alert" class="me-2" />
+                    Item ini sudah ada dalam daftar komposisi
+                  </VAlert>
                 </VCol>
 
                 <!-- Quantity -->
@@ -440,7 +453,10 @@ const ingredientItems = computed(() => {
 })
 
 const canSubmit = computed(() => {
-  return form.base_product_id && (form.ingredient_item_id || form.ingredient_base_product_id) && form.quantity > 0
+  return form.base_product_id && 
+         (form.ingredient_item_id || form.ingredient_base_product_id) && 
+         form.quantity > 0 &&
+         !isDuplicateIngredient.value
 })
 
 const calculatedCost = computed(() => {
@@ -467,6 +483,32 @@ const maxProducibleQuantity = computed(() => {
     console.error('Error calculating max quantity:', error)
     return 0
   }
+})
+
+// Check if current selected ingredient already exists in compositions
+const isDuplicateIngredient = computed(() => {
+  if (!form.ingredient_item_id && !form.ingredient_base_product_id) return false
+  
+  const duplicate = existingCompositions.value.some(comp => {
+    if (form.ingredient_item_id && comp.ingredient_item_id === form.ingredient_item_id) {
+      console.log('Duplicate found - ingredient_item_id:', form.ingredient_item_id, 'in composition:', comp)
+      return true
+    }
+    if (form.ingredient_base_product_id && comp.ingredient_base_product_id === form.ingredient_base_product_id) {
+      console.log('Duplicate found - ingredient_base_product_id:', form.ingredient_base_product_id, 'in composition:', comp)
+      return true
+    }
+    return false
+  })
+  
+  console.log('Duplicate check:', {
+    ingredient_item_id: form.ingredient_item_id,
+    ingredient_base_product_id: form.ingredient_base_product_id,
+    existingCompositions: existingCompositions.value.length,
+    isDuplicate: duplicate
+  })
+  
+  return duplicate
 })
 
 // Helper functions
@@ -545,12 +587,13 @@ const resetForm = () => {
   errors.value = {}
 }
 
-const updateSelectedBaseProduct = () => {
+const updateSelectedBaseProduct = async () => {
   const baseProductId = Number(form.base_product_id)
   if (baseProductId) {
     selectedBaseProduct.value = props.baseProducts.find(bp => bp.id_base_product === baseProductId) || null
-    loadExistingCompositions()
-    loadItems() // Load items when base product is selected
+    // Load items first, then load existing compositions to ensure proper ingredient data
+    await loadItems()
+    await loadExistingCompositions()
   } else {
     selectedBaseProduct.value = null
     existingCompositions.value = []
@@ -586,19 +629,59 @@ const loadExistingCompositions = async () => {
   if (!form.base_product_id) return
   
   try {
+    console.log('Loading existing compositions for base_product_id:', form.base_product_id)
     const response = await axios.get(`/api/base-product-compositions?base_product_id=${form.base_product_id}`)
+    console.log('API Response:', response.data)
+    
     if (response.data.success) {
       const compositions = response.data.data.data || []
-      // Mark existing compositions as saved (not temporary)
+      console.log('Raw compositions from API:', compositions)
+      
+      // Mark existing compositions as saved (not temporary) and ensure proper data structure
       compositions.forEach(comp => {
         comp.is_temporary = false
+        console.log('Processing composition:', {
+          id: comp.id,
+          ingredient_item_id: comp.ingredient_item_id,
+          ingredient_base_product_id: comp.ingredient_base_product_id,
+          ingredient_item: comp.ingredient_item,
+          ingredient_base_product: comp.ingredient_base_product
+        })
+        
+        // Ensure ingredient data is properly loaded
+        if (comp.ingredient_item_id && !comp.ingredient_item) {
+          // Find matching item data
+          const matchingItem = items.value.find(item => item.id_item === comp.ingredient_item_id)
+          if (matchingItem) {
+            comp.ingredient_item = matchingItem
+            console.log('Linked ingredient item:', matchingItem.name)
+          } else {
+            console.warn('Could not find matching item for id:', comp.ingredient_item_id)
+          }
+        }
       })
+      
       existingCompositions.value = compositions
+      console.log('Final existingCompositions:', existingCompositions.value)
     }
   } catch (error) {
     console.error('Error loading compositions:', error)
+    if (error.response) {
+      console.error('Error response:', error.response.data)
+    }
   }
 }
+
+// Watch for modal open to ensure data is loaded
+watch(() => props.show, (newValue) => {
+  if (newValue) {
+    console.log('Modal opened, ensuring data is loaded')
+    loadItems()
+    if (form.base_product_id) {
+      loadExistingCompositions()
+    }
+  }
+}, { immediate: true })
 
 watch(() => props.composition, (newValue) => {
   if (newValue) {
@@ -630,8 +713,40 @@ const calculateCost = () => {
 }
 
 const handleSubmit = async () => {
+  console.log('=== HANDLE SUBMIT START ===')
+  console.log('Form state:', {
+    base_product_id: form.base_product_id,
+    ingredient_item_id: form.ingredient_item_id,
+    ingredient_base_product_id: form.ingredient_base_product_id,
+    quantity: form.quantity
+  })
+  console.log('Existing compositions count:', existingCompositions.value.length)
+  console.log('Can submit:', canSubmit.value)
+  console.log('Is duplicate:', isDuplicateIngredient.value)
+  
   if (!canSubmit.value) {
     console.log('Cannot submit - validation failed')
+    return
+  }
+
+  // Check for duplicate in existing compositions (both saved and temporary)
+  const isDuplicate = existingCompositions.value.some(comp => {
+    if (form.ingredient_item_id && comp.ingredient_item_id === form.ingredient_item_id) {
+      console.log('DUPLICATE FOUND - ingredient_item_id match:', form.ingredient_item_id)
+      return true
+    }
+    if (form.ingredient_base_product_id && comp.ingredient_base_product_id === form.ingredient_base_product_id) {
+      console.log('DUPLICATE FOUND - ingredient_base_product_id match:', form.ingredient_base_product_id)
+      return true
+    }
+    return false
+  })
+
+  if (isDuplicate) {
+    console.log('Duplicate detected, showing error')
+    errors.value = { 
+      general: 'Item ini sudah ada dalam daftar komposisi. Silakan pilih item yang berbeda.' 
+    }
     return
   }
 
@@ -696,11 +811,18 @@ const saveAllCompositions = async () => {
 
   loading.value = true
   errors.value = {}
+  let successCount = 0
+  let errorMessages: string[] = []
 
   try {
     // Save all temporary/unsaved compositions
-    for (const composition of existingCompositions.value) {
-      if (composition.is_temporary || !composition.id || composition.id > 1000000) { // temporary ID
+    const compositionsToSave = existingCompositions.value.filter(comp => 
+      comp.is_temporary || !comp.id || comp.id > 1000000
+    )
+    
+    for (let i = compositionsToSave.length - 1; i >= 0; i--) {
+      const composition = compositionsToSave[i]
+      try {
         const payload: any = {
           base_product_id: composition.base_product_id,
           quantity: composition.quantity,
@@ -718,22 +840,70 @@ const saveAllCompositions = async () => {
         }
 
         await axios.post('/api/base-product-compositions', payload)
+        successCount++
+        
+        // Remove from temporary list since it's now saved
+        const originalIndex = existingCompositions.value.findIndex(c => c.id === composition.id)
+        if (originalIndex > -1) {
+          existingCompositions.value.splice(originalIndex, 1)
+        }
+        
+      } catch (itemError: any) {
+        console.error('Error saving individual composition:', itemError)
+        const ingredientName = getIngredientName(composition)
+        
+        if (itemError.response?.status === 422 && itemError.response?.data?.message?.includes('already exists')) {
+          errorMessages.push(`${ingredientName}: Item sudah ada dalam komposisi`)
+          // Remove duplicate item from local list
+          const originalIndex = existingCompositions.value.findIndex(c => c.id === composition.id)
+          if (originalIndex > -1) {
+            existingCompositions.value.splice(originalIndex, 1)
+          }
+        } else {
+          errorMessages.push(`${ingredientName}: ${itemError.response?.data?.message || 'Gagal menyimpan'}`)
+        }
       }
     }
 
-    emit('save', { success: true })
-    emit('close')
+    // Show results
+    if (successCount > 0 && errorMessages.length === 0) {
+      // All successful
+      emit('save', { success: true })
+      emit('close')
+    } else if (successCount > 0 && errorMessages.length > 0) {
+      // Partial success
+      errors.value = { 
+        general: `${successCount} item berhasil disimpan. Errors: ${errorMessages.join(', ')}` 
+      }
+      // Reload to refresh the list
+      await loadExistingCompositions()
+    } else {
+      // All failed
+      errors.value = { 
+        general: `Gagal menyimpan komposisi: ${errorMessages.join(', ')}` 
+      }
+    }
   } catch (error: any) {
     console.error('Error saving compositions:', error)
-    if (error.response?.data?.errors) {
-      errors.value = error.response.data.errors
-    } else {
-      errors.value = { general: error.response?.data?.message || 'Failed to save compositions' }
-    }
+    errors.value = { general: 'Failed to save compositions: ' + (error.message || 'Unknown error') }
   } finally {
     loading.value = false
   }
 }
+
+// Debug function
+const debugLogState = () => {
+  console.log('=== DEBUG STATE ===')
+  console.log('Form:', form)
+  console.log('Existing compositions:', existingCompositions.value)
+  console.log('Selected ingredient:', selectedIngredient.value)
+  console.log('Is duplicate:', isDuplicateIngredient.value)
+  console.log('Can submit:', canSubmit.value)
+  console.log('Items loaded:', items.value.length)
+}
+
+// Make console available in template
+window.console = console
 </script>
 
 <style scoped>

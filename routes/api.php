@@ -498,6 +498,16 @@ Route::prefix('master-slave-test')->group(function () {
     Route::get('/database-stats', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'getDatabaseStats']);
 });
 
+    // Base Product Composition Routes
+    Route::prefix('base-product-compositions')->group(function () {
+        Route::get('/', [BaseProductCompositionController::class, 'index']);
+        Route::post('/', [BaseProductCompositionController::class, 'store']);
+        Route::get('/{composition}', [BaseProductCompositionController::class, 'show']);
+        Route::put('/{composition}', [BaseProductCompositionController::class, 'update']);
+        Route::delete('/{composition}', [BaseProductCompositionController::class, 'destroy']);
+        Route::post('/{composition}/toggle-status', [BaseProductCompositionController::class, 'toggleStatus']);
+    });
+
     // Asset Management Routes
     Route::prefix('assets')->group(function () {
         Route::get('/', [App\Http\Controllers\Api\AssetController::class, 'index']);
