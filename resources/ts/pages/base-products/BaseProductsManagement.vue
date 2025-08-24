@@ -7,6 +7,7 @@
       </div>
       <div class="d-flex gap-3 align-center">
         <VBtn
+          v-if="activeTab === 'base-products'"
           color="primary"
           prepend-icon="mdi-plus"
           class="coffee-btn"
@@ -16,188 +17,372 @@
         >
           Tambah Base Product
         </VBtn>
+        <VBtn
+          v-if="activeTab === 'compositions'"
+          color="primary"
+          prepend-icon="tabler-vector-triangle"
+          class="coffee-btn"
+          :loading="loading"
+          :disabled="loading"
+          @click="openCompositionCreateDialog"
+        >
+          Tambah Komposisi
+        </VBtn>
       </div>
     </div>
 
-    <!-- Filters -->
-    <VCard class="mb-6">
-      <VCardText>
-        <VRow>
-          <VCol cols="12" md="3">
-            <VTextField
-              v-model="filters.search"
-              @input="debouncedSearch"
-              label="Search"
-              placeholder="Search by name, SKU..."
-              prepend-inner-icon="mdi-magnify"
-              clearable
-              hide-details
-            />
-          </VCol>
+    <!-- Tabs -->
+    <VTabs v-model="activeTab" class="mb-6">
+      <VTab value="base-products">
+        <VIcon icon="tabler-package" class="me-2" />
+        Base Products
+      </VTab>
+      <VTab value="compositions">
+        <VIcon icon="tabler-vector-triangle" class="me-2" />
+        Komposisi
+      </VTab>
+    </VTabs>
 
-          <VCol cols="12" md="3">
-            <VSelect
-              v-model="filters.category_id"
-              @update:model-value="loadBaseProducts"
-              :items="categoryItems"
-              label="Category"
-              clearable
-              hide-details
-            />
-          </VCol>
+    <!-- Tab Content -->
+    <VWindow v-model="activeTab">
+      <!-- Base Products Tab -->
+      <VWindowItem value="base-products">
+        <!-- Filters -->
+        <VCard class="mb-6">
+          <VCardText>
+            <VRow>
+              <VCol cols="12" md="3">
+                <VTextField
+                  v-model="filters.search"
+                  @input="debouncedSearch"
+                  label="Search"
+                  placeholder="Search by name, SKU..."
+                  prepend-inner-icon="mdi-magnify"
+                  clearable
+                  hide-details
+                />
+              </VCol>
 
-          <VCol cols="12" md="3">
-            <VSelect
-              v-model="filters.stock_status"
-              @update:model-value="loadBaseProducts"
-              :items="stockStatusItems"
-              label="Stock Status"
-              clearable
-              hide-details
-            />
-          </VCol>
+              <VCol cols="12" md="3">
+                <VSelect
+                  v-model="filters.category_id"
+                  @update:model-value="loadBaseProducts"
+                  :items="categoryItems"
+                  label="Category"
+                  clearable
+                  hide-details
+                />
+              </VCol>
 
-          <VCol cols="12" md="3">
-            <VSelect
-              v-model="filters.is_active"
-              @update:model-value="loadBaseProducts"
-              :items="statusItems"
-              label="Status"
-              clearable
-              hide-details
-            />
-          </VCol>
-        </VRow>
-      </VCardText>
-    </VCard>
+              <VCol cols="12" md="3">
+                <VSelect
+                  v-model="filters.stock_status"
+                  @update:model-value="loadBaseProducts"
+                  :items="stockStatusItems"
+                  label="Stock Status"
+                  clearable
+                  hide-details
+                />
+              </VCol>
 
-    <!-- Main Content -->
-    <VCard>
-      <VDataTableServer
-        v-model:page="pagination.current_page"
-          v-model:items-per-page="pagination.per_page"
-          :headers="headers"
-          :items="baseProducts || []"
-          :items-length="pagination.total"
-          :loading="loading"
-          item-value="id_base_product"
-          @update:options="loadBaseProducts"
-        >
-          <!-- Image -->
-          <template #item.image_url="{ item }">
-            <VAvatar size="40" rounded>
-              <VImg
-                v-if="item.image_url"
-                :src="item.image_url"
-                :alt="item.name"
-              />
-              <VIcon v-else icon="mdi-package-variant" />
-            </VAvatar>
-          </template>
+              <VCol cols="12" md="3">
+                <VSelect
+                  v-model="filters.is_active"
+                  @update:model-value="loadBaseProducts"
+                  :items="statusItems"
+                  label="Status"
+                  clearable
+                  hide-details
+                />
+              </VCol>
+            </VRow>
+          </VCardText>
+        </VCard>
 
-          <!-- Name with SKU -->
-          <template #item.name="{ item }">
-            <div>
-              <div class="font-medium">{{ item.name }}</div>
-              <div class="text-sm text-gray-500">SKU: {{ item.sku || 'No SKU' }}</div>
-            </div>
-          </template>
-
-          <!-- Category -->
-          <template #item.category="{ item }">
-            <VChip
-              v-if="item.category"
-              size="small"
-              variant="outlined"
+        <!-- Main Content -->
+        <VCard>
+          <VDataTableServer
+            v-model:page="pagination.current_page"
+              v-model:items-per-page="pagination.per_page"
+              :headers="headers"
+              :items="baseProducts || []"
+              :items-length="pagination.total"
+              :loading="loading"
+              item-value="id_base_product"
+              @update:options="loadBaseProducts"
             >
-              {{ item.category.name }}
-            </VChip>
-            <span v-else class="text-gray-400">No Category</span>
-          </template>
+            <!-- Image -->
+            <template #item.image_url="{ item }">
+              <VAvatar size="40" rounded>
+                <VImg
+                  v-if="item.image_url"
+                  :src="item.image_url"
+                  :alt="item.name"
+                />
+                <VIcon v-else icon="mdi-package-variant" />
+              </VAvatar>
+            </template>
 
-          <!-- Stock -->
-          <template #item.stock="{ item }">
-            <div>
-              <div class="font-medium">{{ formatNumber(item.current_stock) }} {{ item.unit }}</div>
-              <div class="text-sm text-gray-500">Min: {{ formatNumber(item.min_stock) }}</div>
-            </div>
-          </template>
+            <!-- Name with SKU -->
+            <template #item.name="{ item }">
+              <div>
+                <div class="font-medium">{{ item.name }}</div>
+                <div class="text-sm text-gray-500">SKU: {{ item.sku || 'No SKU' }}</div>
+              </div>
+            </template>
 
-          <!-- Stock Status -->
-          <template #item.stock_status="{ item }">
-            <VChip
-              :color="getStockStatusColor(item.stock_status)"
-              size="small"
-              variant="flat"
-            >
-              {{ getStatusLabel(item.stock_status) }}
-            </VChip>
-          </template>
-
-          <!-- Cost -->
-          <template #item.cost="{ item }">
-            <div class="text-right">
-              <div class="font-medium">{{ item.formatted_cost }}</div>
-              <div class="text-sm text-gray-500">per {{ item.unit }}</div>
-            </div>
-          </template>
-
-          <!-- Status -->
-          <template #item.is_active="{ item }">
-            <VChip
-              :color="item.is_active ? 'success' : 'error'"
-              size="small"
-              variant="flat"
-            >
-              {{ item.is_active ? 'Active' : 'Inactive' }}
-            </VChip>
-          </template>
-
-          <!-- Actions -->
-          <template #item.actions="{ item }">
-            <div class="d-flex gap-2">
-              <VBtn
-                @click="openStockModal(item)"
-                color="primary"
-                variant="text"
+            <!-- Category -->
+            <template #item.category="{ item }">
+              <VChip
+                v-if="item.category"
                 size="small"
-                icon="mdi-package-variant"
-              />
-              <VBtn
-                @click="openEditModal(item)"
-                color="primary"
-                variant="text"
-                size="small"
-                icon="mdi-pencil"
-              />
-              <VBtn
-                @click="deleteBaseProduct(item)"
-                color="error"
-                variant="text"
-                size="small"
-                icon="mdi-delete"
-              />
-            </div>
-          </template>
-
-          <!-- Empty state -->
-          <template #no-data>
-            <div class="text-center py-12">
-              <VIcon icon="mdi-package-variant" size="64" class="text-gray-400 mb-4" />
-              <h3 class="text-lg font-medium text-gray-900 mb-2">No base products</h3>
-              <p class="text-gray-500 mb-6">Get started by creating a new base product.</p>
-              <VBtn
-                @click="openCreateModal"
-                color="primary"
-                prepend-icon="mdi-plus"
+                variant="outlined"
               >
-                Add Base Product
-              </VBtn>
-            </div>
-          </template>
-        </VDataTableServer>
-      </VCard>
-    </div>
+                {{ item.category.name }}
+              </VChip>
+              <span v-else class="text-gray-400">No Category</span>
+            </template>
+
+            <!-- Stock -->
+            <template #item.stock="{ item }">
+              <div>
+                <div class="font-medium">{{ formatNumber(item.current_stock) }} {{ item.unit }}</div>
+                <div class="text-sm text-gray-500">Min: {{ formatNumber(item.min_stock) }}</div>
+              </div>
+            </template>
+
+            <!-- Stock Status -->
+            <template #item.stock_status="{ item }">
+              <VChip
+                :color="getStockStatusColor(item.stock_status)"
+                size="small"
+                variant="flat"
+              >
+                {{ getStatusLabel(item.stock_status) }}
+              </VChip>
+            </template>
+
+            <!-- Cost -->
+            <template #item.cost="{ item }">
+              <div class="text-right">
+                <div class="font-medium">{{ item.formatted_cost }}</div>
+                <div class="text-sm text-gray-500">per {{ item.unit }}</div>
+              </div>
+            </template>
+
+            <!-- Status -->
+            <template #item.is_active="{ item }">
+              <VChip
+                :color="item.is_active ? 'success' : 'error'"
+                size="small"
+                variant="flat"
+              >
+                {{ item.is_active ? 'Active' : 'Inactive' }}
+              </VChip>
+            </template>
+
+            <!-- Actions -->
+            <template #item.actions="{ item }">
+              <div class="d-flex gap-2">
+                <VBtn
+                  @click="openStockModal(item)"
+                  color="primary"
+                  variant="text"
+                  size="small"
+                  icon="mdi-package-variant"
+                />
+                <VBtn
+                  @click="openEditModal(item)"
+                  color="primary"
+                  variant="text"
+                  size="small"
+                  icon="mdi-pencil"
+                />
+                <VBtn
+                  @click="deleteBaseProduct(item)"
+                  color="error"
+                  variant="text"
+                  size="small"
+                  icon="mdi-delete"
+                />
+              </div>
+            </template>
+
+            <!-- Empty state -->
+            <template #no-data>
+              <div class="text-center py-12">
+                <VIcon icon="mdi-package-variant" size="64" class="text-gray-400 mb-4" />
+                <h3 class="text-lg font-medium text-gray-900 mb-2">No base products</h3>
+                <p class="text-gray-500 mb-6">Get started by creating a new base product.</p>
+                <VBtn
+                  @click="openCreateModal"
+                  color="primary"
+                  prepend-icon="mdi-plus"
+                >
+                  Add Base Product
+                </VBtn>
+              </div>
+            </template>
+          </VDataTableServer>
+        </VCard>
+      </VWindowItem>
+
+      <!-- Compositions Tab -->
+      <VWindowItem value="compositions">
+        <!-- Composition Filters -->
+        <VCard class="mb-6">
+          <VCardText>
+            <VRow>
+              <VCol cols="12" md="4">
+                <VTextField
+                  v-model="compositionFilters.search"
+                  @input="debouncedCompositionSearch"
+                  label="Search"
+                  placeholder="Search compositions..."
+                  prepend-inner-icon="mdi-magnify"
+                  clearable
+                  hide-details
+                />
+              </VCol>
+              <VCol cols="12" md="4">
+                <VAutocomplete
+                  v-model="compositionFilters.base_product_id"
+                  @update:model-value="loadCompositions"
+                  :items="baseProducts"
+                  item-title="name"
+                  item-value="id_base_product"
+                  label="Base Product"
+                  clearable
+                  hide-details
+                />
+              </VCol>
+              <VCol cols="12" md="4">
+                <VSelect
+                  v-model="compositionFilters.is_active"
+                  @update:model-value="loadCompositions"
+                  :items="statusItems"
+                  label="Status"
+                  clearable
+                  hide-details
+                />
+              </VCol>
+            </VRow>
+          </VCardText>
+        </VCard>
+
+        <!-- Compositions Table -->
+        <VCard>
+          <VDataTableServer
+            v-model:page="compositionPagination.current_page"
+            v-model:items-per-page="compositionPagination.per_page"
+            :headers="compositionHeaders"
+            :items="compositions || []"
+            :items-length="compositionPagination.total"
+            :loading="compositionsLoading"
+            item-value="id"
+            @update:options="loadCompositions"
+          >
+            <!-- Base Product -->
+            <template #item.base_product="{ item }">
+              <div class="d-flex align-center gap-3">
+                <VAvatar size="30">
+                  <VImg
+                    v-if="item.base_product?.image_url"
+                    :src="item.base_product.image_url"
+                    :alt="item.base_product.name"
+                  />
+                  <VIcon v-else icon="tabler-package" size="16" />
+                </VAvatar>
+                <div>
+                  <div class="font-medium">{{ item.base_product?.name }}</div>
+                  <div class="text-sm text-gray-500">{{ item.base_product?.sku }}</div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Ingredient -->
+            <template #item.ingredient="{ item }">
+              <div class="d-flex align-center gap-3">
+                <VAvatar size="30">
+                  <VImg
+                    v-if="item.ingredient_base_product?.image_url"
+                    :src="item.ingredient_base_product.image_url"
+                    :alt="item.ingredient_base_product.name"
+                  />
+                  <VIcon v-else icon="tabler-bottle" size="16" />
+                </VAvatar>
+                <div>
+                  <div class="font-medium">{{ item.ingredient_base_product?.name }}</div>
+                  <div class="text-sm text-gray-500">{{ item.ingredient_base_product?.sku }}</div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Quantity -->
+            <template #item.quantity="{ item }">
+              <div>
+                <div class="font-medium">{{ formatNumber(item.quantity) }}</div>
+                <div class="text-sm text-gray-500">{{ item.ingredient_base_product?.unit }}</div>
+              </div>
+            </template>
+
+            <!-- Total Cost -->
+            <template #item.total_cost="{ item }">
+              <div class="text-right font-medium">
+                {{ formatCurrency((item.ingredient_base_product?.cost_per_unit || 0) * item.quantity) }}
+              </div>
+            </template>
+
+            <!-- Status -->
+            <template #item.is_active="{ item }">
+              <VChip
+                :color="item.is_active ? 'success' : 'error'"
+                size="small"
+                variant="flat"
+              >
+                {{ item.is_active ? 'Active' : 'Inactive' }}
+              </VChip>
+            </template>
+
+            <!-- Actions -->
+            <template #item.actions="{ item }">
+              <div class="d-flex gap-2">
+                <VBtn
+                  @click="openCompositionEditDialog(item)"
+                  color="primary"
+                  variant="text"
+                  size="small"
+                  icon="tabler-edit"
+                />
+                <VBtn
+                  @click="deleteComposition(item)"
+                  color="error"
+                  variant="text"
+                  size="small"
+                  icon="tabler-trash"
+                />
+              </div>
+            </template>
+
+            <!-- Empty state -->
+            <template #no-data>
+              <div class="text-center py-12">
+                <VIcon icon="tabler-vector-triangle" size="64" class="text-gray-400 mb-4" />
+                <h3 class="text-lg font-medium text-gray-900 mb-2">No compositions</h3>
+                <p class="text-gray-500 mb-6">Create compositions to define ingredient relationships.</p>
+                <VBtn
+                  @click="openCompositionCreateDialog"
+                  color="primary"
+                  prepend-icon="tabler-plus"
+                >
+                  Add Composition
+                </VBtn>
+              </div>
+            </template>
+          </VDataTableServer>
+        </VCard>
+      </VWindowItem>
+    </VWindow>
 
     <!-- Create/Edit Modal -->
     <BaseProductModal
@@ -215,6 +400,20 @@
       @close="closeStockModal"
       @updated="handleStockUpdated"
     />
+
+    <!-- Composition Modal -->
+    <BaseProductCompositionModal
+      :show="compositionDialog"
+      :composition="selectedComposition"
+      :base-products="baseProducts"
+      :base-products-loading="loading"
+      :edit-mode="compositionEditMode"
+      @close="closeCompositionDialog"
+      @save="saveComposition"
+    />
+  </div>
+      @updated="handleStockUpdated"
+    />
 </template>
 
 <script>
@@ -222,15 +421,18 @@ import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { debounce } from 'lodash'
 import BaseProductModal from './BaseProductModal.vue'
 import StockUpdateModal from './StockUpdateModal.vue'
+import BaseProductCompositionModal from './BaseProductCompositionModal.vue'
 import { useBaseProductStore } from '@/stores/baseProduct'
 import { useNotification } from '@/composables/useNotification'
 import { CategoriesApi } from '@/utils/api/CategoriesApi'
+import axios from 'axios'
 
 export default {
   name: 'BaseProductsManagement',
   components: {
     BaseProductModal,
-    StockUpdateModal
+    StockUpdateModal,
+    BaseProductCompositionModal
   },
   setup() {
     const baseProductStore = useBaseProductStore()
@@ -249,6 +451,41 @@ export default {
     })
     const categories = ref([])
     const categoriesLoading = ref(false)
+    
+    // Tab management
+    const activeTab = ref('base-products')
+    
+    // Composition state
+    const compositions = ref([])
+    const compositionsLoading = ref(false)
+    const compositionDialog = ref(false)
+    const compositionEditMode = ref(false)
+    const selectedComposition = ref(null)
+    const compositionPagination = reactive({
+      current_page: 1,
+      last_page: 1,
+      per_page: 15,
+      total: 0,
+      from: 0,
+      to: 0
+    })
+    
+    // Composition filters
+    const compositionFilters = reactive({
+      search: '',
+      base_product_id: '',
+      is_active: ''
+    })
+    
+    // Composition headers
+    const compositionHeaders = ref([
+      { title: 'Base Product', key: 'base_product', sortable: false },
+      { title: 'Ingredient', key: 'ingredient', sortable: false },
+      { title: 'Quantity', key: 'quantity', sortable: true },
+      { title: 'Total Cost', key: 'total_cost', sortable: false },
+      { title: 'Status', key: 'is_active', sortable: true },
+      { title: 'Actions', key: 'actions', sortable: false, width: 120 }
+    ])
     const showModal = ref(false)
     const showStockModal = ref(false)
     const selectedBaseProduct = ref(null)
@@ -440,6 +677,115 @@ export default {
       }).format(number || 0)
     }
 
+    const formatCurrency = (number) => {
+      return new Intl.NumberFormat('id-ID', {
+        style: 'currency',
+        currency: 'IDR',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(number || 0)
+    }
+
+    // Composition methods
+    const loadCompositions = async (page = 1) => {
+      try {
+        compositionsLoading.value = true
+        const params = {
+          page: page || compositionPagination.current_page,
+          per_page: compositionPagination.per_page,
+          ...compositionFilters
+        }
+        
+        const response = await axios.get('/api/base-product-compositions', { params })
+        
+        if (response.data.success) {
+          compositions.value = response.data.data.data || []
+          Object.assign(compositionPagination, {
+            current_page: response.data.data.current_page || 1,
+            last_page: response.data.data.last_page || 1,
+            per_page: response.data.data.per_page || 15,
+            total: response.data.data.total || 0,
+            from: response.data.data.from || 0,
+            to: response.data.data.to || 0
+          })
+        }
+      } catch (error) {
+        console.error('Error loading compositions:', error)
+        showError('Failed to load compositions')
+      } finally {
+        compositionsLoading.value = false
+      }
+    }
+
+    const debouncedCompositionSearch = debounce(() => {
+      loadCompositions(1)
+    }, 300)
+
+    const openCompositionCreateDialog = () => {
+      selectedComposition.value = null
+      compositionEditMode.value = false
+      compositionDialog.value = true
+    }
+
+    const openCompositionEditDialog = (composition) => {
+      selectedComposition.value = composition
+      compositionEditMode.value = true
+      compositionDialog.value = true
+    }
+
+    const closeCompositionDialog = () => {
+      compositionDialog.value = false
+      selectedComposition.value = null
+      compositionEditMode.value = false
+    }
+
+    const saveComposition = async (compositionData) => {
+      try {
+        if (compositionEditMode.value && selectedComposition.value) {
+          // Update existing composition
+          const response = await axios.put(`/api/base-product-compositions/${selectedComposition.value.id}`, compositionData)
+          if (response.data.success) {
+            showSuccess('Composition updated successfully')
+            await loadCompositions()
+            closeCompositionDialog()
+          }
+        } else {
+          // Create new composition
+          const response = await axios.post('/api/base-product-compositions', compositionData)
+          if (response.data.success) {
+            showSuccess('Composition created successfully')
+            await loadCompositions()
+            closeCompositionDialog()
+          }
+        }
+      } catch (error) {
+        console.error('Error saving composition:', error)
+        showError(error.response?.data?.message || 'Failed to save composition')
+      }
+    }
+
+    const deleteComposition = async (composition) => {
+      if (confirm(`Are you sure you want to delete this composition?`)) {
+        try {
+          const response = await axios.delete(`/api/base-product-compositions/${composition.id}`)
+          if (response.data.success) {
+            showSuccess('Composition deleted successfully')
+            await loadCompositions()
+          }
+        } catch (error) {
+          console.error('Error deleting composition:', error)
+          showError('Failed to delete composition')
+        }
+      }
+    }
+
+    // Watch active tab to load data
+    watch(activeTab, (newTab) => {
+      if (newTab === 'compositions') {
+        loadCompositions()
+      }
+    })
+
     // Lifecycle
     onMounted(async () => {
       console.log('Component mounted, loading data...')
@@ -453,6 +799,7 @@ export default {
     }, { deep: true })
 
     return {
+      // Base products
       loading,
       baseProducts,
       categories,
@@ -480,7 +827,28 @@ export default {
       getStatusBadgeClass,
       getStatusLabel,
       getStockStatusColor,
-      formatNumber
+      formatNumber,
+      
+      // Tabs
+      activeTab,
+      
+      // Compositions
+      compositions,
+      compositionsLoading,
+      compositionDialog,
+      compositionEditMode,
+      selectedComposition,
+      compositionPagination,
+      compositionFilters,
+      compositionHeaders,
+      loadCompositions,
+      debouncedCompositionSearch,
+      openCompositionCreateDialog,
+      openCompositionEditDialog,
+      closeCompositionDialog,
+      saveComposition,
+      deleteComposition,
+      formatCurrency
     }
   }
 }

@@ -253,21 +253,7 @@ export default {
       return requiredQuantity > 0 ? Math.floor(availableStock / requiredQuantity) : 0
     })
 
-    // Watch for prop changes
-    watch(() => props.composition, (newValue) => {
-      if (newValue) {
-        // Populate form with existing data
-        Object.keys(form).forEach(key => {
-          form[key] = newValue[key] || (key === 'is_active' ? true : '')
-        })
-        updateSelectedBaseProduct()
-      } else {
-        // Reset form for create mode
-        resetForm()
-      }
-      errors.value = {}
-    }, { immediate: true })
-
+    // Helper functions - declared before watch to avoid hoisting issues
     const resetForm = () => {
       Object.keys(form).forEach(key => {
         if (key === 'is_active') {
@@ -288,6 +274,21 @@ export default {
         selectedBaseProduct.value = null
       }
     }
+
+    // Watch for prop changes
+    watch(() => props.composition, (newValue) => {
+      if (newValue) {
+        // Populate form with existing data
+        Object.keys(form).forEach(key => {
+          form[key] = newValue[key] || (key === 'is_active' ? true : '')
+        })
+        updateSelectedBaseProduct()
+      } else {
+        // Reset form for create mode
+        resetForm()
+      }
+      errors.value = {}
+    }, { immediate: true })
 
     const calculateCost = () => {
       // This method is called when quantity changes to trigger reactivity

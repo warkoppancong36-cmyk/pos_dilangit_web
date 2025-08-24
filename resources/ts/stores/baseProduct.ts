@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { $api } from '@/utils/api'
 import axios from 'axios'
+import { CategoriesApi } from '@/utils/api/CategoriesApi'
 
 export interface BaseProduct {
   id_base_product: number
@@ -98,27 +99,26 @@ export const useBaseProductStore = defineStore('baseProduct', {
     async fetchBaseProducts(params?: any): Promise<ApiResponse<BaseProduct[]>> {
       this.loading = true
       try {
-        const response = await $api('/base-products', {
-          method: 'GET',
-          query: params
+        const response = await axios.get('/api/base-products', {
+          params
         })
-        console.log('fetchBaseProducts response:', response)
+        console.log('fetchBaseProducts response:', response.data)
 
         // Handle different response structures
-        if (response.data) {
-          this.baseProducts = Array.isArray(response.data) ? response.data : []
+        if (response.data.data) {
+          this.baseProducts = Array.isArray(response.data.data) ? response.data.data : []
         } else {
           this.baseProducts = []
         }
 
-        if (response.pagination) {
-          this.pagination = response.pagination
-        } else if (response.meta) {
-          this.pagination = response.meta
+        if (response.data.pagination) {
+          this.pagination = response.data.pagination
+        } else if (response.data.meta) {
+          this.pagination = response.data.meta
         }
 
         console.log('Base products loaded:', this.baseProducts.length)
-        return response
+        return response.data
       } catch (error) {
         console.error('Error fetching base products:', error)
         this.baseProducts = []
@@ -176,11 +176,8 @@ export const useBaseProductStore = defineStore('baseProduct', {
       reference_number?: string
     }): Promise<ApiResponse<BaseProductMovement>> {
       try {
-        const response = await $api(`/base-products/${id}/stock`, {
-          method: 'POST',
-          body: data
-        })
-        return response
+        const response = await axios.post(`/api/base-products/${id}/stock`, data)
+        return response.data
       } catch (error) {
         console.error('Error updating stock:', error)
         throw error
@@ -189,15 +186,16 @@ export const useBaseProductStore = defineStore('baseProduct', {
 
     async fetchCategories(): Promise<ApiResponse<any[]>> {
       try {
-        const response = await $api('/categories', {
-          method: 'GET',
-          query: {
-            page: 1,
-            per_page: 100,
-            status: 'active'
-          }
+        const response = await CategoriesApi.getCategories({
+          page: 1,
+          per_page: 100,
+          status: 'active'
         })
-        return response
+        return {
+          success: response.success,
+          data: response.data,
+          message: response.message || 'Categories retrieved successfully'
+        }
       } catch (error) {
         console.error('Error fetching categories:', error)
         throw error
@@ -289,10 +287,8 @@ export const useBaseProductStore = defineStore('baseProduct', {
 
     async fetchAvailableBaseProducts(): Promise<ApiResponse<BaseProduct[]>> {
       try {
-        const response = await $api('/product-compositions/base-products', {
-          method: 'GET'
-        })
-        return response
+        const response = await axios.get('/api/product-compositions/base-products')
+        return response.data
       } catch (error) {
         console.error('Error fetching available base products:', error)
         throw error
@@ -315,12 +311,11 @@ export const useBaseProductStore = defineStore('baseProduct', {
     // Stock Movements Actions
     async fetchMovements(baseProductId: number, params?: any): Promise<ApiResponse<BaseProductMovement[]>> {
       try {
-        const response = await $api(`/base-products/${baseProductId}/movements`, {
-          method: 'GET',
-          query: params
+        const response = await axios.get(`/api/base-products/${baseProductId}/movements`, {
+          params
         })
-        this.movements = response.data
-        return response
+        this.movements = response.data.data
+        return response.data
       } catch (error) {
         console.error('Error fetching movements:', error)
         throw error
@@ -330,14 +325,11 @@ export const useBaseProductStore = defineStore('baseProduct', {
     // Bulk Actions
     async bulkUpdateBaseProducts(ids: number[], data: any): Promise<ApiResponse<any>> {
       try {
-        const response = await $api('/base-products/bulk-update', {
-          method: 'POST',
-          body: {
-            ids,
-            ...data
-          }
+        const response = await axios.post('/api/base-products/bulk-update', {
+          ids,
+          ...data
         })
-        return response
+        return response.data
       } catch (error) {
         console.error('Error bulk updating base products:', error)
         throw error
@@ -346,11 +338,10 @@ export const useBaseProductStore = defineStore('baseProduct', {
 
     async bulkDeleteBaseProducts(ids: number[]): Promise<ApiResponse<any>> {
       try {
-        const response = await $api('/base-products/bulk-delete', {
-          method: 'DELETE',
-          body: { ids }
+        const response = await axios.delete('/api/base-products/bulk-delete', {
+          data: { ids }
         })
-        return response
+        return response.data
       } catch (error) {
         console.error('Error bulk deleting base products:', error)
         throw error
@@ -382,6 +373,16 @@ export const useBaseProductStore = defineStore('baseProduct', {
         return response
       } catch (error) {
         console.error('Error bulk deleting compositions:', error)
+        throw error
+      }
+    },
+
+    async getBaseProductsForSelection(): Promise<ApiResponse<BaseProduct[]>> {
+      try {
+        const response = await axios.get('/api/base-products/for-selection')
+        return response.data
+      } catch (error) {
+        console.error('Error fetching base products for selection:', error)
         throw error
       }
     }

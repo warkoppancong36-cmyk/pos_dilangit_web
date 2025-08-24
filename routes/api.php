@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\ItemPurchaseController;
 use App\Http\Controllers\Api\ProductRecipeController;
 use App\Http\Controllers\Api\HPPController;
 use App\Http\Controllers\VariantHPPController;
+use App\Http\Controllers\Api\BaseProductCompositionController;
 
 
 // Test route to create sample inventory movement
@@ -252,6 +253,17 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
         Route::delete('/{id}', [App\Http\Controllers\Api\BaseProductController::class, 'destroy']);
         Route::post('/{id}/update-stock', [App\Http\Controllers\Api\BaseProductController::class, 'updateStock']);
         Route::get('/{id}/movements', [App\Http\Controllers\Api\BaseProductController::class, 'getMovements']);
+    });
+
+    // BASE PRODUCT COMPOSITIONS ROUTES - Base Product Recipe Management
+    Route::prefix('base-product-compositions')->group(function () {
+        Route::get('/', [App\Http\Controllers\Api\BaseProductCompositionController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\Api\BaseProductCompositionController::class, 'store']);
+        Route::get('/base-product/{baseProductId}', [App\Http\Controllers\Api\BaseProductCompositionController::class, 'getCompositionsForBaseProduct']);
+        Route::post('/calculate-cost', [App\Http\Controllers\Api\BaseProductCompositionController::class, 'calculateCost']);
+        Route::get('/{id}', [App\Http\Controllers\Api\BaseProductCompositionController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\Api\BaseProductCompositionController::class, 'update']);
+        Route::delete('/{id}', [App\Http\Controllers\Api\BaseProductCompositionController::class, 'destroy']);
     });
 
     // PRODUCT COMPOSITIONS ROUTES - Product Recipe Management using Base Products

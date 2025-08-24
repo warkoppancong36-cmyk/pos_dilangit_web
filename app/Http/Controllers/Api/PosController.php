@@ -1078,7 +1078,7 @@ class PosController extends Controller
             'order_type' => 'required|string|in:dine_in,takeaway,delivery',
             'customer_id' => 'nullable|integer|exists:customers,id_customer',
             'table_number' => 'nullable|string|max:50', // Added table_number validation
-            'payment_method' => 'required|string|in:cash,card,qris,digital_wallet,bank_transfer,pending,tunai', // Added 'tunai'
+            'payment_method' => 'required|string|in:cash,card,qris,digital_wallet,ewallet,bank_transfer,pending,tunai', // Added 'tunai' and 'ewallet'
             'subtotal_amount' => 'required|numeric|min:0',
             'discount_amount' => 'nullable|numeric|min:0',
             'discount_type' => 'nullable|string|in:amount,percentage',
@@ -1112,6 +1112,7 @@ class PosController extends Controller
         // Map frontend payment method to database enum values
         $paymentMethodMap = [
             'tunai' => 'cash',  // Flutter app sends 'tunai' but we need 'cash'
+            'ewallet' => 'gopay', // Flutter app sends 'ewallet' map to 'gopay' (default e-wallet)
             'card' => 'credit_card',
             'digital_wallet' => 'gopay', // default digital wallet
             // Add other mappings as needed
