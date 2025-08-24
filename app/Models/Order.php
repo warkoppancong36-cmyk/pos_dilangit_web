@@ -312,4 +312,41 @@ class Order extends Model
 
         $this->save();
     }
+
+    /**
+     * Get daily order sequence number
+     */
+    public function getDailyOrderSequenceAttribute(): int
+    {
+        return $this->getDailyOrderSequence();
+    }
+
+    /**
+     * Calculate daily order sequence
+     */
+    public function getDailyOrderSequence(): int
+    {
+        $startOfDay = $this->created_at->startOfDay();
+        $endOfDay = $this->created_at->endOfDay();
+        
+        return static::where('created_at', '<', $this->created_at)
+            ->whereBetween('created_at', [$startOfDay, $endOfDay])
+            ->count() + 1;
+    }
+
+    /**
+     * Get daily order sequence for a specific date
+     */
+    public static function getDailyOrderSequenceForDate($date = null): int
+    {
+        if (!$date) {
+            $date = now();
+        }
+
+        $startOfDay = \Carbon\Carbon::parse($date)->startOfDay();
+        $endOfDay = \Carbon\Carbon::parse($date)->endOfDay();
+        
+        return static::whereBetween('created_at', [$startOfDay, $endOfDay])
+            ->count() + 1;
+    }
 }

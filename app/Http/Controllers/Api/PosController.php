@@ -48,6 +48,12 @@ class PosController extends Controller
 
             $orders = $query->paginate($request->get('per_page', 20));
 
+            // Add daily order sequence to each order
+            $orders->getCollection()->transform(function ($order) {
+                $order->daily_order_sequence = $order->getDailyOrderSequence();
+                return $order;
+            });
+
             return $this->paginatedResponse($orders, 'Active orders retrieved successfully');
         } catch (\Exception $e) {
             return $this->serverErrorResponse('Failed to retrieve active orders: ' . $e->getMessage());
@@ -94,6 +100,12 @@ class PosController extends Controller
             }
 
             $orders = $query->paginate($request->get('per_page', 50));
+
+            // Add daily order sequence to each order
+            $orders->getCollection()->transform(function ($order) {
+                $order->daily_order_sequence = $order->getDailyOrderSequence();
+                return $order;
+            });
 
             return $this->paginatedResponse($orders, 'Orders retrieved successfully');
         } catch (\Exception $e) {
@@ -704,6 +716,9 @@ class PosController extends Controller
                 // Additional information
                 'notes' => $order->notes,
                 'customer_info' => $order->customer_info,
+                
+                // Order sequence information
+                'daily_order_sequence' => $order->daily_order_sequence,
                 
                 // Timestamps
                 'order_date' => $order->order_date,
