@@ -1222,6 +1222,7 @@ class PosController extends Controller
                 'reference_number' => $request->reference_number,
                 'notes' => $order->notes,
                 'status' => $order->status,
+                'daily_order_sequence' => $order->daily_order_sequence,
                 'created_at' => $order->created_at,
                 'items' => $order->orderItems->map(function ($item) {
                     return [
