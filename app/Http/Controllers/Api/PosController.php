@@ -918,19 +918,18 @@ class PosController extends Controller
                 'requested_by' => Auth::id(),
                 'timestamp' => now()->toDateTimeString()
             ]);
-            // Release all reserved stock
-            foreach ($order->orderItems as $item) {
-                $inventory = Inventory::where('id_product', $item->id_product)
-                    ->when($item->id_variant, function($query) use ($item) {
-                        return $query->where('id_variant', $item->id_variant);
-                    })
-                    ->first();
-
-                if ($inventory) {
-                    $inventory->update([
-                        'reserved_stock' => max(0, $inventory->reserved_stock - $item->quantity)
-                    ]);
+            
+            // Release stock back to inventory for each order item
+            foreach ($order->orderItems as $orderItem) {
+                $product = Product::with(['productItems.item.inventory'])->find($orderItem->id_product);
+                
+                if (!$product) {
+                    \Log::warning("Product not found for order item: {$orderItem->id_product}");
+                    continue;
                 }
+
+                // Restore stock based on recipe consumption (reverse the consumption)
+                $this->restoreRecipeItems($product, $orderItem->quantity, Auth::id(), $order->id_order);
             }
 
             // Update order status
@@ -1448,6 +1447,103 @@ class PosController extends Controller
                 }
             } else {
                 \Log::warning("No inventory found for item: {$item->name} (ID: {$item->id_item})");
+            }
+        }
+    }
+
+    /**
+     * Restore recipe items to inventory (when order is cancelled)
+     */
+    private function restoreRecipeItems(Product $product, int $quantity, int $userId, int $orderId): void
+    {
+        // If product has no recipe items, try to restore directly
+        if ($product->productItems->isEmpty()) {
+            $directInventory = Inventory::where('id_item', $product->id_product)->first();
+            if ($directInventory) {
+                $stockBefore = $directInventory->current_stock;
+                $stockAfter = $stockBefore + $quantity;
+                
+                $directInventory->update([
+                    'current_stock' => $stockAfter,
+                ]);
+                
+                // Create inventory movement for direct restoration
+                InventoryMovement::create([
+                    'id_inventory' => $directInventory->id_inventory,
+                    'movement_type' => 'in',
+                    'quantity' => $quantity,
+                    'stock_before' => $stockBefore,
+                    'stock_after' => $stockAfter,
+                    'unit_cost' => $directInventory->average_cost ?? 0,
+                    'total_cost' => ($directInventory->average_cost ?? 0) * $quantity,
+                    'reference_type' => 'order_cancellation',
+                    'reference_id' => $orderId,
+                    'notes' => "Order Cancellation - Restored stock for product: {$product->name}",
+                    'movement_date' => now(),
+                    'created_by' => $userId,
+                ]);
+                
+                \Log::info("Restored direct product stock", [
+                    'product_id' => $product->id_product,
+                    'product_name' => $product->name,
+                    'quantity_restored' => $quantity,
+                    'stock_before' => $stockBefore,
+                    'stock_after' => $stockAfter
+                ]);
+            }
+            return;
+        }
+
+        // Restore recipe items
+        foreach ($product->productItems as $productItem) {
+            $item = $productItem->item;
+            $inventory = $item->inventory;
+            
+            if ($inventory) {
+                $restoreQuantity = $productItem->quantity_needed * $quantity;
+                $stockBefore = $inventory->current_stock;
+                $stockAfter = $stockBefore + $restoreQuantity;
+                
+                \Log::info("Restoring item stock", [
+                    'item_id' => $item->id_item,
+                    'item_name' => $item->name,
+                    'restore_quantity' => $restoreQuantity,
+                    'stock_before' => $stockBefore,
+                    'stock_after' => $stockAfter
+                ]);
+                
+                // Only update if there's actual restoration
+                if ($restoreQuantity > 0) {
+                    $inventory->update([
+                        'current_stock' => $stockAfter,
+                    ]);
+                    
+                    // Verify update
+                    $inventory->refresh();
+                    \Log::info("Stock after restoration: {$inventory->current_stock}");
+
+                    // Create inventory movement for restoration
+                    InventoryMovement::create([
+                        'id_inventory' => $inventory->id_inventory,
+                        'movement_type' => 'in',
+                        'quantity' => $restoreQuantity,
+                        'stock_before' => $stockBefore,
+                        'stock_after' => $stockAfter,
+                        'unit_cost' => $inventory->average_cost ?? 0,
+                        'total_cost' => ($inventory->average_cost ?? 0) * $restoreQuantity,
+                        'reference_type' => 'order_cancellation',
+                        'reference_id' => $orderId,
+                        'notes' => "Order Cancellation - Restored recipe item for product: {$product->name} (Item: {$item->name})",
+                        'movement_date' => now(),
+                        'created_by' => $userId,
+                    ]);
+                    
+                    \Log::info("Inventory movement for restoration created successfully");
+                } else {
+                    \Log::warning("Skipping inventory restoration - restore quantity is 0");
+                }
+            } else {
+                \Log::warning("No inventory found for item restoration: {$item->name} (ID: {$item->id_item})");
             }
         }
     }
