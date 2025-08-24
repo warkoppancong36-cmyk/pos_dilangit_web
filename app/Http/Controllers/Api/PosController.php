@@ -1077,11 +1077,11 @@ class PosController extends Controller
             'cart_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
             'order_type' => 'required|string|in:dine_in,takeaway,delivery',
             'customer_id' => 'nullable|integer|exists:customers,id_customer',
-            'table_number' => 'nullable|string|max:50', // Added table_number validation
-            'payment_method' => 'required|string|in:cash,card,qris,digital_wallet,ewallet,bank_transfer,pending,tunai', // Added 'tunai' and 'ewallet'
+            'table_number' => 'nullable|max:50', // Accept both string and integer
+            'payment_method' => 'required|string|in:cash,card,kartu,qris,digital_wallet,ewallet,bank_transfer,pending,tunai', // Added 'tunai' and 'ewallet'
             'subtotal_amount' => 'required|numeric|min:0',
             'discount_amount' => 'nullable|numeric|min:0',
-            'discount_type' => 'nullable|string|in:amount,percentage',
+            'discount_type' => 'nullable|string|in:amount,percentage,none', // Added 'none' for Flutter compatibility
             'discount_code' => 'nullable|string', // Added for Flutter compatibility
             'discount_code_id' => 'nullable|integer', // Added for Flutter compatibility
             'applied_promotions' => 'nullable|array', // Added for Flutter compatibility
