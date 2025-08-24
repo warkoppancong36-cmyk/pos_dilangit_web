@@ -85,7 +85,7 @@ export const useCategories = () => {
   const canCreateEdit = computed(() =>
     authStore.user?.role?.name === 'admin' || authStore.user?.role?.name === 'manager'
   )
-  
+
   const isDialogOpen = computed(() => dialog.value)
   const totalPages = computed(() => pagination.value.last_page)
 
@@ -129,6 +129,33 @@ export const useCategories = () => {
     }
   }
 
+  const fetchAllCategories = async () => {
+    try {
+      loading.value = true
+      const params = {
+        page: 1,
+        per_page: 100, // Get more categories for dropdown
+        status: 'active' // Only active categories
+      }
+
+      const response = await CategoriesApi.getCategories(params)
+      if (response.success) {
+        categories.value = response.data
+        if (response.pagination) {
+          pagination.value = response.pagination
+        }
+      } else {
+        errorMessage.value = response.message || MESSAGES.ERROR.FETCH
+        clearMessages()
+      }
+    } catch (error: any) {
+      errorMessage.value = CategoriesApi.handleError(error)
+      clearMessages()
+    } finally {
+      loading.value = false
+    }
+  }
+
   const handleImageUpload = (files: File[]) => {
     const file = files[0]
     if (file) {
@@ -160,7 +187,7 @@ export const useCategories = () => {
     try {
       // Use validated data if provided, otherwise use form data
       const dataToSave = validatedData || formData.value
-      
+
       const response = editMode.value && selectedCategory.value
         ? await CategoriesApi.updateCategory(selectedCategory.value.id_category, dataToSave)
         : await CategoriesApi.createCategory(dataToSave)
@@ -296,6 +323,7 @@ export const useCategories = () => {
 
     // Methods
     fetchCategories,
+    fetchAllCategories,
     handleImageUpload,
     removeImage,
     saveCategory,

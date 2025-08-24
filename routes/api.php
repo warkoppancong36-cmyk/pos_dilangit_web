@@ -241,6 +241,33 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
         Route::post('/{variantId}/hpp-price-update', [App\Http\Controllers\VariantHPPController::class, 'updatePriceFromHPP']);
     });
 
+    // BASE PRODUCTS ROUTES - Base Product Management for Compositions
+    Route::prefix('base-products')->group(function () {
+        Route::get('/', [App\Http\Controllers\Api\BaseProductController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\Api\BaseProductController::class, 'store']);
+        Route::get('/categories', [App\Http\Controllers\Api\BaseProductController::class, 'getCategories']);
+        Route::get('/for-selection', [App\Http\Controllers\Api\BaseProductController::class, 'getForSelection']);
+        Route::get('/{id}', [App\Http\Controllers\Api\BaseProductController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\Api\BaseProductController::class, 'update']);
+        Route::delete('/{id}', [App\Http\Controllers\Api\BaseProductController::class, 'destroy']);
+        Route::post('/{id}/update-stock', [App\Http\Controllers\Api\BaseProductController::class, 'updateStock']);
+        Route::get('/{id}/movements', [App\Http\Controllers\Api\BaseProductController::class, 'getMovements']);
+    });
+
+    // PRODUCT COMPOSITIONS ROUTES - Product Recipe Management using Base Products
+    Route::prefix('product-compositions')->group(function () {
+        Route::get('/', [App\Http\Controllers\Api\ProductCompositionController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\Api\ProductCompositionController::class, 'store']);
+        Route::post('/bulk-store', [App\Http\Controllers\Api\ProductCompositionController::class, 'bulkStore']);
+        Route::post('/bulk-update', [App\Http\Controllers\Api\ProductCompositionController::class, 'bulkUpdate']);
+        Route::post('/bulk-delete', [App\Http\Controllers\Api\ProductCompositionController::class, 'bulkDelete']);
+        Route::get('/product/{productId}', [App\Http\Controllers\Api\ProductCompositionController::class, 'getProductCompositions']);
+        Route::post('/product/{productId}/check-availability', [App\Http\Controllers\Api\ProductCompositionController::class, 'checkProductionAvailability']);
+        Route::get('/{id}', [App\Http\Controllers\Api\ProductCompositionController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\Api\ProductCompositionController::class, 'update']);
+        Route::delete('/{id}', [App\Http\Controllers\Api\ProductCompositionController::class, 'destroy']);
+    });
+
     // VARIANT ATTRIBUTES ROUTES - Product Attribute Management
     Route::prefix('variant-attributes')->group(function () {
         Route::get('/', [App\Http\Controllers\Api\VariantAttributeController::class, 'index']);

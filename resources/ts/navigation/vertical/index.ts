@@ -38,6 +38,18 @@ export default [
         icon: { icon: 'tabler-box' },
         role: ['admin', 'manager'], // Only admin and manager can access
       },
+      {
+        title: 'Base Product',
+        to: { name: 'base-products' },
+        icon: { icon: 'tabler-building-blocks' },
+        role: ['admin', 'manager'], // Only admin and manager can access
+      },
+      {
+        title: 'Komposisi Produk',
+        to: { name: 'product-compositions' },
+        icon: { icon: 'tabler-assembly' },
+        role: ['admin', 'manager'], // Only admin and manager can access
+      },
       // {
       //   title: 'Komposisi Produk',
       //   to: { name: 'product-items-management' },

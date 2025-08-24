@@ -40,7 +40,13 @@
             clearable
             variant="outlined"
             @update:model-value="onFilterChange"
-          />
+          >
+            <template #no-data>
+              <VListItem>
+                <VListItemTitle>{{ categoriesLoading ? 'Memuat kategori...' : 'Tidak ada kategori' }}</VListItemTitle>
+              </VListItem>
+            </template>
+          </VSelect>
         </VCol>
 
         <!-- Status Filter -->
@@ -200,15 +206,17 @@ const emit = defineEmits<{
 }>()
 
 // Use categories composable
-const { categories, loading: categoriesLoading, fetchCategories } = useCategories()
+const { categories, loading: categoriesLoading, fetchAllCategories } = useCategories()
 
 // Search state
 const isSearching = ref(false)
 const searchQuery = ref('')
 
 // Fetch categories on mount
-onMounted(() => {
-  fetchCategories()
+onMounted(async () => {
+  console.log('ProductSearchFilters mounted, fetching categories...')
+  await fetchAllCategories() // Use fetchAllCategories instead of fetchCategories
+  console.log('Categories loaded in ProductSearchFilters:', categories.value.length)
   // Initialize search query with existing filter
   searchQuery.value = localFilters.search || ''
 })
