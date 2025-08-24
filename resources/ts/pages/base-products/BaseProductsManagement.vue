@@ -185,11 +185,12 @@
             <template #item.actions="{ item }">
               <div class="d-flex gap-2">
                 <VBtn
-                  @click="openStockModal(item)"
-                  color="primary"
+                  @click="openCompositionCreateDialogForProduct(item)"
+                  color="success"
                   variant="text"
                   size="small"
-                  icon="mdi-package-variant"
+                  icon="tabler-vector-triangle"
+                  title="Add Composition"
                 />
                 <VBtn
                   @click="openEditModal(item)"
@@ -197,6 +198,7 @@
                   variant="text"
                   size="small"
                   icon="mdi-pencil"
+                  title="Edit Product"
                 />
                 <VBtn
                   @click="deleteBaseProduct(item)"
@@ -204,6 +206,7 @@
                   variant="text"
                   size="small"
                   icon="mdi-delete"
+                  title="Delete Product"
                 />
               </div>
             </template>
@@ -393,14 +396,6 @@
       @saved="handleSaved"
     />
 
-    <!-- Stock Update Modal -->
-    <StockUpdateModal
-      :show="showStockModal"
-      :base-product="selectedBaseProduct"
-      @close="closeStockModal"
-      @updated="handleStockUpdated"
-    />
-
     <!-- Composition Modal -->
     <BaseProductCompositionModal
       :show="compositionDialog"
@@ -412,15 +407,12 @@
       @save="saveComposition"
     />
   </div>
-      @updated="handleStockUpdated"
-    />
 </template>
 
 <script>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { debounce } from 'lodash'
 import BaseProductModal from './BaseProductModal.vue'
-import StockUpdateModal from './StockUpdateModal.vue'
 import BaseProductCompositionModal from './BaseProductCompositionModal.vue'
 import { useBaseProductStore } from '@/stores/baseProduct'
 import { useNotification } from '@/composables/useNotification'
@@ -431,7 +423,6 @@ export default {
   name: 'BaseProductsManagement',
   components: {
     BaseProductModal,
-    StockUpdateModal,
     BaseProductCompositionModal
   },
   setup() {
@@ -487,7 +478,6 @@ export default {
       { title: 'Actions', key: 'actions', sortable: false, width: 120 }
     ])
     const showModal = ref(false)
-    const showStockModal = ref(false)
     const selectedBaseProduct = ref(null)
     
     const filters = reactive({
@@ -601,18 +591,8 @@ export default {
       showModal.value = true
     }
 
-    const openStockModal = (baseProduct) => {
-      selectedBaseProduct.value = baseProduct
-      showStockModal.value = true
-    }
-
     const closeModal = () => {
       showModal.value = false
-      selectedBaseProduct.value = null
-    }
-
-    const closeStockModal = () => {
-      showStockModal.value = false
       selectedBaseProduct.value = null
     }
 
@@ -620,12 +600,6 @@ export default {
       closeModal()
       loadBaseProducts(pagination.value.current_page)
       showSuccess('Base product saved successfully')
-    }
-
-    const handleStockUpdated = () => {
-      closeStockModal()
-      loadBaseProducts(pagination.value.current_page)
-      showSuccess('Stock updated successfully')
     }
 
     const deleteBaseProduct = async (baseProduct) => {
@@ -727,6 +701,18 @@ export default {
       compositionDialog.value = true
     }
 
+    const openCompositionCreateDialogForProduct = (baseProduct) => {
+      selectedComposition.value = {
+        base_product_id: baseProduct.id_base_product,
+        ingredient_base_product_id: 0,
+        quantity: 0,
+        is_active: true,
+        is_critical: false
+      }
+      compositionEditMode.value = false
+      compositionDialog.value = true
+    }
+
     const openCompositionEditDialog = (composition) => {
       selectedComposition.value = composition
       compositionEditMode.value = true
@@ -805,7 +791,6 @@ export default {
       categories,
       categoriesLoading,
       showModal,
-      showStockModal,
       selectedBaseProduct,
       filters,
       pagination,
@@ -818,11 +803,8 @@ export default {
       changePage,
       openCreateModal,
       openEditModal,
-      openStockModal,
       closeModal,
-      closeStockModal,
       handleSaved,
-      handleStockUpdated,
       deleteBaseProduct,
       getStatusBadgeClass,
       getStatusLabel,
@@ -844,6 +826,7 @@ export default {
       loadCompositions,
       debouncedCompositionSearch,
       openCompositionCreateDialog,
+      openCompositionCreateDialogForProduct,
       openCompositionEditDialog,
       closeCompositionDialog,
       saveComposition,

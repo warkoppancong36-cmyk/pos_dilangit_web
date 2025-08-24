@@ -17,6 +17,7 @@ class BaseProductComposition extends Model
     protected $fillable = [
         'base_product_id',
         'ingredient_base_product_id',
+        'ingredient_item_id',
         'quantity',
         'notes',
         'is_active'
@@ -50,15 +51,26 @@ class BaseProductComposition extends Model
     }
 
     /**
+     * Get the ingredient item used in this composition
+     */
+    public function ingredientItem(): BelongsTo
+    {
+        return $this->belongsTo(Item::class, 'ingredient_item_id', 'id_item');
+    }
+
+    /**
      * Calculate the total cost of this composition
      */
     public function getTotalCostAttribute(): float
     {
-        if (!$this->ingredientBaseProduct) {
-            return 0;
+        // Prefer ingredient item over base product for cost calculation
+        if ($this->ingredientItem) {
+            return $this->quantity * ($this->ingredientItem->cost_per_unit ?? 0);
+        } else if ($this->ingredientBaseProduct) {
+            return $this->quantity * $this->ingredientBaseProduct->cost_per_unit;
         }
         
-        return $this->quantity * $this->ingredientBaseProduct->cost_per_unit;
+        return 0;
     }
 
     /**
@@ -74,11 +86,18 @@ class BaseProductComposition extends Model
      */
     public function getAvailablePortionsAttribute(): int
     {
-        if (!$this->ingredientBaseProduct || $this->quantity <= 0) {
+        if ($this->quantity <= 0) {
             return 0;
         }
         
-        return floor($this->ingredientBaseProduct->current_stock / $this->quantity);
+        // Prefer ingredient item over base product for stock calculation
+        if ($this->ingredientItem) {
+            return floor(($this->ingredientItem->current_stock ?? 0) / $this->quantity);
+        } else if ($this->ingredientBaseProduct) {
+            return floor($this->ingredientBaseProduct->current_stock / $this->quantity);
+        }
+        
+        return 0;
     }
 
     /**
