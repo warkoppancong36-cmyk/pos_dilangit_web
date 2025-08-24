@@ -53,36 +53,36 @@
         <VRow v-if="selectedBaseProduct" class="mb-6">
           <VCol cols="6" md="3">
             <VCard variant="outlined" class="stats-card">
-              <VCardText class="text-center pa-4">
-                <VIcon icon="mdi-package-variant" color="primary" class="mb-2" />
-                <div class="text-h6 font-weight-bold">{{ formatCurrency(selectedBaseProduct.cost_per_unit || 0) }}</div>
+              <VCardText class="text-center pa-3">
+                <VIcon icon="mdi-package-variant" color="primary" class="mb-1" size="20" />
+                <div class="text-body-1 font-weight-bold">{{ formatCurrency(selectedBaseProduct.cost_per_unit || 0) }}</div>
                 <div class="text-caption text-medium-emphasis">HPP</div>
               </VCardText>
             </VCard>
           </VCol>
           <VCol cols="6" md="3">
             <VCard variant="outlined" class="stats-card">
-              <VCardText class="text-center pa-4">
-                <VIcon icon="mdi-currency-usd" color="success" class="mb-2" />
-                <div class="text-h6 font-weight-bold">{{ formatCurrency(selectedBaseProduct.selling_price || 0) }}</div>
+              <VCardText class="text-center pa-3">
+                <VIcon icon="mdi-currency-usd" color="success" class="mb-1" size="20" />
+                <div class="text-body-1 font-weight-bold">{{ formatCurrency(selectedBaseProduct.selling_price || 0) }}</div>
                 <div class="text-caption text-medium-emphasis">Harga Jual</div>
               </VCardText>
             </VCard>
           </VCol>
           <VCol cols="6" md="3">
             <VCard variant="outlined" class="stats-card">
-              <VCardText class="text-center pa-4">
-                <VIcon icon="mdi-trending-up" color="info" class="mb-2" />
-                <div class="text-h6 font-weight-bold">{{ formatCurrency(calculateMargin()) }}</div>
+              <VCardText class="text-center pa-3">
+                <VIcon icon="mdi-trending-up" color="info" class="mb-1" size="20" />
+                <div class="text-body-1 font-weight-bold">{{ formatCurrency(calculateMargin()) }}</div>
                 <div class="text-caption text-medium-emphasis">Margin</div>
               </VCardText>
             </VCard>
           </VCol>
           <VCol cols="6" md="3">
             <VCard variant="outlined" class="stats-card">
-              <VCardText class="text-center pa-4">
-                <VIcon icon="mdi-percent" color="warning" class="mb-2" />
-                <div class="text-h6 font-weight-bold">{{ calculateMarginPercentage() }}%</div>
+              <VCardText class="text-center pa-3">
+                <VIcon icon="mdi-percent" color="warning" class="mb-1" size="20" />
+                <div class="text-body-1 font-weight-bold">{{ calculateMarginPercentage() }}%</div>
                 <div class="text-caption text-medium-emphasis">Margin %</div>
               </VCardText>
             </VCard>
@@ -226,7 +226,7 @@
                     block
                   >
                     <VIcon icon="mdi-plus" class="me-1" />
-                    Tambah
+                    Tambah ke List
                   </VBtn>
                 </VCol>
               </VRow>
@@ -284,81 +284,54 @@
             </p>
           </div>
 
-          <!-- Compositions Table -->
-          <VTable v-else class="compositions-table">
-            <thead>
-              <tr>
-                <th class="text-left">Item</th>
-                <th class="text-center">Jumlah</th>
-                <th class="text-center">Satuan</th>
-                <th class="text-right">Cost</th>
-                <th class="text-center">Status</th>
-                <th class="text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="composition in existingCompositions" :key="composition.id">
-                <td>
-                  <div class="d-flex align-center gap-3">
-                    <VAvatar size="32">
-                      <VImg 
-                        v-if="composition.ingredient?.image_url" 
-                        :src="composition.ingredient.image_url" 
-                        :alt="composition.ingredient.name"
-                      />
-                      <VIcon v-else icon="tabler-bottle" size="16" />
-                    </VAvatar>
-                    <div>
-                      <div class="font-weight-medium">{{ composition.ingredient?.name }}</div>
-                      <div class="text-caption text-medium-emphasis">
-                        Stock: {{ formatNumber(composition.ingredient?.current_stock) }} {{ composition.ingredient?.unit }}
-                      </div>
-                    </div>
+          <!-- Compositions List -->
+          <div v-else class="pa-4">
+            <div 
+              v-for="composition in existingCompositions" 
+              :key="composition.id || composition.base_product_id"
+              class="composition-item d-flex align-center justify-space-between pa-3 mb-3 rounded-lg border"
+              :class="{ 'bg-green-lighten-5 border-success': composition.is_temporary }"
+            >
+              <!-- Left side: Item info -->
+              <div class="d-flex align-center gap-3 flex-grow-1">
+                <VIcon 
+                  icon="mdi-check-circle" 
+                  color="success" 
+                  size="18"
+                />
+                <div class="flex-grow-1">
+                  <div class="font-weight-medium text-body-2 mb-1">
+                    {{ getIngredientName(composition) }}
                   </div>
-                </td>
-                <td class="text-center">
-                  <span class="font-weight-medium">{{ formatNumber(composition.quantity) }}</span>
-                </td>
-                <td class="text-center">
-                  <VChip size="small" variant="outlined">
-                    {{ composition.ingredient?.unit }}
-                  </VChip>
-                </td>
-                <td class="text-right">
-                  <div class="font-weight-medium">{{ formatCurrency(composition.total_cost) }}</div>
-                </td>
-                <td class="text-center">
-                  <VChip 
-                    :color="composition.is_active ? 'success' : 'error'"
-                    size="small"
-                    variant="flat"
-                  >
-                    {{ composition.is_active ? 'Aktif' : 'Nonaktif' }}
-                  </VChip>
-                  <VChip 
-                    v-if="composition.is_critical"
-                    color="warning"
-                    size="small"
-                    variant="flat"
-                    class="ml-1"
-                  >
-                    Kritis
-                  </VChip>
-                </td>
-                <td class="text-center">
-                  <VBtn
-                    icon
-                    size="small"
-                    variant="text"
-                    color="error"
-                    @click="removeComposition(composition)"
-                  >
-                    <VIcon icon="mdi-delete" />
-                  </VBtn>
-                </td>
-              </tr>
-            </tbody>
-          </VTable>
+                  <div class="text-caption text-medium-emphasis" style="font-size: 0.75rem;">
+                    Dibutuhkan: {{ formatNumber(composition.quantity || 0) }} {{ getIngredientUnit(composition) }}
+                    <span class="mx-2">•</span>
+                    Stok: {{ formatNumber(getIngredientStock(composition)) }} {{ getIngredientUnit(composition) }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right side: Unit and Actions -->
+              <div class="d-flex align-center gap-2">
+                <VChip 
+                  size="x-small" 
+                  variant="outlined"
+                  color="primary"
+                >
+                  {{ getIngredientUnit(composition) }}
+                </VChip>
+                <VBtn
+                  icon
+                  size="x-small"
+                  variant="text"
+                  color="error"
+                  @click="removeComposition(composition)"
+                >
+                  <VIcon icon="mdi-delete" size="16" />
+                </VBtn>
+              </div>
+            </div>
+          </div>
         </VCard>
       </VCardText>
       
@@ -379,7 +352,8 @@
           :loading="loading"
           :disabled="existingCompositions.length === 0"
         >
-          Simpan Komposisi
+          <VIcon icon="mdi-content-save" class="me-1" />
+          Simpan Komposisi ({{ existingCompositions.filter(c => c.is_temporary).length }})
         </VBtn>
       </VCardActions>
     </VCard>
@@ -407,13 +381,17 @@ interface BaseProduct {
 interface Composition {
   id?: number
   base_product_id: number
-  ingredient_base_product_id: number
+  ingredient_base_product_id?: number
+  ingredient_item_id?: number
   quantity: number
   is_active: boolean
   is_critical?: boolean
   notes?: string
   ingredient?: BaseProduct
+  ingredient_item?: any
+  ingredient_base_product?: BaseProduct
   total_cost?: number
+  is_temporary?: boolean
 }
 
 interface Props {
@@ -439,6 +417,7 @@ const emit = defineEmits<Emits>()
 // Form state
 const form = reactive({
   base_product_id: 0,
+  ingredient_base_product_id: 0,
   ingredient_item_id: 0,
   quantity: 0,
   notes: '',
@@ -461,31 +440,77 @@ const ingredientItems = computed(() => {
 })
 
 const canSubmit = computed(() => {
-  return form.base_product_id && form.ingredient_item_id && form.quantity > 0
+  return form.base_product_id && (form.ingredient_item_id || form.ingredient_base_product_id) && form.quantity > 0
 })
 
 const calculatedCost = computed(() => {
   if (!selectedIngredient.value || !form.quantity) return 0
-  const itemCost = selectedIngredient.value.cost_per_unit || 0
-  return parseFloat(itemCost.toString()) * parseFloat(form.quantity.toString())
+  
+  try {
+    const itemCost = selectedIngredient.value.cost_per_unit || 0
+    const quantity = Number(form.quantity) || 0
+    return itemCost * quantity
+  } catch (error) {
+    console.error('Error calculating cost:', error)
+    return 0
+  }
 })
 
 const maxProducibleQuantity = computed(() => {
   if (!selectedIngredient.value || !form.quantity) return 0
-  const availableStock = parseFloat(selectedIngredient.value.current_stock.toString()) || 0
-  const requiredQuantity = parseFloat(form.quantity.toString()) || 0
-  return requiredQuantity > 0 ? Math.floor(availableStock / requiredQuantity) : 0
+  
+  try {
+    const availableStock = Number(selectedIngredient.value.current_stock) || 0
+    const requiredQuantity = Number(form.quantity) || 0
+    return requiredQuantity > 0 ? Math.floor(availableStock / requiredQuantity) : 0
+  } catch (error) {
+    console.error('Error calculating max quantity:', error)
+    return 0
+  }
 })
 
 // Helper functions
-const formatNumber = (value: number | string): string => {
-  const num = typeof value === 'string' ? parseFloat(value) : value
+const formatNumber = (value: number | string | null | undefined): string => {
+  if (value === null || value === undefined) return '0'
+  const num = typeof value === 'string' ? parseFloat(value) : Number(value)
   return isNaN(num) ? '0' : num.toLocaleString('id-ID')
 }
 
-const formatCurrency = (value: number | string): string => {
-  const num = typeof value === 'string' ? parseFloat(value) : value
+const formatCurrency = (value: number | string | null | undefined): string => {
+  if (value === null || value === undefined) return 'Rp 0'
+  const num = typeof value === 'string' ? parseFloat(value) : Number(value)
   return isNaN(num) ? 'Rp 0' : `Rp ${num.toLocaleString('id-ID')}`
+}
+
+// Helper functions for composition display
+const getIngredientName = (composition: any): string => {
+  try {
+    if (composition.ingredient_item?.name) return composition.ingredient_item.name
+    if (composition.ingredient_base_product?.name) return composition.ingredient_base_product.name
+    return 'Unknown Item'
+  } catch (error) {
+    return 'Unknown Item'
+  }
+}
+
+const getIngredientStock = (composition: any): number => {
+  try {
+    if (composition.ingredient_item?.current_stock !== undefined) return composition.ingredient_item.current_stock
+    if (composition.ingredient_base_product?.current_stock !== undefined) return composition.ingredient_base_product.current_stock
+    return 0
+  } catch (error) {
+    return 0
+  }
+}
+
+const getIngredientUnit = (composition: any): string => {
+  try {
+    if (composition.ingredient_item?.unit) return composition.ingredient_item.unit
+    if (composition.ingredient_base_product?.unit) return composition.ingredient_base_product.unit
+    return 'pcs'
+  } catch (error) {
+    return 'pcs'
+  }
 }
 
 const calculateMargin = (): number => {
@@ -510,7 +535,7 @@ const resetForm = () => {
       form[key] = true
     } else if (key === 'is_critical') {
       form[key] = false
-    } else if (key === 'quantity' || key === 'base_product_id' || key === 'ingredient_item_id') {
+    } else if (key === 'quantity' || key === 'base_product_id' || key === 'ingredient_item_id' || key === 'ingredient_base_product_id') {
       form[key] = 0
     } else {
       form[key] = ''
@@ -563,7 +588,12 @@ const loadExistingCompositions = async () => {
   try {
     const response = await axios.get(`/api/base-product-compositions?base_product_id=${form.base_product_id}`)
     if (response.data.success) {
-      existingCompositions.value = response.data.data.data || []
+      const compositions = response.data.data.data || []
+      // Mark existing compositions as saved (not temporary)
+      compositions.forEach(comp => {
+        comp.is_temporary = false
+      })
+      existingCompositions.value = compositions
     }
   } catch (error) {
     console.error('Error loading compositions:', error)
@@ -600,33 +630,43 @@ const calculateCost = () => {
 }
 
 const handleSubmit = async () => {
-  if (!canSubmit.value) return
+  if (!canSubmit.value) {
+    console.log('Cannot submit - validation failed')
+    return
+  }
 
   loading.value = true
   errors.value = {}
 
   try {
-    const payload = {
+    // Create temporary composition object for local list
+    const newComposition = {
+      id: Date.now(), // temporary ID for local identification
       base_product_id: form.base_product_id,
-      ingredient_item_id: form.ingredient_item_id,
+      ingredient_base_product_id: form.ingredient_base_product_id || null,
+      ingredient_item_id: form.ingredient_item_id || null,
       quantity: Number(form.quantity),
+      notes: form.notes || null,
       is_active: form.is_active,
       is_critical: form.is_critical,
-      notes: form.notes || null
+      // Include selected ingredient data for display
+      ingredient_item: form.ingredient_item_id ? selectedIngredient.value : null,
+      ingredient_base_product: form.ingredient_base_product_id ? selectedIngredient.value : null,
+      total_cost: calculatedCost.value,
+      // Temporary flag to indicate unsaved
+      is_temporary: true
     }
 
-    // Add to local list instead of saving immediately
-    const newComposition: Composition = {
-      ...payload,
-      id: Date.now(), // temporary ID
-      ingredient: selectedIngredient.value!,
-      total_cost: calculatedCost.value
-    }
+    console.log('Adding composition to list:', newComposition)
 
+    // Add to local list
     existingCompositions.value.push(newComposition)
+    
+    console.log('Total compositions:', existingCompositions.value.length)
 
     // Reset form for next item
     form.ingredient_base_product_id = 0
+    form.ingredient_item_id = 0
     form.quantity = 0
     form.notes = ''
     form.is_critical = false
@@ -655,19 +695,28 @@ const saveAllCompositions = async () => {
   if (existingCompositions.value.length === 0) return
 
   loading.value = true
+  errors.value = {}
 
   try {
-    // Save all compositions
+    // Save all temporary/unsaved compositions
     for (const composition of existingCompositions.value) {
-      if (!composition.id || composition.id > 1000000) { // temporary ID
-        const payload = {
+      if (composition.is_temporary || !composition.id || composition.id > 1000000) { // temporary ID
+        const payload: any = {
           base_product_id: composition.base_product_id,
-          ingredient_base_product_id: composition.ingredient_base_product_id,
           quantity: composition.quantity,
           is_active: composition.is_active,
           is_critical: composition.is_critical,
           notes: composition.notes
         }
+
+        // Only include relevant ingredient field
+        if (composition.ingredient_item_id) {
+          payload.ingredient_item_id = composition.ingredient_item_id
+        }
+        if (composition.ingredient_base_product_id) {
+          payload.ingredient_base_product_id = composition.ingredient_base_product_id
+        }
+
         await axios.post('/api/base-product-compositions', payload)
       }
     }
@@ -711,18 +760,25 @@ const saveAllCompositions = async () => {
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
-.compositions-table {
-  border-radius: 8px;
+.composition-item {
+  transition: all 0.2s ease;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  background: rgb(var(--v-theme-surface));
 }
 
-.compositions-table thead th {
-  background-color: rgb(var(--v-theme-surface-variant));
-  font-weight: 600;
-  padding: 16px;
+.composition-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border-color: rgb(var(--v-theme-primary));
 }
 
-.compositions-table tbody td {
-  padding: 12px 16px;
-  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+.composition-item.bg-green-lighten-5 {
+  background-color: rgba(76, 175, 80, 0.08);
+  border-color: rgba(76, 175, 80, 0.3);
+}
+
+.composition-item.bg-green-lighten-5:hover {
+  background-color: rgba(76, 175, 80, 0.12);
+  border-color: rgba(76, 175, 80, 0.5);
 }
 </style>

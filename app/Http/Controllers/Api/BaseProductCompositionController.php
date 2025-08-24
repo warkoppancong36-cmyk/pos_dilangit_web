@@ -112,8 +112,8 @@ class BaseProductCompositionController extends Controller
 
             $composition = BaseProductComposition::create([
                 'base_product_id' => $request->base_product_id,
-                'ingredient_base_product_id' => $request->ingredient_base_product_id,
-                'ingredient_item_id' => $request->ingredient_item_id,
+                'ingredient_base_product_id' => $request->ingredient_base_product_id ?: null,
+                'ingredient_item_id' => $request->ingredient_item_id ?: null,
                 'quantity' => $request->quantity,
                 'notes' => $request->notes,
                 'is_active' => $request->get('is_active', true)
