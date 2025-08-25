@@ -68,6 +68,14 @@ class BaseProductCompositionController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        // Debug: Log the incoming request
+        Log::info('BaseProductComposition store request:', [
+            'all_data' => $request->all(),
+            'base_product_id' => $request->get('base_product_id'),
+            'quantity' => $request->get('quantity'),
+            'content_type' => $request->header('Content-Type')
+        ]);
+
         $validator = Validator::make($request->all(), [
             'base_product_id' => 'required|exists:base_products,id_base_product',
             'ingredient_base_product_id' => 'nullable|exists:base_products,id_base_product|different:base_product_id',
@@ -81,6 +89,10 @@ class BaseProductCompositionController extends Controller
         ]);
 
         if ($validator->fails()) {
+            Log::error('Validation failed for BaseProductComposition:', [
+                'errors' => $validator->errors(),
+                'request_data' => $request->all()
+            ]);
             return $this->validationErrorResponse($validator->errors());
         }
 
@@ -233,7 +245,7 @@ class BaseProductCompositionController extends Controller
     public function getCompositionsForBaseProduct($baseProductId): JsonResponse
     {
         try {
-            $compositions = BaseProductComposition::with(['ingredientBaseProduct'])
+            $compositions = BaseProductComposition::with(['ingredientBaseProduct', 'ingredientItem'])
                 ->where('base_product_id', $baseProductId)
                 ->where('is_active', true)
                 ->orderBy('created_at', 'desc')

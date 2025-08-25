@@ -14,6 +14,25 @@
       </VCardTitle>
       
       <VCardText class="pa-6">
+        <!-- Loading Overlay -->
+        <VOverlay 
+          v-model="itemsLoading" 
+          contained 
+          persistent
+          class="d-flex align-center justify-center"
+        >
+          <VCard class="pa-6 text-center" min-width="250">
+            <VProgressCircular 
+              indeterminate 
+              color="primary" 
+              size="50"
+              class="mb-4"
+            />
+            <div class="text-h6 mb-2">Memuat Data...</div>
+            <div class="text-body-2 text-medium-emphasis">Mohon tunggu sebentar</div>
+          </VCard>
+        </VOverlay>
+        
         <!-- Selected Base Product Info Card -->
         <VCard 
           v-if="selectedBaseProduct" 
@@ -33,8 +52,11 @@
               </VAvatar>
               <div class="flex-grow-1">
                 <h3 class="text-h6 font-weight-bold mb-1">{{ selectedBaseProduct.name }}</h3>
-                <div class="text-body-2 text-medium-emphasis">
+                <div class="text-body-2 text-medium-emphasis mb-1">
                   SKU: {{ selectedBaseProduct.sku || 'No SKU' }}
+                </div>
+                <div class="text-body-2 text-medium-emphasis mb-2">
+                  Kategori: {{ selectedBaseProduct.category?.name || 'Tidak ada kategori' }}
                 </div>
                 <VChip 
                   :color="selectedBaseProduct.current_stock > selectedBaseProduct.min_stock ? 'success' : 'warning'"
@@ -51,6 +73,15 @@
 
         <!-- Stats Cards -->
         <VRow v-if="selectedBaseProduct" class="mb-6">
+          <VCol cols="6" md="3">
+            <VCard variant="outlined" class="stats-card">
+              <VCardText class="text-center pa-3">
+                <VIcon icon="mdi-tag" color="info" class="mb-1" size="20" />
+                <div class="text-body-2 font-weight-bold">{{ selectedBaseProduct.category?.name || 'No Category' }}</div>
+                <div class="text-caption text-medium-emphasis">Kategori</div>
+              </VCardText>
+            </VCard>
+          </VCol>
           <VCol cols="6" md="3">
             <VCard variant="outlined" class="stats-card">
               <VCardText class="text-center pa-3">
@@ -72,18 +103,9 @@
           <VCol cols="6" md="3">
             <VCard variant="outlined" class="stats-card">
               <VCardText class="text-center pa-3">
-                <VIcon icon="mdi-trending-up" color="info" class="mb-1" size="20" />
+                <VIcon icon="mdi-trending-up" color="warning" class="mb-1" size="20" />
                 <div class="text-body-1 font-weight-bold">{{ formatCurrency(calculateMargin()) }}</div>
                 <div class="text-caption text-medium-emphasis">Margin</div>
-              </VCardText>
-            </VCard>
-          </VCol>
-          <VCol cols="6" md="3">
-            <VCard variant="outlined" class="stats-card">
-              <VCardText class="text-center pa-3">
-                <VIcon icon="mdi-percent" color="warning" class="mb-1" size="20" />
-                <div class="text-body-1 font-weight-bold">{{ calculateMarginPercentage() }}%</div>
-                <div class="text-caption text-medium-emphasis">Margin %</div>
               </VCardText>
             </VCard>
           </VCol>
@@ -162,7 +184,9 @@
                     :error-messages="errors.ingredient_item_id"
                     :color="isDuplicateIngredient ? 'warning' : 'primary'"
                     @update:model-value="updateSelectedIngredient"
-                    :no-data-text="'Tidak ada item tersedia'"
+                    @click:prepend-inner="ensureItemsLoaded"
+                    @focus="ensureItemsLoaded"
+                    :no-data-text="itemsLoading ? 'Memuat item...' : (items.length === 0 ? 'Tidak ada item tersedia' : 'Ketik untuk mencari...')"
                   >
                     <template #item="{ props, item }">
                       <VListItem v-bind="props">
@@ -389,6 +413,17 @@ interface BaseProduct {
   cost_per_unit: number
   selling_price?: number
   formatted_cost: string
+  category?: {
+    id_category: number
+    name: string
+    description?: string
+    is_active: boolean
+  }
+  inventory?: {
+    current_stock: number
+    min_stock: number
+    max_stock: number
+  }
 }
 
 interface Composition {
@@ -405,6 +440,7 @@ interface Composition {
   ingredient_base_product?: BaseProduct
   total_cost?: number
   is_temporary?: boolean
+  marked_for_deletion?: boolean
 }
 
 interface Props {
@@ -446,6 +482,7 @@ const selectedIngredient = ref<any>(null)
 const existingCompositions = ref<Composition[]>([])
 const items = ref<any[]>([])
 const itemsLoading = ref(false)
+const itemsCached = ref(false) // Cache flag to avoid repeated API calls
 
 // Computed properties
 const ingredientItems = computed(() => {
@@ -490,6 +527,9 @@ const isDuplicateIngredient = computed(() => {
   if (!form.ingredient_item_id && !form.ingredient_base_product_id) return false
   
   const duplicate = existingCompositions.value.some(comp => {
+    // Skip temporary compositions that are marked for deletion
+    if (comp.is_temporary && comp.marked_for_deletion) return false
+    
     if (form.ingredient_item_id && comp.ingredient_item_id === form.ingredient_item_id) {
       console.log('Duplicate found - ingredient_item_id:', form.ingredient_item_id, 'in composition:', comp)
       return true
@@ -591,9 +631,12 @@ const updateSelectedBaseProduct = async () => {
   const baseProductId = Number(form.base_product_id)
   if (baseProductId) {
     selectedBaseProduct.value = props.baseProducts.find(bp => bp.id_base_product === baseProductId) || null
-    // Load items first, then load existing compositions to ensure proper ingredient data
-    await loadItems()
+    
+    // Only load existing compositions immediately
+    // Items will be loaded on-demand when user clicks autocomplete
+    console.log('Loading compositions for base product:', baseProductId)
     await loadExistingCompositions()
+    console.log('Compositions loading completed')
   } else {
     selectedBaseProduct.value = null
     existingCompositions.value = []
@@ -609,16 +652,58 @@ const updateSelectedIngredient = () => {
   }
 }
 
+// Ensure items are loaded when user interacts with autocomplete
+const ensureItemsLoaded = async () => {
+  console.log('ensureItemsLoaded called, itemsCached:', itemsCached.value, 'items length:', items.value.length)
+  if (!itemsCached.value) {
+    console.log('Items not cached, loading...')
+    await loadItems()
+  } else {
+    console.log('Items already cached, skipping load')
+  }
+}
+
 const loadItems = async () => {
+  // Skip loading if items are already cached
+  if (itemsCached.value && items.value.length > 0) {
+    console.log('Using cached items:', items.value.length)
+    return
+  }
+  
   try {
     itemsLoading.value = true
-    const response = await axios.get('/api/items')
-    if (response.data.success) {
-      const itemsData = response.data.data.data || response.data.data || []
+    console.log('Loading items from API...')
+    
+    // Request all items without pagination
+    const response = await axios.get('/api/items?per_page=all&active=true')
+    console.log('Items API response:', response.data)
+    
+    if (response.data.success && response.data.data) {
+      // Handle pagination structure - data is in response.data.data.data
+      let itemsData = []
+      if (Array.isArray(response.data.data.data)) {
+        itemsData = response.data.data.data
+      } else if (Array.isArray(response.data.data)) {
+        itemsData = response.data.data
+      }
+      
       items.value = itemsData
+      itemsCached.value = true // Mark as cached
+      console.log('Items loaded and cached:', itemsData.length)
+      
+      if (itemsData.length > 0) {
+        console.log('Sample item structure:', itemsData[0])
+      }
+    } else {
+      console.error('API response not successful:', response.data)
+      items.value = []
     }
   } catch (error) {
     console.error('Error loading items:', error)
+    // Check if it's an authentication error
+    if (error.response?.status === 401) {
+      console.error('Authentication required for items API')
+    }
     items.value = []
   } finally {
     itemsLoading.value = false
@@ -630,23 +715,16 @@ const loadExistingCompositions = async () => {
   
   try {
     console.log('Loading existing compositions for base_product_id:', form.base_product_id)
-    const response = await axios.get(`/api/base-product-compositions?base_product_id=${form.base_product_id}`)
-    console.log('API Response:', response.data)
+    // Use the specific endpoint for getting compositions by base product
+    const response = await axios.get(`/api/base-product-compositions/base-product/${form.base_product_id}`)
     
     if (response.data.success) {
-      const compositions = response.data.data.data || []
-      console.log('Raw compositions from API:', compositions)
+      const compositions = response.data.data || []
       
       // Mark existing compositions as saved (not temporary) and ensure proper data structure
-      compositions.forEach(comp => {
+      compositions.forEach((comp: any) => {
         comp.is_temporary = false
-        console.log('Processing composition:', {
-          id: comp.id,
-          ingredient_item_id: comp.ingredient_item_id,
-          ingredient_base_product_id: comp.ingredient_base_product_id,
-          ingredient_item: comp.ingredient_item,
-          ingredient_base_product: comp.ingredient_base_product
-        })
+        comp.marked_for_deletion = false
         
         // Ensure ingredient data is properly loaded
         if (comp.ingredient_item_id && !comp.ingredient_item) {
@@ -654,29 +732,44 @@ const loadExistingCompositions = async () => {
           const matchingItem = items.value.find(item => item.id_item === comp.ingredient_item_id)
           if (matchingItem) {
             comp.ingredient_item = matchingItem
-            console.log('Linked ingredient item:', matchingItem.name)
-          } else {
-            console.warn('Could not find matching item for id:', comp.ingredient_item_id)
           }
         }
       })
       
       existingCompositions.value = compositions
-      console.log('Final existingCompositions:', existingCompositions.value)
+      console.log('Loaded existing compositions:', compositions.length)
+      if (compositions.length > 0) {
+        console.log('Sample composition:', compositions[0])
+      }
+    } else {
+      console.error('API response not successful:', response.data)
+      existingCompositions.value = []
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error loading compositions:', error)
     if (error.response) {
       console.error('Error response:', error.response.data)
     }
+    existingCompositions.value = []
   }
 }
 
 // Watch for modal open to ensure data is loaded
-watch(() => props.show, (newValue) => {
+watch(() => props.show, async (newValue) => {
   if (newValue) {
-    console.log('Modal opened, ensuring data is loaded')
-    loadItems()
+    console.log('Modal opened')
+    console.log('Current auth headers:', axios.defaults.headers.common)
+    console.log('Items cached:', itemsCached.value, 'Items count:', items.value.length)
+    
+    // Load items immediately when modal opens for better UX
+    if (!itemsCached.value) {
+      console.log('Loading items on modal open...')
+      await loadItems()
+    } else {
+      console.log('Items already cached, not loading again')
+    }
+    
+    // If there's already a base_product_id, load compositions
     if (form.base_product_id) {
       loadExistingCompositions()
     }
@@ -729,8 +822,11 @@ const handleSubmit = async () => {
     return
   }
 
-  // Check for duplicate in existing compositions (both saved and temporary)
+  // Enhanced duplicate check including both local and potentially saved compositions
   const isDuplicate = existingCompositions.value.some(comp => {
+    // Skip compositions marked for deletion
+    if (comp.marked_for_deletion) return false
+    
     if (form.ingredient_item_id && comp.ingredient_item_id === form.ingredient_item_id) {
       console.log('DUPLICATE FOUND - ingredient_item_id match:', form.ingredient_item_id)
       return true
@@ -744,8 +840,11 @@ const handleSubmit = async () => {
 
   if (isDuplicate) {
     console.log('Duplicate detected, showing error')
+    const ingredientName = form.ingredient_item_id 
+      ? selectedIngredient.value?.name 
+      : selectedIngredient.value?.name
     errors.value = { 
-      general: 'Item ini sudah ada dalam daftar komposisi. Silakan pilih item yang berbeda.' 
+      general: `Item "${ingredientName || 'yang dipilih'}" sudah ada dalam daftar komposisi. Silakan pilih item yang berbeda.` 
     }
     return
   }
@@ -757,19 +856,20 @@ const handleSubmit = async () => {
     // Create temporary composition object for local list
     const newComposition = {
       id: Date.now(), // temporary ID for local identification
-      base_product_id: form.base_product_id,
-      ingredient_base_product_id: form.ingredient_base_product_id || null,
-      ingredient_item_id: form.ingredient_item_id || null,
+      base_product_id: Number(form.base_product_id),
+      ingredient_base_product_id: form.ingredient_base_product_id > 0 ? Number(form.ingredient_base_product_id) : null,
+      ingredient_item_id: form.ingredient_item_id > 0 ? Number(form.ingredient_item_id) : null,
       quantity: Number(form.quantity),
       notes: form.notes || null,
       is_active: form.is_active,
       is_critical: form.is_critical,
       // Include selected ingredient data for display
-      ingredient_item: form.ingredient_item_id ? selectedIngredient.value : null,
-      ingredient_base_product: form.ingredient_base_product_id ? selectedIngredient.value : null,
+      ingredient_item: form.ingredient_item_id > 0 ? selectedIngredient.value : null,
+      ingredient_base_product: form.ingredient_base_product_id > 0 ? selectedIngredient.value : null,
       total_cost: calculatedCost.value,
       // Temporary flag to indicate unsaved
-      is_temporary: true
+      is_temporary: true,
+      marked_for_deletion: false
     }
 
     console.log('Adding composition to list:', newComposition)
@@ -802,7 +902,13 @@ const handleSubmit = async () => {
 const removeComposition = (composition: Composition) => {
   const index = existingCompositions.value.findIndex(c => c.id === composition.id)
   if (index > -1) {
-    existingCompositions.value.splice(index, 1)
+    // If it's a temporary composition, remove it completely
+    if (composition.is_temporary) {
+      existingCompositions.value.splice(index, 1)
+    } else {
+      // If it's a saved composition, mark it for deletion
+      composition.marked_for_deletion = true
+    }
   }
 }
 
@@ -817,27 +923,59 @@ const saveAllCompositions = async () => {
   try {
     // Save all temporary/unsaved compositions
     const compositionsToSave = existingCompositions.value.filter(comp => 
-      comp.is_temporary || !comp.id || comp.id > 1000000
+      comp.is_temporary && !comp.marked_for_deletion && comp.base_product_id && comp.quantity > 0
     )
+    
+    console.log('Compositions to save:', compositionsToSave.length)
+    console.log('All existing compositions:', existingCompositions.value.length)
+    
+    if (compositionsToSave.length === 0) {
+      console.log('No compositions to save')
+      return
+    }
     
     for (let i = compositionsToSave.length - 1; i >= 0; i--) {
       const composition = compositionsToSave[i]
+      
+      // Validate composition data before sending
+      if (!composition.base_product_id || composition.quantity <= 0) {
+        console.error('Invalid composition data:', composition)
+        errorMessages.push(`Invalid composition data for ${getIngredientName(composition)}`)
+        continue
+      }
+      
       try {
         const payload: any = {
-          base_product_id: composition.base_product_id,
-          quantity: composition.quantity,
-          is_active: composition.is_active,
-          is_critical: composition.is_critical,
-          notes: composition.notes
+          base_product_id: Number(composition.base_product_id),
+          quantity: Number(composition.quantity),
+          is_active: Boolean(composition.is_active),
+          is_critical: Boolean(composition.is_critical),
+          notes: composition.notes || null
         }
 
-        // Only include relevant ingredient field
-        if (composition.ingredient_item_id) {
-          payload.ingredient_item_id = composition.ingredient_item_id
+        // Only include relevant ingredient field (ensure it's a number and > 0)
+        if (composition.ingredient_item_id && composition.ingredient_item_id > 0) {
+          payload.ingredient_item_id = Number(composition.ingredient_item_id)
         }
-        if (composition.ingredient_base_product_id) {
-          payload.ingredient_base_product_id = composition.ingredient_base_product_id
+        if (composition.ingredient_base_product_id && composition.ingredient_base_product_id > 0) {
+          payload.ingredient_base_product_id = Number(composition.ingredient_base_product_id)
         }
+
+        // Validate that at least one ingredient is provided
+        if (!payload.ingredient_item_id && !payload.ingredient_base_product_id) {
+          console.error('No ingredient provided for composition:', composition)
+          errorMessages.push(`${getIngredientName(composition)}: No ingredient selected`)
+          continue
+        }
+
+        console.log('Saving composition payload:', payload)
+        console.log('Original composition data:', {
+          id: composition.id,
+          base_product_id: composition.base_product_id,
+          quantity: composition.quantity,
+          ingredient_item_id: composition.ingredient_item_id,
+          ingredient_base_product_id: composition.ingredient_base_product_id
+        })
 
         await axios.post('/api/base-product-compositions', payload)
         successCount++
@@ -852,12 +990,17 @@ const saveAllCompositions = async () => {
         console.error('Error saving individual composition:', itemError)
         const ingredientName = getIngredientName(composition)
         
-        if (itemError.response?.status === 422 && itemError.response?.data?.message?.includes('already exists')) {
-          errorMessages.push(`${ingredientName}: Item sudah ada dalam komposisi`)
-          // Remove duplicate item from local list
-          const originalIndex = existingCompositions.value.findIndex(c => c.id === composition.id)
-          if (originalIndex > -1) {
-            existingCompositions.value.splice(originalIndex, 1)
+        if (itemError.response?.status === 422) {
+          const errorMessage = itemError.response?.data?.message || ''
+          if (errorMessage.includes('already exists') || errorMessage.includes('Composition already exists')) {
+            errorMessages.push(`${ingredientName}: Item sudah ada dalam komposisi database`)
+            // Remove duplicate item from local list
+            const originalIndex = existingCompositions.value.findIndex(c => c.id === composition.id)
+            if (originalIndex > -1) {
+              existingCompositions.value.splice(originalIndex, 1)
+            }
+          } else {
+            errorMessages.push(`${ingredientName}: ${errorMessage}`)
           }
         } else {
           errorMessages.push(`${ingredientName}: ${itemError.response?.data?.message || 'Gagal menyimpan'}`)

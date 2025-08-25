@@ -390,17 +390,27 @@ class PosController extends Controller
         try {
             DB::beginTransaction();
 
-            // Release reserved stock
-            $inventory = Inventory::where('id_product', $orderItem->id_product)
-                ->when($orderItem->id_variant, function($query) use ($orderItem) {
-                    return $query->where('id_variant', $orderItem->id_variant);
-                })
-                ->first();
+            // Get product to restore recipe items
+            $product = Product::with(['productItems.item.inventory'])->find($orderItem->id_product);
+            
+            if ($product) {
+                // Restore stock based on recipe consumption (reverse the consumption)
+                $this->restoreRecipeItems($product, $orderItem->quantity, Auth::id(), $order->id_order);
+            } else {
+                \Log::warning("Product not found when removing item: {$orderItem->id_product}");
+                
+                // Fallback: Release reserved stock for direct inventory (old method)
+                $inventory = Inventory::where('id_product', $orderItem->id_product)
+                    ->when($orderItem->id_variant, function($query) use ($orderItem) {
+                        return $query->where('id_variant', $orderItem->id_variant);
+                    })
+                    ->first();
 
-            if ($inventory) {
-                $inventory->update([
-                    'reserved_stock' => max(0, $inventory->reserved_stock - $orderItem->quantity)
-                ]);
+                if ($inventory) {
+                    $inventory->update([
+                        'reserved_stock' => max(0, $inventory->reserved_stock - $orderItem->quantity)
+                    ]);
+                }
             }
 
             // Remove item
