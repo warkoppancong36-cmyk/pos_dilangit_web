@@ -17,7 +17,12 @@ class ProductItemController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            $query = ProductItem::with(['product', 'item.inventory']);
+            $query = ProductItem::with([
+                'product',
+                'item' => function($query) {
+                    $query->with('inventory');
+                }
+            ]);
 
             // Search filter (search in product name, SKU, or item name)
             if ($request->filled('search')) {
@@ -126,7 +131,7 @@ class ProductItemController extends Controller
                 'product_id' => 'required|exists:products,id_product',
                 'item_id' => 'required|exists:items,id_item',
                 'quantity_needed' => 'required|numeric|min:0.01',
-                'unit' => 'required|string|max:50',
+                // Removed 'unit' validation - will be retrieved from items table
                 'cost_per_unit' => 'nullable|numeric|min:0',
                 'is_critical' => 'boolean',
                 'notes' => 'nullable|string',

@@ -17,7 +17,7 @@ class ProductItem extends Model
         'product_id',
         'item_id',
         'quantity_needed',
-        'unit',
+        // 'unit', // Removed - will be accessed via item relationship
         'cost_per_unit',
         'is_critical',
         'notes',
@@ -34,6 +34,7 @@ class ProductItem extends Model
     ];
 
     protected $appends = [
+        'unit', // Include unit from item relationship in JSON
         'total_cost_per_product',
         'formatted_cost_per_unit',
         'formatted_total_cost',
@@ -65,6 +66,11 @@ class ProductItem extends Model
     /**
      * Computed Attributes
      */
+    public function getUnitAttribute(): string
+    {
+        return $this->item ? $this->item->unit : 'pcs';
+    }
+
     public function getTotalCostPerProductAttribute(): float
     {
         $cost = $this->cost_per_unit ?? $this->item->cost_per_unit ?? 0;

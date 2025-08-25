@@ -52,8 +52,8 @@ export interface StockFilters {
   item_id?: number
 }
 
-// Composable
-export function useStockMovements() {
+// Main composable
+export function useStockMovements(onMovementSuccess?: () => void) {
   // State
   const itemsList = ref<Item[]>([])
   const stockMovements = ref<StockMovement[]>([])
@@ -168,7 +168,7 @@ export function useStockMovements() {
         page: currentPage.value,
         per_page: itemsPerPage.value
       })
-      
+
       // Map InventoryMovement to StockMovement format
       stockMovements.value = response.data.map(movement => ({
         id: movement.id_movement,
@@ -185,7 +185,7 @@ export function useStockMovements() {
         created_at: movement.created_at,
         creator: movement.user
       }))
-      
+
       totalItems.value = response.total
     } catch (error) {
       console.error('Failed to fetch stock movements:', error)
@@ -199,7 +199,7 @@ export function useStockMovements() {
     try {
       await fetchItems()
       const items = itemsList.value
-      
+
       stats.value = {
         total_items: items.length,
         total_value: items.reduce((sum, item) => sum + (item.current_stock * item.cost_per_unit), 0),
@@ -218,36 +218,33 @@ export function useStockMovements() {
   const recordStockMovement = async () => {
     saveLoading.value = true
     modalErrorMessage.value = ''
-    
+
     try {
-      // Call the actual API for stock movement recording
-      const response = await fetch('/api/inventory/movement', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        body: JSON.stringify({
-          item_id: movementFormData.item_id,
-          movement_type: movementFormData.type,
-          quantity: movementFormData.quantity,
-          notes: movementFormData.notes,
-          cost_per_unit: movementFormData.cost_per_unit
-        })
+      // Use InventoryApi that has proper axios configuration with auth
+      const response = await InventoryApi.recordMovement({
+        item_id: movementFormData.item_id,
+        movement_type: movementFormData.type as 'adjustment',
+        quantity: movementFormData.quantity,
+        notes: movementFormData.notes,
+        cost_per_unit: movementFormData.cost_per_unit
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || 'Gagal mencatat pergerakan stok')
-      }
+      // Response from InventoryApi is already parsed JSON
+      if (response.success) {
+        successMessage.value = `Stock ${movementFormData.type === 'in' ? 'masuk' : movementFormData.type === 'out' ? 'keluar' : 'disesuaikan'} berhasil dicatat`
+        closeMovementDialog()
 
-      successMessage.value = `Stock ${movementFormData.type === 'in' ? 'masuk' : movementFormData.type === 'out' ? 'keluar' : 'disesuaikan'} berhasil dicatat`
-      closeMovementDialog()
-      
-      // Refresh data
-      await fetchItems()
-      await fetchStats()
+        // Refresh data
+        await fetchItems()
+        await fetchStats()
+
+        // Call the callback function if provided (for inventory refresh)
+        if (onMovementSuccess) {
+          onMovementSuccess()
+        }
+      } else {
+        throw new Error(response.message || 'Gagal mencatat pergerakan stok')
+      }
     } catch (error: any) {
       modalErrorMessage.value = error.message || 'Gagal mencatat pergerakan stok'
     } finally {
@@ -333,13 +330,13 @@ export function useStockMovements() {
     errorMessage,
     successMessage,
     modalErrorMessage,
-    
+
     // Computed
     canManageStock,
     stockStatusOptions,
     movementTypeOptions,
     referenceTypeOptions,
-    
+
     // Methods
     getStockStatus,
     getStockPercentage,

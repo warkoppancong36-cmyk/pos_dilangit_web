@@ -121,15 +121,15 @@ class PurchaseController extends Controller
                 'created_by' => Auth::id()
             ]);
 
-            // Create purchase items
+            // Create purchase items (unit will be retrieved from items table via JOIN)
             foreach ($request->items as $item) {
                 PurchaseItem::create([
                     'purchase_id' => $purchase->id_purchase,
                     'item_id' => $item['id_item'],
                     'quantity_ordered' => $item['quantity'],
                     'unit_cost' => $item['unit_cost'],
-                    'total_cost' => $item['quantity'] * $item['unit_cost'],
-                    'unit' => $item['unit'] ?? 'pcs' // Default unit if not provided
+                    'total_cost' => $item['quantity'] * $item['unit_cost']
+                    // Removed 'unit' field - will be retrieved from items table via JOIN
                 ]);
             }
 
@@ -257,8 +257,8 @@ class PurchaseController extends Controller
                     'item_id' => $item['id_item'],
                     'quantity_ordered' => $item['quantity'],
                     'unit_cost' => $item['unit_cost'],
-                    'total_cost' => $item['quantity'] * $item['unit_cost'],
-                    'unit' => $item['unit'] ?? 'pcs' // Default unit if not provided
+                    'total_cost' => $item['quantity'] * $item['unit_cost']
+                    // Removed 'unit' field - will be retrieved from items table via JOIN
                 ]);
                 
                 // For completed purchases, auto-receive and update inventory

@@ -86,6 +86,14 @@ interface StockUpdateData {
   notes?: string
 }
 
+interface MovementRecordData {
+  item_id: number
+  movement_type: 'adjustment'
+  quantity: number
+  notes?: string
+  cost_per_unit?: number
+}
+
 interface BulkStockUpdateData {
   items: Array<{
     id_inventory: number
@@ -239,20 +247,30 @@ export class InventoryApi {
   }
 
   // Get inventory movements
-  static async getMovements(params?: { 
-    id_inventory?: number; 
-    start_date?: string; 
-    end_date?: string; 
+  static async getMovements(params?: {
+    id_inventory?: number;
+    start_date?: string;
+    end_date?: string;
     movement_type?: string;
     page?: number;
     per_page?: number;
   }): Promise<InventoryMovementResponse> {
     try {
-      const url = params?.id_inventory 
+      const url = params?.id_inventory
         ? `${API_BASE_URL}/${params.id_inventory}/movements`
         : `${API_BASE_URL}/movements`
-      
+
       const response = await axios.get(url, { params })
+      return response.data
+    } catch (error: any) {
+      throw error.response?.data || this.handleError(error)
+    }
+  }
+
+  // Record inventory movement
+  static async recordMovement(data: MovementRecordData): Promise<any> {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/movement`, data)
       return response.data
     } catch (error: any) {
       throw error.response?.data || this.handleError(error)
@@ -301,8 +319,8 @@ export class InventoryApi {
   // Utility method to get specific field error
   static getFieldError(error: any, field: string): string | null {
     if (error.errors && error.errors[field]) {
-      return Array.isArray(error.errors[field]) 
-        ? error.errors[field][0] 
+      return Array.isArray(error.errors[field])
+        ? error.errors[field][0]
         : error.errors[field]
     }
     return null

@@ -83,7 +83,7 @@ const {
   successMessage: stockMovementSuccessMessage,
   modalErrorMessage: stockMovementErrorMessage,
   clearModalError: clearStockMovementError,
-} = useStockMovements()
+} = useStockMovements(refreshCurrentView) // Pass callback function for inventory refresh
 
 // Helper function to convert inventory item to Item format for stock movements
 const convertInventoryItemToItem = (inventoryItem: any) => {

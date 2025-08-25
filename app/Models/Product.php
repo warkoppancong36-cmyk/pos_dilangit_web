@@ -175,7 +175,7 @@ class Product extends Model
     public function items()
     {
         return $this->belongsToMany(Item::class, 'product_items', 'product_id', 'item_id', 'id_product', 'id_item')
-            ->withPivot(['id_product_item', 'quantity_needed', 'unit', 'cost_per_unit', 'is_critical', 'notes'])
+            ->withPivot(['id_product_item', 'quantity_needed', 'cost_per_unit', 'is_critical', 'notes'])
             ->withTimestamps();
     }
 
@@ -393,7 +393,7 @@ class Product extends Model
                 'item_name' => $productItem->item->name,
                 'item_code' => $productItem->item->item_code,
                 'quantity_needed' => $productItem->quantity_needed,
-                'unit' => $productItem->unit,
+                'unit' => $productItem->item->unit, // Get unit from items table
                 'cost_per_unit' => $itemCost,
                 'total_cost' => $itemTotalCost,
                 'is_critical' => $productItem->is_critical,

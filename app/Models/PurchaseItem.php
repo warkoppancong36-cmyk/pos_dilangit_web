@@ -18,7 +18,7 @@ class PurchaseItem extends Model
         'item_id',
         'quantity_ordered',
         'quantity_received',
-        'unit',
+        // 'unit', // Removed - will be accessed via item relationship
         'unit_cost',
         'total_cost',
         'expected_delivery_date',
@@ -39,6 +39,12 @@ class PurchaseItem extends Model
         'quality_check' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime'
+    ];
+
+    protected $appends = [
+        'unit', // Include unit from item relationship in JSON
+        'formatted_unit_cost',
+        'formatted_total_cost'
     ];
 
     // Relationships
@@ -69,6 +75,12 @@ class PurchaseItem extends Model
         return 'Rp ' . number_format($this->total_cost, 0, ',', '.');
     }
 
+    // Get unit from related item
+    public function getUnitAttribute()
+    {
+        return $this->item ? $this->item->unit : 'pcs';
+    }
+
     public function getProductNameAttribute()
     {
         return $this->variant ? $this->variant->product->name : '';
@@ -91,10 +103,10 @@ class PurchaseItem extends Model
         return $this->variant ? $this->variant->sku : '';
     }
 
-    public function getUnitAttribute()
-    {
-        return $this->variant ? $this->variant->unit : 'pcs';
-    }
+    // public function getUnitAttribute()
+    // {
+    //     return $this->variant ? $this->variant->unit : 'pcs';
+    // }
 
     // Helper methods
     public function getRemainingQuantity()
