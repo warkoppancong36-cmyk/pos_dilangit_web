@@ -85,6 +85,11 @@ class PosController extends Controller
                 $query->where('status', $request->status);
             }
 
+            // Table number filter
+            if ($request->filled('table_number')) {
+                $query->where('table_number', 'like', "%{$request->table_number}%");
+            }
+
             // Date range filter
             if ($request->has('date_from')) {
                 $query->whereDate('created_at', '>=', $request->date_from);
