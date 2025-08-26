@@ -131,12 +131,15 @@ export const useSuppliers = () => {
       })
 
       const response = await SuppliersApi.getAll(params)
+
+
       if (response.success) {
         suppliersList.value = response.data
         if (response.pagination) {
           totalItems.value = response.pagination.total
           currentPage.value = response.pagination.current_page
         }
+        console.log('Suppliers loaded:', suppliersList.value.length)
       } else {
         throw new Error(response.message)
       }
@@ -220,9 +223,9 @@ export const useSuppliers = () => {
 
     try {
       deleteLoading.value = true
-      
+
       const response = await SuppliersApi.delete(selectedSupplier.value.id_supplier)
-      
+
       if (response.success) {
         successMessage.value = response.message
         deleteDialog.value = false
@@ -243,9 +246,9 @@ export const useSuppliers = () => {
   const toggleActiveStatus = async (supplier: Supplier) => {
     try {
       toggleLoading.value[supplier.id_supplier] = true
-      
+
       const response = await SuppliersApi.toggleActive(supplier.id_supplier)
-      
+
       if (response.success) {
         // Update the supplier in the list
         const index = suppliersList.value.findIndex(s => s.id_supplier === supplier.id_supplier)
@@ -348,7 +351,14 @@ export const useSuppliers = () => {
   }
 
   const handleFiltersUpdate = (newFilters: Partial<SupplierFilters>) => {
+    console.log('=== SUPPLIERS FILTERS UPDATE ===')
+    console.log('Old filters:', { ...filters })
+    console.log('New filters received:', newFilters)
+
     Object.assign(filters, newFilters)
+
+    console.log('Updated filters:', { ...filters })
+
     onFilterChange()
   }
 

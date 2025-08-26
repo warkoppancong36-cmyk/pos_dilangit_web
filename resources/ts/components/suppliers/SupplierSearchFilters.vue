@@ -2,6 +2,13 @@
 import type { SupplierFilters } from '@/utils/api/SuppliersApi'
 import { computed, ref, watch } from 'vue'
 
+// Debounce utility
+let searchTimeout: any = null
+const debounceSearch = (callback: Function, delay: number = 500) => {
+  if (searchTimeout) clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(callback, delay)
+}
+
 interface Props {
   filters: SupplierFilters
   loading?: boolean
@@ -33,8 +40,20 @@ watch(
 
 // Update filters
 const updateFilters = (key: keyof SupplierFilters, value: any) => {
+  
   localFilters.value[key] = value
-  emit('update:filters', { ...localFilters.value })
+  
+  
+  // Emit immediately for non-search filters
+  if (key !== 'search') {
+    emit('update:filters', { ...localFilters.value })
+  } else {
+    // Debounce search
+    debounceSearch(() => {
+      console.log('Emitting debounced search filter update:', { ...localFilters.value })
+      emit('update:filters', { ...localFilters.value })
+    })
+  }
 }
 
 // Search

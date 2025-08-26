@@ -30,13 +30,13 @@ export interface Supplier {
   created_at: string
   updated_at: string
   deleted_at?: string
-  
+
   // Computed fields
   total_purchases?: number
   total_purchase_amount?: number
   last_purchase_date?: string
   full_address?: string
-  
+
   // Relations
   creator?: { id: number; name: string; email: string }
   updater?: { id: number; name: string; email: string }
@@ -129,27 +129,30 @@ interface ApiResponse<T> {
   }
 }
 
-interface SupplierResponse extends ApiResponse<Supplier> {}
-interface SuppliersResponse extends ApiResponse<Supplier[]> {}
-interface SupplierStatsResponse extends ApiResponse<SupplierStats> {}
+interface SupplierResponse extends ApiResponse<Supplier> { }
+interface SuppliersResponse extends ApiResponse<Supplier[]> { }
+interface SupplierStatsResponse extends ApiResponse<SupplierStats> { }
 
 export class SuppliersApi {
   // Get all suppliers with filters
   static async getAll(filters: SupplierFilters = {}): Promise<SuppliersResponse> {
     try {
       const params = new URLSearchParams()
-      
+
+
       Object.entries(filters).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
           params.append(key, String(value))
         }
       })
 
-      const response: AxiosResponse<SuppliersResponse> = await axios.get(
-        `${API_BASE_URL}?${params.toString()}`
-      )
+      const url = `${API_BASE_URL}?${params.toString()}`
+
+      const response: AxiosResponse<SuppliersResponse> = await axios.get(url)
+
       return response.data
     } catch (error: any) {
+      console.error('SuppliersApi.getAll error:', error)
       throw error.response?.data || { success: false, message: 'Failed to fetch suppliers' }
     }
   }

@@ -97,7 +97,9 @@ onMounted(() => {
       :cities="cities"
       :provinces="provinces"
       :loading="loading"
-      @filters-update="handleFiltersUpdate"
+      @update:filters="handleFiltersUpdate"
+      @search="fetchSuppliersList"
+      @reset="fetchSuppliersList"
       class="mb-6"
     />
 
