@@ -113,15 +113,25 @@ export const useCategories = () => {
         status: statusFilter.value !== 'all' ? statusFilter.value : undefined
       }
 
+      console.log('=== CATEGORIES FETCH ===')
+      console.log('Search value:', search.value)
+      console.log('Status filter:', statusFilter.value)
+      console.log('Params sent:', params)
+
       const response = await CategoriesApi.getCategories(params)
+
+      console.log('Categories API response:', response)
+
       if (response.success) {
         categories.value = response.data
         pagination.value = response.pagination
+        console.log('Categories loaded:', categories.value.length)
       } else {
         errorMessage.value = response.message || MESSAGES.ERROR.FETCH
         clearMessages()
       }
     } catch (error: any) {
+      console.error('Error fetching categories:', error)
       errorMessage.value = CategoriesApi.handleError(error)
       clearMessages()
     } finally {
@@ -280,6 +290,8 @@ export const useCategories = () => {
   }
 
   const onSearch = () => {
+    console.log('=== CATEGORIES SEARCH TRIGGERED ===')
+    console.log('Current search value:', search.value)
     currentPage.value = 1
     fetchCategories()
   }

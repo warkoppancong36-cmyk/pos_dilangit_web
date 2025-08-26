@@ -42,15 +42,26 @@ export class CategoriesApi {
       per_page: params.per_page.toString()
     })
 
+    console.log('=== CATEGORIES API CALL ===')
+    console.log('Input params:', params)
+
     if (params.search?.trim()) {
       searchParams.append('search', params.search.trim())
+      console.log('Added search param:', params.search.trim())
     }
 
     if (params.status && params.status !== 'all') {
       searchParams.append('status', params.status)
+      console.log('Added status param:', params.status)
     }
 
-    const response = await axios.get(`${this.baseUrl}?${searchParams.toString()}`)
+    const url = `${this.baseUrl}?${searchParams.toString()}`
+    console.log('Request URL:', url)
+
+    const response = await axios.get(url)
+
+    console.log('Categories API response:', response.data)
+
     return response.data
   }
 
@@ -71,7 +82,7 @@ export class CategoriesApi {
   static async updateCategory(id: number, data: CategoryFormData): Promise<CategoryResponse> {
     const formData = this.prepareFormData(data)
     formData.append('_method', 'PUT')
-    
+
     const response = await axios.post(`${this.baseUrl}/${id}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
@@ -110,7 +121,7 @@ export class CategoriesApi {
     formData.append('name', data.name)
     formData.append('description', data.description)
     formData.append('active', data.active ? '1' : '0')
-    
+
     if (data.image) {
       formData.append('image', data.image)
     }

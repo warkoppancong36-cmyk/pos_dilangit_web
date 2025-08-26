@@ -7,6 +7,7 @@ import StatsCards from '@/components/categories/StatsCards.vue'
 import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog.vue'
 import { useCategories } from '@/composables/useCategories'
 // import '@styles/index.scss'
+import { useDebounceFn } from '@vueuse/core'
 import { onMounted, watch } from 'vue'
 
 const {
@@ -52,8 +53,21 @@ const {
 } = useCategories()
 
 const handleSearchUpdate = (value: string) => {
+  console.log('=== CATEGORIES SEARCH UPDATE ===')
+  console.log('New search value:', value)
   search.value = value
 }
+
+// Debounced search
+const debouncedSearch = useDebounceFn(() => {
+  console.log('Executing debounced search for categories with term:', search.value)
+  onSearch()
+}, 500)
+
+// Watch for search changes
+watch(search, () => {
+  debouncedSearch()
+})
 
 const handleStatusFilterUpdate = (value: string) => {
   statusFilter.value = value

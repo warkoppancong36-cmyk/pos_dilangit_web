@@ -12,9 +12,9 @@
             density="comfortable"
             hide-details
             clearable
-            @update:model-value="$emit('update:search', $event)"
-            @keyup.enter="$emit('search')"
-            @click:clear="$emit('search')"
+            @update:model-value="handleSearchUpdate"
+            @keyup.enter="handleSearch"
+            @click:clear="handleSearch"
           />
         </VCol>
         <VCol cols="12" md="3">
@@ -70,7 +70,32 @@ interface Emits {
 }
 
 defineProps<Props>()
-defineEmits<Emits>()
+const emit = defineEmits<Emits>()
+
+// Debounce utility
+let searchTimeout: any = null
+const debounceSearch = (callback: Function, delay: number = 500) => {
+  if (searchTimeout) clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(callback, delay)
+}
+
+// Handlers
+const handleSearchUpdate = (value: string) => {
+  console.log('=== CATEGORIES SEARCH UPDATE ===')
+  console.log('Search value:', value)
+  emit('update:search', value)
+  
+  // Debounce search
+  debounceSearch(() => {
+    console.log('Executing debounced search for categories')
+    emit('search')
+  })
+}
+
+const handleSearch = () => {
+  console.log('=== CATEGORIES SEARCH BUTTON CLICKED ===')
+  emit('search')
+}
 
 // Options
 const statusOptions = [

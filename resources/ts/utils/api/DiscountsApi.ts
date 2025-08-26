@@ -24,12 +24,12 @@ export interface Discount {
   updated_by?: number
   created_at: string
   updated_at: string
-  
+
   // Computed attributes
   status?: string
   formatted_value?: string
   remaining_usage?: number | null
-  
+
   // Relations
   createdBy?: {
     id: number
@@ -103,12 +103,17 @@ class DiscountsApi {
   private static readonly BASE_URL = '/api/discounts'
 
   static async getDiscounts(filters: DiscountFilters = {}): Promise<PaginatedDiscounts> {
+    console.log('=== DISCOUNTS API CALL ===')
+    console.log('Input filters:', filters)
+
     const response: AxiosResponse<{
       success: boolean
       data: PaginatedDiscounts
       message: string
     }> = await axios.get(this.BASE_URL, { params: filters })
-    
+
+    console.log('Discounts API response:', response.data)
+
     return response.data.data
   }
 
@@ -118,7 +123,7 @@ class DiscountsApi {
       data: Discount
       message: string
     }> = await axios.get(`${this.BASE_URL}/${id}`)
-    
+
     return response.data.data
   }
 
@@ -128,7 +133,7 @@ class DiscountsApi {
       data: Discount
       message: string
     }> = await axios.post(this.BASE_URL, data)
-    
+
     return response.data.data
   }
 
@@ -138,7 +143,7 @@ class DiscountsApi {
       data: Discount
       message: string
     }> = await axios.put(`${this.BASE_URL}/${id}`, data)
-    
+
     return response.data.data
   }
 
@@ -156,7 +161,7 @@ class DiscountsApi {
       order_total: orderTotal,
       customer_id: customerId
     })
-    
+
     return response.data.data
   }
 
@@ -166,7 +171,7 @@ class DiscountsApi {
       data: DiscountStats
       message: string
     }> = await axios.get(`${this.BASE_URL}/stats`)
-    
+
     return response.data.data
   }
 
@@ -176,7 +181,7 @@ class DiscountsApi {
       data: { active: boolean }
       message: string
     }> = await axios.post(`${this.BASE_URL}/${id}/toggle-status`)
-    
+
     return response.data.data
   }
 
@@ -186,7 +191,7 @@ class DiscountsApi {
       data: Discount
       message: string
     }> = await axios.post(`${this.BASE_URL}/${id}/duplicate`)
-    
+
     return response.data.data
   }
 
@@ -242,29 +247,29 @@ class DiscountsApi {
 
   static isDiscountValid(discount: Discount): boolean {
     if (!discount.active) return false
-    
+
     const now = new Date()
     const validFrom = new Date(discount.valid_from)
     const validUntil = new Date(discount.valid_until)
-    
+
     return now >= validFrom && now <= validUntil
   }
 
   static canDiscountBeUsed(discount: Discount, orderTotal: number): boolean {
     if (!this.isDiscountValid(discount)) return false
-    
+
     if (discount.minimum_amount && orderTotal < discount.minimum_amount) return false
-    
+
     if (discount.usage_limit && discount.used_count >= discount.usage_limit) return false
-    
+
     return true
   }
 
   static calculateDiscountAmount(discount: Discount, orderTotal: number): number {
     if (!this.canDiscountBeUsed(discount, orderTotal)) return 0
-    
+
     let discountAmount = 0
-    
+
     switch (discount.type) {
       case 'percentage':
         discountAmount = (orderTotal * discount.value) / 100
@@ -277,12 +282,12 @@ class DiscountsApi {
         discountAmount = 0
         break
     }
-    
+
     // Apply maximum discount limit
     if (discount.maximum_discount && discountAmount > discount.maximum_discount) {
       discountAmount = discount.maximum_discount
     }
-    
+
     return Math.round(discountAmount * 100) / 100
   }
 }
