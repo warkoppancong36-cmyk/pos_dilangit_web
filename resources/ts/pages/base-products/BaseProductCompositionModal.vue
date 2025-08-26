@@ -361,10 +361,27 @@
                   icon
                   size="x-small"
                   variant="text"
+                  color="primary"
+                  @click="editComposition(composition)"
+                  :disabled="composition.is_temporary || loading"
+                >
+                  <VIcon icon="mdi-pencil" size="16" />
+                  <VTooltip activator="parent" location="top">
+                    Edit Komposisi
+                  </VTooltip>
+                </VBtn>
+                <VBtn
+                  icon
+                  size="x-small"
+                  variant="text"
                   color="error"
+                  :disabled="loading"
                   @click="removeComposition(composition)"
                 >
                   <VIcon icon="mdi-delete" size="16" />
+                  <VTooltip activator="parent" location="top">
+                    Hapus Komposisi
+                  </VTooltip>
                 </VBtn>
               </div>
             </div>
@@ -400,6 +417,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
 import axios from 'axios'
+import { $api } from '@/utils/api'
 
 // Types
 interface BaseProduct {
@@ -440,7 +458,6 @@ interface Composition {
   ingredient_base_product?: BaseProduct
   total_cost?: number
   is_temporary?: boolean
-  marked_for_deletion?: boolean
 }
 
 interface Props {
@@ -454,6 +471,7 @@ interface Props {
 interface Emits {
   (e: 'close'): void
   (e: 'save', composition: any): void
+  (e: 'notification', message: string, type: 'success' | 'error' | 'warning' | 'info'): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -527,9 +545,6 @@ const isDuplicateIngredient = computed(() => {
   if (!form.ingredient_item_id && !form.ingredient_base_product_id) return false
   
   const duplicate = existingCompositions.value.some(comp => {
-    // Skip temporary compositions that are marked for deletion
-    if (comp.is_temporary && comp.marked_for_deletion) return false
-    
     if (form.ingredient_item_id && comp.ingredient_item_id === form.ingredient_item_id) {
       console.log('Duplicate found - ingredient_item_id:', form.ingredient_item_id, 'in composition:', comp)
       return true
@@ -695,14 +710,39 @@ const loadItems = async () => {
         console.log('Sample item structure:', itemsData[0])
       }
     } else {
-      console.error('API response not successful:', response.data)
+      console.error('API response not successful:', response)
       items.value = []
     }
-  } catch (error) {
-    console.error('Error loading items:', error)
-    // Check if it's an authentication error
-    if (error.response?.status === 401) {
-      console.error('Authentication required for items API')
+  } catch (error: any) {
+    console.error('Error loading items with $api:', error)
+    
+    // Fallback to fetch
+    try {
+      console.log('Trying fallback for items...')
+      const fallbackResponse = await fetch('/api/items?per_page=all&active=true', {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${useCookie('accessToken').value}`
+        }
+      })
+      const fallbackData = await fallbackResponse.json()
+      console.log('Items fallback response:', fallbackData)
+      
+      if (fallbackData.success && fallbackData.data) {
+        let itemsData = []
+        if (Array.isArray(fallbackData.data.data)) {
+          itemsData = fallbackData.data.data
+        } else if (Array.isArray(fallbackData.data)) {
+          itemsData = fallbackData.data
+        }
+        
+        items.value = itemsData
+        itemsCached.value = true
+        console.log('Items loaded via fallback:', itemsData.length)
+      }
+    } catch (fallbackError) {
+      console.error('Items fallback also failed:', fallbackError)
+      items.value = []
     }
     items.value = []
   } finally {
@@ -717,6 +757,7 @@ const loadExistingCompositions = async () => {
     console.log('Loading existing compositions for base_product_id:', form.base_product_id)
     // Use the specific endpoint for getting compositions by base product
     const response = await axios.get(`/api/base-product-compositions/base-product/${form.base_product_id}`)
+    console.log('Full API response:', response.data)
     
     if (response.data.success) {
       const compositions = response.data.data || []
@@ -724,7 +765,6 @@ const loadExistingCompositions = async () => {
       // Mark existing compositions as saved (not temporary) and ensure proper data structure
       compositions.forEach((comp: any) => {
         comp.is_temporary = false
-        comp.marked_for_deletion = false
         
         // Ensure ingredient data is properly loaded
         if (comp.ingredient_item_id && !comp.ingredient_item) {
@@ -824,9 +864,6 @@ const handleSubmit = async () => {
 
   // Enhanced duplicate check including both local and potentially saved compositions
   const isDuplicate = existingCompositions.value.some(comp => {
-    // Skip compositions marked for deletion
-    if (comp.marked_for_deletion) return false
-    
     if (form.ingredient_item_id && comp.ingredient_item_id === form.ingredient_item_id) {
       console.log('DUPLICATE FOUND - ingredient_item_id match:', form.ingredient_item_id)
       return true
@@ -868,8 +905,7 @@ const handleSubmit = async () => {
       ingredient_base_product: form.ingredient_base_product_id > 0 ? selectedIngredient.value : null,
       total_cost: calculatedCost.value,
       // Temporary flag to indicate unsaved
-      is_temporary: true,
-      marked_for_deletion: false
+      is_temporary: true
     }
 
     console.log('Adding composition to list:', newComposition)
@@ -899,16 +935,117 @@ const handleSubmit = async () => {
   }
 }
 
-const removeComposition = (composition: Composition) => {
-  const index = existingCompositions.value.findIndex(c => c.id === composition.id)
-  if (index > -1) {
-    // If it's a temporary composition, remove it completely
-    if (composition.is_temporary) {
-      existingCompositions.value.splice(index, 1)
-    } else {
-      // If it's a saved composition, mark it for deletion
-      composition.marked_for_deletion = true
+const editComposition = async (composition: Composition) => {
+  // Populate form with composition data for editing
+  form.base_product_id = composition.base_product_id
+  form.quantity = composition.quantity
+  form.notes = composition.notes || ''
+  form.is_active = composition.is_active
+  form.is_critical = composition.is_critical || false
+  
+  // Set ingredient based on type
+  if (composition.ingredient_item_id) {
+    form.ingredient_item_id = composition.ingredient_item_id
+    form.ingredient_base_product_id = 0
+    selectedIngredient.value = composition.ingredient_item
+  } else if (composition.ingredient_base_product_id) {
+    form.ingredient_base_product_id = composition.ingredient_base_product_id
+    form.ingredient_item_id = 0
+    selectedIngredient.value = composition.ingredient_base_product
+  }
+  
+  // Remove the composition temporarily so it can be re-added after editing
+  // Note: For non-temporary items, this will delete from database
+  await removeComposition(composition)
+  
+  // Clear errors
+  errors.value = {}
+  
+  // Scroll to form for better UX
+  setTimeout(() => {
+    const formElement = document.querySelector('.composition-modal .v-card-text')
+    if (formElement) {
+      formElement.scrollTo({ top: 0, behavior: 'smooth' })
     }
+  }, 100)
+}
+
+const removeComposition = async (composition: Composition) => {
+  loading.value = true;
+  try {
+    console.log('Remove composition called:', composition);
+    console.log('is_temporary:', composition.is_temporary);
+    console.log('id:', composition.id);
+    console.log('id_base_product_composition:', composition.id_base_product_composition);
+    
+    // Jika composition memiliki ID (sudah tersimpan di database), hapus dari database
+    // Gunakan id atau id_base_product_composition
+    const compositionId = composition.id_base_product_composition || composition.id;
+    const isTemporary = composition.is_temporary === true;
+    
+    console.log('compositionId:', compositionId);
+    console.log('isTemporary:', isTemporary);
+    console.log('!isTemporary:', !isTemporary);
+    console.log('Should call API:', compositionId && !isTemporary);
+    
+    if (compositionId && !isTemporary) {
+      console.log('✅ Calling DELETE API for composition ID:', compositionId);
+      
+      try {
+        // Coba pakai $api dengan debug lengkap
+        console.log('Trying $api first...')
+        const response = await $api(`/base-product-compositions/${compositionId}`, {
+          method: 'DELETE'
+        });
+        
+        console.log('DELETE API response ($api):', response);
+        emit('notification', 'Item komposisi berhasil dihapus dari database', 'success');
+        
+      } catch (apiError: any) {
+        console.error('$api failed, trying axios fallback:', apiError)
+        
+        // Fallback ke axios jika $api gagal
+        const getCookieValue = (name: string) => {
+          const value = "; " + document.cookie;
+          const parts = value.split("; " + name + "=");
+          if (parts.length === 2) return parts.pop()?.split(";").shift();
+          return null;
+        }
+        
+        const token = getCookieValue('accessToken') || localStorage.getItem('accessToken')
+        console.log('Token found for fallback:', token ? 'YES' : 'NO')
+        
+        const config = {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        }
+        
+        const axiosResponse = await axios.delete(`/api/base-product-compositions/${compositionId}`, config);
+        console.log('DELETE API response (axios fallback):', axiosResponse.data);
+        emit('notification', 'Item komposisi berhasil dihapus dari database', 'success');
+      }
+    } else {
+      console.log('❌ Skipping API call');
+      console.log('Reason - compositionId:', compositionId, ', isTemporary:', isTemporary);
+      emit('notification', 'Item komposisi berhasil dihapus', 'success');
+    }
+    
+    // Hapus dari array lokal
+    const index = existingCompositions.value.findIndex(c => c.id === composition.id)
+    if (index > -1) {
+      existingCompositions.value.splice(index, 1)
+      console.log('Item removed from composition list at index:', index)
+    }
+    
+  } catch (error: any) {
+    console.error('Error deleting composition:', error);
+    emit('notification', error.data?.message || 'Gagal menghapus item komposisi', 'error');
+  } finally {
+    loading.value = false;
   }
 }
 
@@ -923,7 +1060,7 @@ const saveAllCompositions = async () => {
   try {
     // Save all temporary/unsaved compositions
     const compositionsToSave = existingCompositions.value.filter(comp => 
-      comp.is_temporary && !comp.marked_for_deletion && comp.base_product_id && comp.quantity > 0
+      comp.is_temporary && comp.base_product_id && comp.quantity > 0
     )
     
     console.log('Compositions to save:', compositionsToSave.length)

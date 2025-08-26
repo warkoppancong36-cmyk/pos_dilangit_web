@@ -747,20 +747,6 @@ watch(totalItems, (newValue, oldValue) => {
           </VDataTableServer>
           
           <!-- Total Data Info -->
-          <VCardText 
-            v-if="!loading && inventoryList.length > 0"
-            class="text-center py-2 text-caption text-medium-emphasis"
-          >
-            Menampilkan {{ inventoryList.length }} dari {{ totalItems }} total produk inventory
-            <span v-if="filters.search || filters.stock_status !== 'all'">
-              (hasil pencarian/filter)
-            </span>
-            <br>
-            <small class="text-xs text-info">
-              Debug: Page {{ currentPage }}/{{ totalPages }} | Items per page: {{ itemsPerPage }} | 
-              Has Next: {{ hasNextPage }} | Has Prev: {{ hasPrevPage }}
-            </small>
-          </VCardText>
         </VCard>
 
         <!-- Stock Update Dialog -->

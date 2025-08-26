@@ -8,6 +8,7 @@ use App\Models\PurchaseItem;
 use App\Models\Product;
 use App\Models\Supplier;
 use App\Models\Inventory;
+use App\Models\InventoryMovement;
 // use App\Models\Variant; // DISABLED - Variant system removed
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -128,7 +129,8 @@ class PurchaseController extends Controller
                     'item_id' => $item['id_item'],
                     'quantity_ordered' => $item['quantity'],
                     'unit_cost' => $item['unit_cost'],
-                    'total_cost' => $item['quantity'] * $item['unit_cost']
+                    'total_cost' => $item['quantity'] * $item['unit_cost'],
+                    'status' => 'pending' // Explicitly set status to pending for new items
                     // Removed 'unit' field - will be retrieved from items table via JOIN
                 ]);
             }
@@ -220,6 +222,15 @@ class PurchaseController extends Controller
             $discountAmount = $request->get('discount_amount', 0);
             $totalAmount = $subtotal  - $discountAmount;
 
+            // Store original status to handle inventory reversals and auto-receive logic
+            $originalStatus = $purchase->status;
+
+            // Update purchase status based on original status
+            $newPurchaseStatus = 'pending'; // Default to pending
+            if (in_array($originalStatus, ['received', 'completed'])) {
+                $newPurchaseStatus = $originalStatus; // Keep original status if received/completed
+            }
+
             // Update purchase
             $purchase->update([
                 'supplier_id' => $request->supplier_id,
@@ -230,12 +241,13 @@ class PurchaseController extends Controller
                 'discount_amount' => $discountAmount,
                 'total_amount' => $totalAmount,
                 'notes' => $request->notes,
-                'updated_by' => Auth::id()
+                'updated_by' => Auth::id(),
+                'status' => $newPurchaseStatus
             ]);
 
             // Delete existing items and create new ones
             // For completed purchases, we need to handle inventory changes carefully
-            if ($purchase->status === 'completed') {
+            if ($originalStatus === 'completed') {
                 $existingItems = $purchase->items()->get();
                 
                 // First, reverse inventory changes from old items
@@ -243,7 +255,27 @@ class PurchaseController extends Controller
                     if ($existingItem->quantity_received > 0) {
                         $inventory = Inventory::where('id_item', $existingItem->item_id)->first();
                         if ($inventory) {
-                            $inventory->decrement('current_stock', $existingItem->quantity_received);
+                            $stockBefore = $inventory->current_stock;
+                            $quantityReversed = $existingItem->quantity_received;
+                            
+                            // Decrease inventory stock
+                            $inventory->decrement('current_stock', $quantityReversed);
+                            
+                            // Create inventory movement record for reversal
+                            InventoryMovement::create([
+                                'id_inventory' => $inventory->id_inventory,
+                                'movement_type' => 'out',
+                                'quantity' => $quantityReversed,
+                                'stock_before' => $stockBefore,
+                                'stock_after' => $stockBefore - $quantityReversed,
+                                'unit_cost' => $existingItem->unit_cost,
+                                'total_cost' => $existingItem->unit_cost * $quantityReversed,
+                                'reference_type' => 'purchase_edit_reversal',
+                                'reference_id' => $purchase->id_purchase,
+                                'notes' => "Stock reversal due to purchase edit - Purchase #{$purchase->purchase_number}",
+                                'movement_date' => now(),
+                                'created_by' => Auth::id(),
+                            ]);
                         }
                     }
                 }
@@ -251,28 +283,73 @@ class PurchaseController extends Controller
             
             PurchaseItem::where('purchase_id', $purchase->id_purchase)->delete();
 
+            // Create new items with appropriate status based on purchase status
             foreach ($items as $item) {
+                $itemStatus = 'pending'; // Default status
+                $quantityReceived = 0;
+                
+                // If purchase was originally received/completed, auto-receive items
+                if (in_array($originalStatus, ['received', 'completed'])) {
+                    $itemStatus = 'received';
+                    $quantityReceived = $item['quantity'];
+                }
+                
                 $newItem = PurchaseItem::create([
                     'purchase_id' => $purchase->id_purchase,
                     'item_id' => $item['id_item'],
                     'quantity_ordered' => $item['quantity'],
+                    'quantity_received' => $quantityReceived,
                     'unit_cost' => $item['unit_cost'],
-                    'total_cost' => $item['quantity'] * $item['unit_cost']
-                    // Removed 'unit' field - will be retrieved from items table via JOIN
+                    'total_cost' => $item['quantity'] * $item['unit_cost'],
+                    'status' => $itemStatus,
+                    'actual_delivery_date' => $itemStatus === 'received' ? now() : null
                 ]);
                 
-                // For completed purchases, auto-receive and update inventory
-                if ($purchase->status === 'completed') {
-                    $newItem->update([
-                        'quantity_received' => $item['quantity'],
-                        'status' => 'received'
-                    ]);
-                    
-                    // Apply new inventory changes
+                // If item is auto-received, update inventory
+                if ($itemStatus === 'received') {
                     $inventory = Inventory::where('id_item', $item['id_item'])->first();
+                    $stockBefore = $inventory ? $inventory->current_stock : 0;
+                    
                     if ($inventory) {
                         $inventory->increment('current_stock', $item['quantity']);
+                        $inventory->update([
+                            'last_restocked' => now(),
+                            'average_cost' => $item['unit_cost']
+                        ]);
+                    } else {
+                        // Create new inventory record if doesn't exist
+                        $inventory = Inventory::create([
+                            'id_item' => $item['id_item'],
+                            'current_stock' => $item['quantity'],
+                            'reserved_stock' => 0,
+                            'reorder_level' => 10,
+                            'max_stock_level' => 100,
+                            'average_cost' => $item['unit_cost'],
+                            'last_restocked' => now(),
+                            'created_by' => Auth::id()
+                        ]);
                     }
+                    
+                    // Create inventory movement record for auto-receive
+                    InventoryMovement::create([
+                        'id_inventory' => $inventory->id_inventory,
+                        'movement_type' => 'in',
+                        'quantity' => $item['quantity'],
+                        'stock_before' => $stockBefore,
+                        'stock_after' => $stockBefore + $item['quantity'],
+                        'unit_cost' => $item['unit_cost'],
+                        'total_cost' => $item['unit_cost'] * $item['quantity'],
+                        'reference_type' => 'purchase_edit_auto_receive',
+                        'reference_id' => $purchase->id_purchase,
+                        'notes' => "Auto-received due to purchase edit (maintained status) - Purchase #{$purchase->purchase_number}",
+                        'movement_date' => now(),
+                        'created_by' => Auth::id(),
+                    ]);
+                    
+                    // Update item cost_per_unit
+                    $newItem->item->update([
+                        'cost_per_unit' => $item['unit_cost']
+                    ]);
                 }
             }
 
@@ -315,6 +392,8 @@ class PurchaseController extends Controller
                 ], 422);
             }
 
+            DB::beginTransaction();
+
             $updateData = [
                 'status' => $request->status,
                 'updated_by' => Auth::id()
@@ -353,6 +432,66 @@ class PurchaseController extends Controller
                     \Log::info('Skipping inventory update - items already received for purchase: ' . $purchase->purchase_number);
                 }
             }
+                // Tambahan: Jika status purchase sudah received atau completed, item pending dianggap sudah diterima
+                if (in_array($request->status, ['received', 'completed'])) {
+                    foreach ($purchase->items as $item) {
+                        if ($item->status === 'pending') {
+                            // Update item status dulu
+                            $item->update([
+                                'quantity_received' => $item->quantity_ordered,
+                                'status' => 'received',
+                                'delivery_date' => now()
+                            ]);
+                            
+                            // Update inventory untuk item yang baru diterima
+                            $inventory = Inventory::where('id_item', $item->item_id)->first();
+                            $stockBefore = $inventory ? $inventory->current_stock : 0;
+                            
+                            if ($inventory) {
+                                $inventory->increment('current_stock', $item->quantity_ordered);
+                                $inventory->update([
+                                    'last_restocked' => now(),
+                                    'average_cost' => $item->unit_cost
+                                ]);
+                            } else {
+                                // Create new inventory record if doesn't exist
+                                $inventory = Inventory::create([
+                                    'id_item' => $item->item_id,
+                                    'current_stock' => $item->quantity_ordered,
+                                    'reserved_stock' => 0,
+                                    'reorder_level' => 10,
+                                    'max_stock_level' => 100,
+                                    'average_cost' => $item->unit_cost,
+                                    'last_restocked' => now(),
+                                    'created_by' => Auth::id()
+                                ]);
+                            }
+                            
+                            // Create inventory movement record untuk item pending yang otomatis diterima
+                            InventoryMovement::create([
+                                'id_inventory' => $inventory->id_inventory,
+                                'movement_type' => 'in',
+                                'quantity' => $item->quantity_ordered,
+                                'stock_before' => $stockBefore,
+                                'stock_after' => $stockBefore + $item->quantity_ordered,
+                                'unit_cost' => $item->unit_cost,
+                                'total_cost' => $item->unit_cost * $item->quantity_ordered,
+                                'reference_type' => 'purchase_auto_receive',
+                                'reference_id' => $purchase->id_purchase,
+                                'notes' => "Auto-received pending item due to purchase status change - Purchase #{$purchase->purchase_number}",
+                                'movement_date' => now(),
+                                'created_by' => Auth::id(),
+                            ]);
+                            
+                            // Update item cost_per_unit
+                            $item->item->update([
+                                'cost_per_unit' => $item->unit_cost
+                            ]);
+                        }
+                    }
+                }
+
+            DB::commit();
 
             return response()->json([
                 'success' => true,
@@ -361,6 +500,7 @@ class PurchaseController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Error updating purchase status: ' . $e->getMessage()
@@ -417,6 +557,27 @@ class PurchaseController extends Controller
                     'cost_per_unit' => $item->unit_cost
                 ]);
                 
+                // Create inventory movement record
+                $inventory = Inventory::where('id_item', $item->item_id)->first();
+                if ($inventory) {
+                    $stockBefore = $inventory->current_stock - $stockIncrease;
+                    
+                    InventoryMovement::create([
+                        'id_inventory' => $inventory->id_inventory,
+                        'movement_type' => 'in',
+                        'quantity' => $stockIncrease,
+                        'stock_before' => $stockBefore,
+                        'stock_after' => $inventory->current_stock,
+                        'unit_cost' => $item->unit_cost,
+                        'total_cost' => $item->unit_cost * $stockIncrease,
+                        'reference_type' => 'purchase_completed',
+                        'reference_id' => $purchase->id_purchase,
+                        'notes' => "Stock received from purchase completion - Purchase #{$purchase->purchase_number}",
+                        'movement_date' => now(),
+                        'created_by' => Auth::id(),
+                    ]);
+                }
+                
                 \Log::info('Stock and cost updated for item: ' . $inventoryItem->name, [
                     'stock_increase' => $stockIncrease,
                     'new_cost_per_unit' => $item->unit_cost
@@ -424,9 +585,6 @@ class PurchaseController extends Controller
             } else {
                 \Log::warning('No item found for purchase item ID: ' . $item->id_purchase_item);
             }
-            
-            // Create inventory movement record
-            // You might want to create an InventoryMovement model and record here
         }
         
         \Log::info('Inventory update completed for purchase: ' . $purchase->purchase_number);
@@ -650,7 +808,7 @@ class PurchaseController extends Controller
                         ]);
                         
                         // Create inventory movement for existing inventory
-                        \App\Models\InventoryMovement::create([
+                        InventoryMovement::create([
                             'id_inventory' => $inventory->id_inventory,
                             'movement_type' => 'in',
                             'quantity' => $itemData['quantity_received'],
@@ -678,7 +836,7 @@ class PurchaseController extends Controller
                         ]);
                         
                         // Create inventory movement for new inventory
-                        \App\Models\InventoryMovement::create([
+                        InventoryMovement::create([
                             'id_inventory' => $newInventory->id_inventory,
                             'movement_type' => 'in',
                             'quantity' => $itemData['quantity_received'],
