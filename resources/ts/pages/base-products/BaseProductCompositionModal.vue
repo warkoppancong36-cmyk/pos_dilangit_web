@@ -418,6 +418,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 import axios from 'axios'
 import { $api } from '@/utils/api'
+import { getAuthToken } from '@/utils/auth'
 
 // Types
 interface BaseProduct {
@@ -991,42 +992,26 @@ const removeComposition = async (composition: Composition) => {
     if (compositionId && !isTemporary) {
       console.log('✅ Calling DELETE API for composition ID:', compositionId);
       
-      try {
-        // Coba pakai $api dengan debug lengkap
-        console.log('Trying $api first...')
-        const response = await $api(`/base-product-compositions/${compositionId}`, {
-          method: 'DELETE'
-        });
-        
-        console.log('DELETE API response ($api):', response);
+      // Gunakan pola yang sama seperti di purchases-management.vue
+      const token = getAuthToken()
+      const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+      
+      console.log('Request headers:', headers)
+      const response = await axios.delete(`/api/base-product-compositions/${compositionId}`, { headers });
+      
+      console.log('DELETE API response:', response.data);
+      
+      if (response.data.success) {
         emit('notification', 'Item komposisi berhasil dihapus dari database', 'success');
-        
-      } catch (apiError: any) {
-        console.error('$api failed, trying axios fallback:', apiError)
-        
-        // Fallback ke axios jika $api gagal
-        const getCookieValue = (name: string) => {
-          const value = "; " + document.cookie;
-          const parts = value.split("; " + name + "=");
-          if (parts.length === 2) return parts.pop()?.split(";").shift();
-          return null;
-        }
-        
-        const token = getCookieValue('accessToken') || localStorage.getItem('accessToken')
-        console.log('Token found for fallback:', token ? 'YES' : 'NO')
-        
-        const config = {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-          }
-        }
-        
-        const axiosResponse = await axios.delete(`/api/base-product-compositions/${compositionId}`, config);
-        console.log('DELETE API response (axios fallback):', axiosResponse.data);
-        emit('notification', 'Item komposisi berhasil dihapus dari database', 'success');
+      } else {
+        emit('notification', 'Gagal menghapus item komposisi', 'error');
       }
     } else {
       console.log('❌ Skipping API call');
@@ -1043,7 +1028,7 @@ const removeComposition = async (composition: Composition) => {
     
   } catch (error: any) {
     console.error('Error deleting composition:', error);
-    emit('notification', error.data?.message || 'Gagal menghapus item komposisi', 'error');
+    emit('notification', error.response?.data?.message || 'Gagal menghapus item komposisi', 'error');
   } finally {
     loading.value = false;
   }
@@ -1072,67 +1057,101 @@ const saveAllCompositions = async () => {
     }
     
     for (let i = compositionsToSave.length - 1; i >= 0; i--) {
-      const composition = compositionsToSave[i]
+      const currentComposition = compositionsToSave[i]
+      
+      console.log(`\n=== PROCESSING COMPOSITION ${i + 1}/${compositionsToSave.length} ===`)
+      console.log('Current composition raw data:', currentComposition)
       
       // Validate composition data before sending
-      if (!composition.base_product_id || composition.quantity <= 0) {
-        console.error('Invalid composition data:', composition)
-        errorMessages.push(`Invalid composition data for ${getIngredientName(composition)}`)
+      if (!currentComposition.base_product_id || currentComposition.quantity <= 0) {
+        console.error('Invalid composition data:', currentComposition)
+        errorMessages.push(`Invalid composition data for ${getIngredientName(currentComposition)}`)
         continue
       }
       
       try {
-        const payload: any = {
-          base_product_id: Number(composition.base_product_id),
-          quantity: Number(composition.quantity),
-          is_active: Boolean(composition.is_active),
-          is_critical: Boolean(composition.is_critical),
-          notes: composition.notes || null
-        }
+        // Create a completely new payload object
+        const savePayload: any = {}
+        
+        // Populate required fields
+        savePayload.base_product_id = Number(currentComposition.base_product_id)
+        savePayload.quantity = Number(currentComposition.quantity)
+        savePayload.is_active = Boolean(currentComposition.is_active)
+        savePayload.is_critical = Boolean(currentComposition.is_critical)
+        savePayload.notes = currentComposition.notes || null
 
-        // Only include relevant ingredient field (ensure it's a number and > 0)
-        if (composition.ingredient_item_id && composition.ingredient_item_id > 0) {
-          payload.ingredient_item_id = Number(composition.ingredient_item_id)
+        // Handle ingredient fields carefully
+        if (currentComposition.ingredient_item_id && Number(currentComposition.ingredient_item_id) > 0) {
+          savePayload.ingredient_item_id = Number(currentComposition.ingredient_item_id)
         }
-        if (composition.ingredient_base_product_id && composition.ingredient_base_product_id > 0) {
-          payload.ingredient_base_product_id = Number(composition.ingredient_base_product_id)
+        if (currentComposition.ingredient_base_product_id && Number(currentComposition.ingredient_base_product_id) > 0) {
+          savePayload.ingredient_base_product_id = Number(currentComposition.ingredient_base_product_id)
         }
 
         // Validate that at least one ingredient is provided
-        if (!payload.ingredient_item_id && !payload.ingredient_base_product_id) {
-          console.error('No ingredient provided for composition:', composition)
-          errorMessages.push(`${getIngredientName(composition)}: No ingredient selected`)
+        if (!savePayload.ingredient_item_id && !savePayload.ingredient_base_product_id) {
+          console.error('No ingredient provided for composition:', currentComposition)
+          errorMessages.push(`${getIngredientName(currentComposition)}: No ingredient selected`)
           continue
         }
 
-        console.log('Saving composition payload:', payload)
-        console.log('Original composition data:', {
-          id: composition.id,
-          base_product_id: composition.base_product_id,
-          quantity: composition.quantity,
-          ingredient_item_id: composition.ingredient_item_id,
-          ingredient_base_product_id: composition.ingredient_base_product_id
+        console.log('Final savePayload constructed:', savePayload)
+        console.log('savePayload type checks:')
+        console.log('- base_product_id:', typeof savePayload.base_product_id, savePayload.base_product_id)
+        console.log('- quantity:', typeof savePayload.quantity, savePayload.quantity)
+        console.log('- ingredient_item_id:', typeof savePayload.ingredient_item_id, savePayload.ingredient_item_id)
+        console.log('- ingredient_base_product_id:', typeof savePayload.ingredient_base_product_id, savePayload.ingredient_base_product_id)
+
+        // Debug: Log payload before sending
+        console.log('=== ABOUT TO SEND PAYLOAD ===')
+        console.log('savePayload stringified:', JSON.stringify(savePayload))
+        console.log('savePayload keys:', Object.keys(savePayload))
+        console.log('savePayload values:', Object.values(savePayload))
+
+        // Add temporary request interceptor to debug
+        const requestInterceptor = axios.interceptors.request.use(config => {
+          console.log('=== AXIOS REQUEST INTERCEPTOR ===')
+          console.log('Request URL:', config.url)
+          console.log('Request method:', config.method)
+          console.log('Request data type:', typeof config.data)
+          console.log('Request data:', config.data)
+          console.log('Request data stringified:', JSON.stringify(config.data))
+          console.log('Request headers:', config.headers)
+          return config
         })
 
-        await axios.post('/api/base-product-compositions', payload)
+        const response = await axios.post('/api/base-product-compositions', savePayload, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        })
+        
+        // Remove the interceptor
+        axios.interceptors.request.eject(requestInterceptor)
+        
+        console.log('=== POST RESPONSE ===')
+        console.log('Response status:', response.status)
+        console.log('Response data:', response.data)
+        
         successCount++
         
         // Remove from temporary list since it's now saved
-        const originalIndex = existingCompositions.value.findIndex(c => c.id === composition.id)
+        const originalIndex = existingCompositions.value.findIndex(c => c.id === currentComposition.id)
         if (originalIndex > -1) {
           existingCompositions.value.splice(originalIndex, 1)
         }
         
       } catch (itemError: any) {
         console.error('Error saving individual composition:', itemError)
-        const ingredientName = getIngredientName(composition)
+        const ingredientName = getIngredientName(currentComposition)
         
         if (itemError.response?.status === 422) {
           const errorMessage = itemError.response?.data?.message || ''
           if (errorMessage.includes('already exists') || errorMessage.includes('Composition already exists')) {
             errorMessages.push(`${ingredientName}: Item sudah ada dalam komposisi database`)
             // Remove duplicate item from local list
-            const originalIndex = existingCompositions.value.findIndex(c => c.id === composition.id)
+            const originalIndex = existingCompositions.value.findIndex(c => c.id === currentComposition.id)
             if (originalIndex > -1) {
               existingCompositions.value.splice(originalIndex, 1)
             }
