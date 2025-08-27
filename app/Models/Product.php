@@ -38,6 +38,8 @@ class Product extends Model
         'status',
         'active',
         'featured',
+        'available_in_kitchen',
+        'available_in_bar',
         'created_by',
         'updated_by',
         'deleted_by',
@@ -50,6 +52,8 @@ class Product extends Model
         'weight' => 'decimal:2',
         'active' => 'boolean',
         'featured' => 'boolean',
+        'available_in_kitchen' => 'boolean',
+        'available_in_bar' => 'boolean',
         'tags' => 'array',
         'dimensions' => 'array',
     ];
@@ -64,6 +68,8 @@ class Product extends Model
         'status' => 'draft',
         'active' => true,
         'featured' => false,
+        'available_in_kitchen' => true,
+        'available_in_bar' => true,
     ];
 
     // Boot method untuk auto-generate slug dan SKU

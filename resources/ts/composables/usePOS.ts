@@ -11,6 +11,8 @@ export interface Product {
   image?: string
   id_category?: number
   id_variant?: number
+  available_in_kitchen?: boolean
+  available_in_bar?: boolean
 }
 
 export interface Customer {
@@ -51,11 +53,11 @@ const usePOS = () => {
 
   const discountValue = computed(() => {
     if (!discountAmount.value) return 0
-    
+
     if (discountType.value === 'percentage') {
       return (subtotal.value * discountAmount.value) / 100
     }
-    
+
     return discountAmount.value
   })
 
@@ -86,7 +88,7 @@ const usePOS = () => {
   const addToCart = (product: Product, quantity: number = 1) => {
     try {
       const existingItem = cartItems.value.find(item => item.id_product === product.id_product)
-      
+
       if (existingItem) {
         const newQuantity = existingItem.quantity + quantity
         if (newQuantity <= product.stock) {
@@ -104,7 +106,7 @@ const usePOS = () => {
           throw new Error(`Stok tidak mencukupi. Tersedia: ${product.stock}`)
         }
       }
-      
+
       error.value = null
       return true
     } catch (err) {
@@ -149,12 +151,12 @@ const usePOS = () => {
       error.value = 'Diskon persentase tidak boleh lebih dari 100%'
       return false
     }
-    
+
     if (type === 'amount' && amount > subtotal.value) {
       error.value = 'Diskon tidak boleh lebih dari subtotal'
       return false
     }
-    
+
     discountAmount.value = amount
     discountType.value = type
     error.value = null
@@ -226,7 +228,7 @@ const usePOS = () => {
 
       // Clear cart after successful order
       clearCart()
-      
+
       return order
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Gagal membuat pesanan'
@@ -307,6 +309,53 @@ const usePOS = () => {
     }
   })
 
+  // Station availability helpers
+  const isAvailableInStation = (product: Product, station: 'kitchen' | 'bar'): boolean => {
+    if (station === 'kitchen') {
+      return product.available_in_kitchen !== false
+    } else if (station === 'bar') {
+      return product.available_in_bar !== false
+    }
+    return false
+  }
+
+  const isAvailableInBothStations = (product: Product): boolean => {
+    return (product.available_in_kitchen !== false) && (product.available_in_bar !== false)
+  }
+
+  const getAvailableStations = (product: Product): ('kitchen' | 'bar')[] => {
+    const stations: ('kitchen' | 'bar')[] = []
+    if (product.available_in_kitchen !== false) stations.push('kitchen')
+    if (product.available_in_bar !== false) stations.push('bar')
+    return stations
+  }
+
+  const canProcessOrderInStation = (cartItems: CartItem[], station: 'kitchen' | 'bar'): boolean => {
+    return cartItems.every(item => isAvailableInStation(item, station))
+  }
+
+  const getStationRequirements = (cartItems: CartItem[]): {
+    kitchen: CartItem[]
+    bar: CartItem[]
+    both: CartItem[]
+  } => {
+    const kitchen: CartItem[] = []
+    const bar: CartItem[] = []
+    const both: CartItem[] = []
+
+    cartItems.forEach(item => {
+      const stations = getAvailableStations(item)
+      if (stations.length === 1) {
+        if (stations[0] === 'kitchen') kitchen.push(item)
+        else if (stations[0] === 'bar') bar.push(item)
+      } else if (stations.length === 2) {
+        both.push(item)
+      }
+    })
+
+    return { kitchen, bar, both }
+  }
+
   return {
     // State
     cartItems: readonly(cartItems),
@@ -339,7 +388,14 @@ const usePOS = () => {
     formatCurrency,
     getCartItemById,
     getItemQuantity,
-    canAddToCart
+    canAddToCart,
+
+    // Station helpers
+    isAvailableInStation,
+    isAvailableInBothStations,
+    getAvailableStations,
+    canProcessOrderInStation,
+    getStationRequirements
   }
 }
 

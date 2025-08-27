@@ -983,6 +983,19 @@ class PosController extends Controller
                 $query->where('category_id', $request->category_id);
             }
 
+            // Filter by station availability
+            if ($request->filled('station')) {
+                $station = $request->station;
+                if ($station === 'kitchen') {
+                    $query->where('available_in_kitchen', true);
+                } elseif ($station === 'bar') {
+                    $query->where('available_in_bar', true);
+                } elseif ($station === 'both') {
+                    $query->where('available_in_kitchen', true)
+                          ->where('available_in_bar', true);
+                }
+            }
+
             $products = $query->orderBy('name')->get();
 
             // Add stock information - VARIANT SYSTEM REMOVED, use product inventory directly

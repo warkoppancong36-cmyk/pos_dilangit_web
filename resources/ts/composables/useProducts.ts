@@ -6,7 +6,7 @@ import { computed, reactive, ref } from 'vue'
 export type { Category }
 
 export type ProductStatus = 'draft' | 'published' | 'archived'
-export type StockStatus = 'in_stock' | 'low_stock' | 'out_of_stock' 
+export type StockStatus = 'in_stock' | 'low_stock' | 'out_of_stock'
 
 export interface ProductDimensions {
   length?: number
@@ -31,6 +31,8 @@ export interface ProductFormData {
   status: ProductStatus
   active: boolean
   featured: boolean
+  available_in_kitchen: boolean
+  available_in_bar: boolean
   meta_title?: string
   meta_description?: string
   tags?: string[]
@@ -94,6 +96,9 @@ export interface ProductFilters {
   sort_order?: 'asc' | 'desc'
   active?: boolean | string | null
   stock_status?: StockStatus | 'all' | null
+  available_in_kitchen?: boolean | string | null
+  available_in_bar?: boolean | string | null
+  station?: 'kitchen' | 'bar' | 'both' | null
   sortBy?: string
   sortOrder?: string
   per_page?: number
@@ -189,6 +194,8 @@ export const useProducts = () => {
     status: 'published',
     active: true,
     featured: false,
+    available_in_kitchen: true,
+    available_in_bar: true,
     tags: [],
     meta_title: '',
     meta_description: ''
@@ -276,7 +283,7 @@ export const useProducts = () => {
       if (response.success) {
         categories.value = response.data
       }
-    } catch (error) {}
+    } catch (error) { }
   }
 
   const fetchStats = async () => {
@@ -285,7 +292,7 @@ export const useProducts = () => {
       if (response.success) {
         stats.value = response.data
       }
-    } catch (error: any) {}
+    } catch (error: any) { }
   }
 
   const saveProduct = async () => {
@@ -316,7 +323,7 @@ export const useProducts = () => {
       }
 
     } catch (error: any) {
-      modalErrorMessage.value =  error.errors || error.message
+      modalErrorMessage.value = error.errors || error.message
     } finally {
       saveLoading.value = false
     }

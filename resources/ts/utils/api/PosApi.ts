@@ -108,6 +108,8 @@ export interface ProductForPos {
   status: string
   active: boolean
   featured: boolean
+  available_in_kitchen: boolean
+  available_in_bar: boolean
   created_by?: number
   updated_by?: number
   deleted_by?: number

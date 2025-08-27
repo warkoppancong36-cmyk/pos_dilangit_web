@@ -75,6 +75,21 @@
               class="category-select"
             />
             
+            <VSelect
+              v-model="selectedStation"
+              :items="stationOptions"
+              item-title="title"
+              item-value="value"
+              placeholder="Station"
+              density="comfortable"
+              variant="solo"
+              prepend-inner-icon="tabler-tools-kitchen-2"
+              clearable
+              hide-details
+              style="min-inline-size: 150px;"
+              class="station-select"
+            />
+            
             <VChip
               v-if="filteredProducts.length > 0"
               color="primary"
@@ -123,6 +138,26 @@
                     class="mr-1"
                   />
                   Stock: {{ product.stock }}
+                </div>
+                
+                <!-- Station Availability Badges -->
+                <div class="station-badges">
+                  <div 
+                    v-if="product.available_in_kitchen"
+                    class="station-badge kitchen-badge"
+                    title="Tersedia di Kitchen"
+                  >
+                    <VIcon icon="tabler-chef-hat" size="10" />
+                    Kitchen
+                  </div>
+                  <div 
+                    v-if="product.available_in_bar"
+                    class="station-badge bar-badge"
+                    title="Tersedia di Bar"
+                  >
+                    <VIcon icon="tabler-glass-cocktail" size="10" />
+                    Bar
+                  </div>
                 </div>
                 
                 <!-- Status Indicators -->
@@ -385,6 +420,7 @@ const categories = ref<any[]>([])
 const customers = ref<Customer[]>([])
 const productSearch = ref('')
 const selectedCategory = ref<number | null>(null)
+const selectedStation = ref<'kitchen' | 'bar' | null>(null)
 const paymentDialog = ref(false)
 const transactionHistoryDialog = ref(false)
 const cashDrawerDialog = ref(false)
@@ -425,6 +461,12 @@ const mutableCartItems = computed(() => {
   }))
 })
 
+// Station options
+const stationOptions = [
+  { title: 'Kitchen', value: 'kitchen' },
+  { title: 'Bar', value: 'bar' }
+]
+
 const filteredProducts = computed(() => {
   let filtered = products.value
 
@@ -441,6 +483,18 @@ const filteredProducts = computed(() => {
   // Filter by category
   if (selectedCategory.value) {
     filtered = filtered.filter(product => product.id_category === selectedCategory.value)
+  }
+
+  // Filter by station availability
+  if (selectedStation.value) {
+    filtered = filtered.filter(product => {
+      if (selectedStation.value === 'kitchen') {
+        return product.available_in_kitchen !== false
+      } else if (selectedStation.value === 'bar') {
+        return product.available_in_bar !== false
+      }
+      return true
+    })
   }
 
   return filtered
@@ -460,7 +514,9 @@ const loadProducts = async () => {
       // Get stock from stock_info, fallback to 0 if not available
       stock: p.stock_info?.available_stock || p.stock_info?.current_stock || p.stock || 0,
       image: p.image_url || p.image,
-      id_category: p.category?.id_category
+      id_category: p.category?.id_category,
+      available_in_kitchen: p.available_in_kitchen ?? true,
+      available_in_bar: p.available_in_bar ?? true
     }))
   } catch (error) {
     console.error('Error loading products:', error)
@@ -1327,6 +1383,36 @@ onMounted(async () => {
   z-index: 2;
   inset-block-start: 8px;
   inset-inline-end: 8px;
+}
+
+.station-badges {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: 8px;
+  inset-inline-start: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.station-badge {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  border-radius: 12px;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.kitchen-badge {
+  background: rgba(76, 175, 80, 0.9);
+}
+
+.bar-badge {
+  background: rgba(255, 152, 0, 0.9);
 }
 
 .out-of-stock-overlay {

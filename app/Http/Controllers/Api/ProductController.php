@@ -58,6 +58,29 @@ class ProductController extends Controller
                 }
             }
 
+            // Filter by kitchen availability
+            if ($request->filled('available_in_kitchen')) {
+                $query->where('available_in_kitchen', $request->boolean('available_in_kitchen'));
+            }
+
+            // Filter by bar availability
+            if ($request->filled('available_in_bar')) {
+                $query->where('available_in_bar', $request->boolean('available_in_bar'));
+            }
+
+            // Filter by station (kitchen OR bar)
+            if ($request->filled('station')) {
+                $station = $request->station;
+                if ($station === 'kitchen') {
+                    $query->where('available_in_kitchen', true);
+                } elseif ($station === 'bar') {
+                    $query->where('available_in_bar', true);
+                } elseif ($station === 'both') {
+                    $query->where('available_in_kitchen', true)
+                          ->where('available_in_bar', true);
+                }
+            }
+
             $sortBy = $request->get('sort_by', 'created_at');
             $sortOrder = $request->get('sort_order', 'desc');
             $allowedSorts = ['name', 'price', 'cost', 'stock', 'created_at', 'updated_at'];
@@ -86,6 +109,8 @@ class ProductController extends Controller
                 'cost' => 'nullable|numeric|min:0',
                 'min_stock' => 'nullable|integer|min:0',
                 'category_id' => 'required|exists:categories,id_category',
+                'available_in_kitchen' => 'nullable|in:true,false,1,0',
+                'available_in_bar' => 'nullable|in:true,false,1,0',
             ]);
 
             if ($validator->fails()) {
@@ -97,6 +122,8 @@ class ProductController extends Controller
             $productData['status'] = $productData['status'] ?? 'published';
             $productData['active'] = $request->boolean('active', true);
             $productData['featured'] = $request->boolean('featured', false);
+            $productData['available_in_kitchen'] = $request->boolean('available_in_kitchen', true);
+            $productData['available_in_bar'] = $request->boolean('available_in_bar', true);
             $productData['price'] = $request->input('price', 0);
 
             if (!$request->filled('sku')) {
@@ -154,6 +181,8 @@ class ProductController extends Controller
                 'cost' => 'nullable|numeric|min:0',
                 'min_stock' => 'nullable|integer|min:0',
                 'category_id' => 'required|exists:categories,id_category',
+                'available_in_kitchen' => 'nullable|in:true,false,1,0',
+                'available_in_bar' => 'nullable|in:true,false,1,0',
             ]);
 
             if ($validator->fails()) {
@@ -164,6 +193,8 @@ class ProductController extends Controller
             $productData['updated_by'] = auth()->id();
             $productData['active'] = $request->boolean('active', $product->active);
             $productData['featured'] = $request->boolean('featured', $product->featured);
+            $productData['available_in_kitchen'] = $request->boolean('available_in_kitchen', $product->available_in_kitchen);
+            $productData['available_in_bar'] = $request->boolean('available_in_bar', $product->available_in_bar);
 
             if ($request->hasFile('image')) {
                 if ($product->image && Storage::disk('public')->exists('products/' . $product->image)) {

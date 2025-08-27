@@ -77,6 +77,20 @@
           />
         </VCol>
 
+        <!-- Station Filter -->
+        <VCol cols="12" md="2">
+          <VSelect
+            v-model="localFilters.station"
+            :items="stationOptions"
+            label="Station"
+            placeholder="Semua station"
+            prepend-inner-icon="tabler-tools-kitchen-2"
+            clearable
+            variant="outlined"
+            @update:model-value="onFilterChange"
+          />
+        </VCol>
+
         <!-- Actions -->
         <VCol cols="12" md="1" class="d-flex align-center">
           <VBtn
@@ -262,6 +276,12 @@ const stockOptions = [
   { title: 'Habis', value: 'out_of_stock' }
 ]
 
+const stationOptions = [
+  { title: 'Kitchen Only', value: 'kitchen' },
+  { title: 'Bar Only', value: 'bar' },
+  { title: 'Kitchen & Bar', value: 'both' }
+]
+
 const featuredOptions = [
   { title: 'Ya', value: true },
   { title: 'Tidak', value: false }
@@ -287,6 +307,7 @@ const hasActiveFilters = computed(() => {
     localFilters.category_id ||
     localFilters.active ||
     localFilters.stock_status ||
+    localFilters.station ||
     localFilters.featured !== null ||
     localFilters.min_price ||
     localFilters.max_price

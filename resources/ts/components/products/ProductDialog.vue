@@ -439,6 +439,54 @@
               />
             </VCol>
 
+            <!-- Station Availability -->
+            <VCol cols="12">
+              <h6 class="text-h6 mb-4 d-flex align-center gap-2">
+                <VIcon
+                  icon="tabler-tools-kitchen-2"
+                  size="20"
+                  class="coffee-icon"
+                />
+                Ketersediaan Station
+              </h6>
+            </VCol>
+
+            <VCol cols="12" md="6">
+              <VSwitch
+                :model-value="localFormData.available_in_kitchen"
+                @update:model-value="localFormData.available_in_kitchen = Boolean($event)"
+                label="Tersedia di Kitchen"
+                color="coffee"
+                inset
+              >
+                <template #prepend>
+                  <VIcon 
+                    icon="tabler-chef-hat" 
+                    class="me-2"
+                    :color="localFormData.available_in_kitchen ? 'success' : 'grey'"
+                  />
+                </template>
+              </VSwitch>
+            </VCol>
+
+            <VCol cols="12" md="6">
+              <VSwitch
+                :model-value="localFormData.available_in_bar"
+                @update:model-value="localFormData.available_in_bar = Boolean($event)"
+                label="Tersedia di Bar"
+                color="coffee"
+                inset
+              >
+                <template #prepend>
+                  <VIcon 
+                    icon="tabler-glass-cocktail" 
+                    class="me-2"
+                    :color="localFormData.available_in_bar ? 'success' : 'grey'"
+                  />
+                </template>
+              </VSwitch>
+            </VCol>
+
             <!-- Meta Information -->
             <VCol cols="12">
               <h6 class="text-h6 mb-4 d-flex align-center gap-2">
@@ -715,11 +763,21 @@ const emit = defineEmits<{
 const formRef = ref()
 
 // Local form data - reactive copy of props
-const localFormData = reactive({ ...props.formData })
+const localFormData = reactive({ 
+  ...props.formData,
+  available_in_kitchen: Boolean(props.formData.available_in_kitchen),
+  available_in_bar: Boolean(props.formData.available_in_bar)
+})
 
 // Watch props changes to sync with local data
 watch(() => props.formData, (newData) => {
-  Object.assign(localFormData, newData)
+  // Ensure boolean fields are properly converted
+  const processedData = {
+    ...newData,
+    available_in_kitchen: Boolean(newData.available_in_kitchen),
+    available_in_bar: Boolean(newData.available_in_bar)
+  }
+  Object.assign(localFormData, processedData)
 }, { deep: true })
 
 // Watch local form changes and emit updates
