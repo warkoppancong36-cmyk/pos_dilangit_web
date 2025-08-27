@@ -17,7 +17,7 @@ class ProductItem extends Model
         'product_id',
         'item_id',
         'quantity_needed',
-        // 'unit', // Removed - will be accessed via item relationship
+        'unit', // Unit for this specific relationship (could be different from item's base unit)
         'cost_per_unit',
         'is_critical',
         'notes',
@@ -68,7 +68,8 @@ class ProductItem extends Model
      */
     public function getUnitAttribute(): string
     {
-        return $this->item ? $this->item->unit : 'pcs';
+        // Priority: unit stored in product_items table, then fallback to item's unit
+        return $this->attributes['unit'] ?? $this->item?->unit ?? 'pcs';
     }
 
     public function getTotalCostPerProductAttribute(): float
