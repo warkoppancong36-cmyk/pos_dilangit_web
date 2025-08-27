@@ -551,16 +551,9 @@ const openCreateDialog = () => {
 }
 
 const editPurchase = (purchase) => {
-  console.log('🔧 editPurchase called with:', purchase)
-  console.log('👤 Purchase supplier ID:', purchase.id_supplier)
-  console.log('📦 Purchase items:', purchase.items)
-  
   selectedPurchase.value = purchase
   dialogMode.value = 'edit'
   dialogOpen.value = true
-  
-  console.log('📋 selectedPurchase set to:', selectedPurchase.value)
-  console.log('🎯 dialogMode set to:', dialogMode.value)
 }
 
 const viewPurchase = (purchase) => {
@@ -745,19 +738,14 @@ const getStatusLabel = (status) => {
 
 const canEdit = (purchase) => {
   // Allow edit for pending, ordered, received, and completed status
-  console.log('🔍 canEdit check for purchase:', purchase.purchase_number, 'status:', purchase.status)
   const result = ['pending', 'ordered', 'received', 'completed'].includes(purchase.status)
-  console.log('✅ canEdit result:', result)
   return result
 }
 
 const canDelete = (purchase) => {
   // Allow delete for pending, received, and completed status
   // Don't allow delete for 'ordered' (in process)
-  console.log('🔍 canDelete check for purchase:', purchase.purchase_number, 'status:', purchase.status)
-  const result = ['pending', 'received', 'completed'].includes(purchase.status)
-  console.log('✅ canDelete result:', result)
-  return result
+  return ['pending', 'received', 'completed'].includes(purchase.status)
 }
 
 // Watchers

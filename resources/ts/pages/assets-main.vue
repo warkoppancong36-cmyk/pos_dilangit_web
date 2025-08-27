@@ -633,7 +633,6 @@ const confirmBulkDelete = async () => {
 
 const bulkUpdateStatus = () => {
   // TODO: Implement bulk status update
-  console.log('Bulk update status for:', selectedAssets.value)
 }
 
 const refreshAssets = () => {

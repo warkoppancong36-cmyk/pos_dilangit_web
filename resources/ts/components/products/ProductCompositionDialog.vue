@@ -565,7 +565,6 @@ const fetchProductComposition = async () => {
   
   try {
     const productId = props.product.id_product || props.product.id
-    console.log('🔄 Fetching composition for product ID:', productId)
     
     // Fetch product items for this specific product
     const response = await ProductItemsApi.getAll({ 
@@ -578,7 +577,6 @@ const fetchProductComposition = async () => {
       compositionItems.value = response.data.data
       // Store initial data for comparison during save
       initialCompositionItems.value = JSON.parse(JSON.stringify(response.data.data))
-      console.log('✅ Initial composition loaded:', initialCompositionItems.value.length, 'items')
     }
   } catch (error) {
     console.error('Error fetching product composition:', error)
@@ -782,14 +780,11 @@ const addItem = () => {
 }
 
 const editItem = (item: CompositionItem, index: number) => {
-  console.log('🔍 EditItem called with:', item)
-  console.log('🔍 Item structure:', JSON.stringify(item, null, 2))
   
   // Check if available items are loaded
   if (availableItems.value.length === 0) {
     console.warn('⚠️ Available items not loaded yet, fetching...')
     fetchAvailableItems().then(() => {
-      console.log('✅ Available items loaded, retrying edit')
       editItem(item, index) // Retry after loading
     })
     return
@@ -806,8 +801,6 @@ const editItem = (item: CompositionItem, index: number) => {
     itemId = itemId.toString()
   }
   
-  console.log('🎯 Found itemId (converted to string):', itemId)
-  console.log('🔍 Available items for reference:', availableItems.value.map(ai => ({ id: ai.id, name: ai.name })))
   
   // Fill form with item data
   newItem.value = {
@@ -817,12 +810,6 @@ const editItem = (item: CompositionItem, index: number) => {
     isCritical: item.is_critical
   }
   
-  console.log('📝 Form data set for edit:', {
-    original_quantity: item.quantity_needed,
-    parsed_quantity: parseFloat(item.quantity_needed.toString()),
-    form_data: newItem.value
-  })
-  
   // Verify that the itemId exists in available items
   const foundInAvailable = availableItems.value.find(ai => ai.id === itemId)
   if (!foundInAvailable) {
@@ -831,13 +818,11 @@ const editItem = (item: CompositionItem, index: number) => {
     // Try to find by name as backup
     const foundByName = availableItems.value.find(ai => ai.name === item.item?.name)
     if (foundByName) {
-      console.log('✅ Found item by name matching, using ID:', foundByName.id)
       newItem.value.itemId = foundByName.id
     } else {
       console.error('❌ Could not find item in available items by ID or name')
     }
   } else {
-    console.log('✅ Item found in available items:', foundInAvailable.name)
   }
 }
 
@@ -887,8 +872,6 @@ const saveComposition = async () => {
 
   loading.value = true
   try {
-    console.log('💾 Saving composition for product:', props.product.name)
-    console.log('📦 Items to save:', compositionItems.value)
     
     // Prepare data for API
     const productId = parseInt(String(props.product?.id_product || props.product?.id || '0'))
@@ -898,25 +881,7 @@ const saveComposition = async () => {
     const existingItems = initialCompositionItems.value || []
     const currentItems = compositionItems.value
     
-    console.log('🔄 Comparing items for save:', {
-      existing_count: existingItems.length,
-      current_count: currentItems.length,
-      existing_items: existingItems.map(item => ({
-        id: item.id_product_item,
-        item_id: item.item?.id,
-        item_name: item.item?.name
-      })),
-      current_items: currentItems.map(item => ({
-        id: item.id_product_item,
-        item_id: item.item?.id,
-        item_name: item.item?.name,
-        quantity: item.quantity_needed,
-        unit: item.unit
-      }))
-    })
-    
     // Process each current item (create or update)
-    console.log('🔄 Starting to process', currentItems.length, 'items for save...')
     for (const item of currentItems) {
       const existingItem = existingItems.find(existing => {
         // Try multiple matching strategies
@@ -933,17 +898,6 @@ const saveComposition = async () => {
         }
         
         return false
-      })
-      
-      console.log('🔍 Processing item:', {
-        item_name: item.item?.name,
-        item_id_product_item: item.id_product_item,
-        existing_found: !!existingItem,
-        existing_id: existingItem?.id_product_item,
-        is_temp: item.id_product_item?.toString().startsWith('temp_'),
-        matching_strategy: existingItem ? 
-          (existingItem.id_product_item === item.id_product_item ? 'exact_id' : 'item_product_match') : 
-          'no_match'
       })
       
       // Skip items with invalid item_id
@@ -965,36 +919,12 @@ const saveComposition = async () => {
         notes: item.notes || ''
       }
       
-      console.log('📤 API Data for item:', item.item?.name, {
-        raw_item_id: item.item?.id,
-        parsed_item_id: parseInt(item.item?.id || '0'),
-        api_data: apiData,
-        full_item_data: {
-          id_product_item: item.id_product_item,
-          item_name: item.item?.name,
-          quantity: item.quantity_needed,
-          unit: item.unit
-        }
-      })
-      
       try {
         if (existingItem && !item.id_product_item?.toString().startsWith('temp_')) {
           // Update existing item
-          console.log('✏️ Updating existing item:', {
-            id: existingItem.id_product_item,
-            item_name: item.item?.name,
-            current_stock: item.item?.inventory?.current_stock
-          })
           await ProductItemsApi.update(parseInt(existingItem.id_product_item || '0'), apiData)
         } else {
           // Create new item
-          console.log('➕ Creating new item:', {
-            item_name: item.item?.name,
-            current_stock: item.item?.inventory?.current_stock,
-            id_product_item: item.id_product_item,
-            is_temp: item.id_product_item?.toString().startsWith('temp_'),
-            existing_item_found: !!existingItem
-          })
           await ProductItemsApi.create(apiData)
         }
       } catch (itemError: any) {
@@ -1020,7 +950,6 @@ const saveComposition = async () => {
       
       if (!stillExists && existingItem.id_product_item) {
         try {
-          console.log('🗑️ Deleting item:', existingItem.id_product_item)
           await ProductItemsApi.delete(parseInt(existingItem.id_product_item))
         } catch (deleteError: any) {
           console.error('❌ Error deleting item:', deleteError)
@@ -1030,7 +959,6 @@ const saveComposition = async () => {
       }
     }
     
-    console.log('✅ Composition saved successfully!')
     
     // Show success message
     successMessage.value = 'Komposisi produk berhasil disimpan!'

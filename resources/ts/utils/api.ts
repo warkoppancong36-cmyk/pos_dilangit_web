@@ -5,7 +5,6 @@ export const $api = ofetch.create({
   async onRequest({ options }) {
     const accessToken = useCookie('accessToken').value
 
-    console.log('🔐 $api onRequest - Token:', accessToken ? 'EXISTS' : 'NOT FOUND')
 
     if (accessToken) {
       if (!options.headers)
@@ -16,10 +15,8 @@ export const $api = ofetch.create({
       else
         (options.headers as any).Authorization = `Bearer ${accessToken}`
 
-      console.log('✅ $api - Authorization header added')
     }
     else {
-      console.log('❌ $api - No access token found')
     }
   },
 })

@@ -20,9 +20,6 @@ const router = useRouter()
 const route = useRoute()
 const productId = computed(() => {
   const id = Number(route.params.id)
-  console.log('🔗 Route params:', route.params)
-  console.log('🆔 Product ID from route:', id, typeof id)
-  console.log('🌐 Current route:', route.path)
   return id
 })
 
@@ -62,42 +59,27 @@ const {
 // Get product info
 const { productsList, fetchProductsList, loading: productsLoading } = useProducts()
 const currentProduct = computed(() => {
-  console.log('🔍 Computing current product...')
-  console.log('📦 ProductId:', productId.value, typeof productId.value)
-  console.log('📦 Products list:', productsList.value.length, 'items')
-  
   if (productsList.value.length > 0) {
-    console.log('📋 First few products:', productsList.value.slice(0, 3).map(p => ({
-      id: p.id,
-      id_product: p.id_product, 
-      name: p.name,
-      sku: p.sku
-    })))
-  }
-  
-  const product = productsList.value.find(p => {
-    const matchById = p.id === productId.value
-    const matchByIdProduct = p.id_product === productId.value
-    console.log(`🔍 Checking product ${p.name}: id=${p.id}, id_product=${p.id_product}, matchById=${matchById}, matchByIdProduct=${matchByIdProduct}`)
-    return matchById || matchByIdProduct
-  })
-  
-  console.log('✅ Found product:', product ? `${product.name} (ID: ${product.id || product.id_product})` : 'Not found')
-  
-  // Fallback data for testing if no product found
-  if (!product && productsList.value.length === 0) {
-    console.log('🔄 Using fallback product data')
-    return {
-      id: productId.value,
-      name: 'Loading...', 
-      sku: 'LOADING',
-      price: 0,
-      active: true,
-      description: 'Memuat data produk...'
+    const product = productsList.value.find(p => {
+      const matchById = p.id === productId.value
+      const matchByIdProduct = p.id_product === productId.value
+      return matchById || matchByIdProduct
+    })
+    
+    if (product) {
+      return product
     }
   }
   
-  return product
+  // Fallback data for testing if no product found
+  return {
+    id: productId.value,
+    name: 'Loading...', 
+    sku: 'LOADING',
+    price: 0,
+    active: true,
+    description: 'Memuat data produk...'
+  }
 })
 
 const confirmDelete = async () => {
@@ -105,7 +87,7 @@ const confirmDelete = async () => {
 }
 
 onMounted(async () => {
-  console.log('🚀 Component mounted, productId:', productId.value)
+
   
   try {
     await Promise.all([
@@ -115,10 +97,10 @@ onMounted(async () => {
       fetchStats()
     ])
     
-    console.log('✅ All data loaded')
-    console.log('📦 Products loaded:', productsList.value.length)
-    console.log('🔍 Looking for product ID:', productId.value)
-    console.log('📋 Available products:', productsList.value.map(p => ({ id: p.id, id_product: p.id_product, name: p.name })))
+
+
+
+
   } catch (error) {
     console.error('❌ Error loading data:', error)
   }

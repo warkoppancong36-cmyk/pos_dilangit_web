@@ -102,7 +102,6 @@ export const useBaseProductStore = defineStore('baseProduct', {
         const response = await axios.get('/api/base-products', {
           params
         })
-        console.log('fetchBaseProducts response:', response.data)
 
         // Handle different response structures
         if (response.data.data) {
@@ -117,7 +116,6 @@ export const useBaseProductStore = defineStore('baseProduct', {
           this.pagination = response.data.meta
         }
 
-        console.log('Base products loaded:', this.baseProducts.length)
         return response.data
       } catch (error) {
         console.error('Error fetching base products:', error)

@@ -100,7 +100,6 @@ export function useProductRecipes() {
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       const recipes = stored ? JSON.parse(stored) : []
-      console.log('📖 Loaded recipes from localStorage:', recipes.length, 'recipes')
       return recipes
     } catch (error) {
       console.error('❌ Failed to load recipes from localStorage:', error)
@@ -111,8 +110,6 @@ export function useProductRecipes() {
   const saveToStorage = (recipes: ProductRecipe[]) => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes))
-      console.log('✅ Recipes saved to localStorage:', recipes.length, 'recipes')
-      console.log('Storage key:', STORAGE_KEY)
     } catch (error) {
       console.error('❌ Failed to save recipes to localStorage:', error)
     }
@@ -249,8 +246,6 @@ export function useProductRecipes() {
         successMessage.value = 'Resep berhasil ditambahkan'
       }
       
-      console.log('💾 Saving recipe data:', formData)
-      console.log('📦 Total recipes to save:', allRecipes.length)
       
       saveToStorage(allRecipes)
       await fetchRecipes(formData.product_id)

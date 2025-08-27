@@ -291,11 +291,9 @@ const rules = {
 
 // Format currency for display
 const formatCurrency = (amount: number | string): string => {
-  console.log('formatCurrency called with:', amount, 'type:', typeof amount) // Debug log
   const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount
   
   if (isNaN(numericAmount) || numericAmount === null || numericAmount === undefined) {
-    console.log('formatCurrency received invalid number:', amount, 'type:', typeof amount)
     return 'Rp 0'
   }
   
@@ -351,7 +349,6 @@ const loadCashData = async () => {
     
     const response = await axios.get('/api/cash-drawer/data', { headers })
     
-    console.log('API Response:', response.data) // Debug log
     const data = response.data.data
     
     // Parse current_balance - could be string or number
@@ -367,14 +364,11 @@ const loadCashData = async () => {
     // Set currentCash with parsed balance
     currentCash.value = isNaN(balance) ? 0 : balance
     
-    console.log('Parsed balance:', balance, 'type:', typeof balance) // Debug log
-    console.log('currentCash.value after assignment:', currentCash.value, 'type:', typeof currentCash.value) // Debug log
     
     lastUpdated.value = new Date().toLocaleString('id-ID')
     recentTransactions.value = Array.isArray(data?.today_transactions) ? data.today_transactions : []
   } catch (error) {
     console.error('Error loading cash data:', error)
-    console.log('Using fallback data')
     // Fallback to calculating from props if API fails
     const startingCash = 500000
     const dailySales = typeof props.dailySales === 'number' && !isNaN(props.dailySales) ? props.dailySales : 0
@@ -464,7 +458,6 @@ const processCashIn = async () => {
     })
     
     closeCashInDialog()
-    console.log('Kas masuk berhasil ditambahkan')
     
   } catch (error) {
     console.error('Error processing cash in:', error)
@@ -546,7 +539,6 @@ const processCashOut = async () => {
     })
     
     closeCashOutDialog()
-    console.log('Kas keluar berhasil ditambahkan')
     
   } catch (error) {
     console.error('Error processing cash out:', error)
@@ -567,7 +559,6 @@ watch(
 
 // Watcher for debugging
 watch(currentCash, (newValue, oldValue) => {
-  console.log('currentCash changed from', oldValue, 'to', newValue)
 }, { deep: true, immediate: true })
 
 // Lifecycle

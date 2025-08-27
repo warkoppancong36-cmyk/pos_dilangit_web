@@ -53,14 +53,11 @@ const {
 } = useCategories()
 
 const handleSearchUpdate = (value: string) => {
-  console.log('=== CATEGORIES SEARCH UPDATE ===')
-  console.log('New search value:', value)
   search.value = value
 }
 
 // Debounced search
 const debouncedSearch = useDebounceFn(() => {
-  console.log('Executing debounced search for categories with term:', search.value)
   onSearch()
 }, 500)
 

@@ -624,13 +624,9 @@ const openCreateDialog = () => {
 }
 
 const openEditDialog = (variant: Variant) => {
-  console.log('🔵 ProductVariantTable - openEditDialog called with variant:', variant)
   selectedVariant.value = { ...variant }
   editMode.value = true
   formDialog.value = true
-  console.log('🔵 ProductVariantTable - selectedVariant set to:', selectedVariant.value)
-  console.log('🔵 ProductVariantTable - editMode:', editMode.value)
-  console.log('🔵 ProductVariantTable - formDialog:', formDialog.value)
 }
 
 const openDetailDialog = (variant: Variant) => {
@@ -644,13 +640,8 @@ const openCompositionDialog = (variant: Variant) => {
 }
 
 const openAddItemDialog = (variant: Variant) => {
-  console.log('🟢 [DEBUG] Button clicked! Opening Add Item dialog for variant:', variant.name)
-  console.log('🟢 [DEBUG] Current addItemDialog state:', addItemDialog.value)
-  console.log('🟢 [DEBUG] Setting selectedVariant to:', variant)
   selectedVariant.value = variant
   addItemDialog.value = true
-  console.log('🟢 [DEBUG] New addItemDialog state:', addItemDialog.value)
-  console.log('🟢 [DEBUG] New selectedVariant:', selectedVariant.value)
 }
 
 const openManagementDialog = () => {
@@ -668,10 +659,8 @@ const handleCompositionSave = () => {
 }
 
 const handleAddItemSave = () => {
-  console.log('🔄 handleAddItemSave called - refreshing data...')
   addItemDialog.value = false
   emit('refresh')
-  console.log('✅ refresh event emitted to parent')
 }
 </script>
 

@@ -390,11 +390,9 @@ const processBatch = async () => {
   })
 
   if (productsNeedingHPP.length === 0) {
-    console.log('All products have HPP from backend, skipping API calls')
     return
   }
 
-  console.log(`Loading HPP for ${productsNeedingHPP.length}/${productsToLoad.length} products (others have backend HPP)`)
 
   // Process in smaller batches to avoid overwhelming the server
   const concurrencyLimit = 3 // Reduced from 5

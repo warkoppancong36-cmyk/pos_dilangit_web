@@ -80,7 +80,6 @@ const totals = computed(() => {
   const tax = 0 //(subtotal - discount) * 0.11 // 11% PPN
   const total = subtotal - discount + tax
 
-  console.log('💰 Totals calculation:', { subtotal, discount, tax, total })
 
   return {
     subtotal,
@@ -121,8 +120,6 @@ const loadSuppliers = async () => {
     const response = await axios.get('/api/suppliers', { headers })
 
     suppliers.value = response.data.data || []
-    console.log('📋 Suppliers loaded:', suppliers.value.length, 'suppliers')
-    console.log('📋 First supplier sample:', suppliers.value[0])
   }
   catch (error: any) {
     console.error('Error loading suppliers:', error)
@@ -138,7 +135,6 @@ const loadItems = async () => {
 
     const token = getAuthToken()
 
-    console.log('Loading items with token:', token ? 'Token found' : 'No token')
 
     const headers: any = {
       'Content-Type': 'application/json',
@@ -148,11 +144,9 @@ const loadItems = async () => {
     if (token)
       headers.Authorization = `Bearer ${token}`
 
-    console.log('Making request to /api/items')
 
     const response = await axios.get('/api/items?per_page=all', { headers })
 
-    console.log('Items response:', response.data)
 
     // Handle paginated response structure
     const itemsData = response.data.data
@@ -161,7 +155,6 @@ const loadItems = async () => {
     else
       items.value = response.data.data || []
 
-    console.log('Items loaded:', items.value.length, 'items')
   }
   catch (error: any) {
     console.error('Error loading items:', error)
@@ -189,7 +182,6 @@ const calculateUnitCost = (index: number) => {
       item.unit_cost_display = '0'
     }
     
-    console.log(`Item ${index} unit cost calculated:`, item.unit_cost)
   }
   catch (error) {
     console.error('Error in calculateUnitCost:', error)
@@ -213,7 +205,6 @@ const calculateTotalCost = (index: number) => {
       item.total_cost_display = '0'
     }
     
-    console.log(`Item ${index} total cost calculated:`, item.total_cost)
   }
   catch (error) {
     console.error('Error in calculateTotalCost:', error)
@@ -229,7 +220,6 @@ const onItemChange = (index: number, itemId: number | null) => {
     const selectedItem = items.value.find(i => i.id_item === itemId)
     if (selectedItem) {
       item.unit = selectedItem.unit || ''
-      console.log(`Item ${index} unit set to:`, item.unit)
     }
   }
   catch (error) {
@@ -239,8 +229,6 @@ const onItemChange = (index: number, itemId: number | null) => {
 
 const addItem = () => {
   try {
-    console.log('Adding new item...')
-    console.log('Current items count:', formData.value.items.length)
 
     const newItem = {
       id_item: null,
@@ -253,7 +241,6 @@ const addItem = () => {
     }
 
     formData.value.items.push(newItem)
-    console.log('Item added successfully. New count:', formData.value.items.length)
   }
   catch (error) {
     console.error('Error in addItem:', error)
@@ -348,17 +335,8 @@ const formatCurrency = (amount: number) => {
 }
 
 const initializeForm = () => {
-  console.log('🔍 initializeForm called')
-  console.log('📝 Mode:', props.mode)
-  console.log('💾 Purchase data:', props.purchase)
   
   if (props.mode === 'edit' && props.purchase) {
-    console.log('✅ Initializing form for edit mode')
-    console.log('� All purchase properties:', Object.keys(props.purchase))
-    console.log('�👤 Supplier ID from purchase:', props.purchase.id_supplier)
-    console.log('� Supplier object from purchase:', props.purchase.supplier)
-    console.log('👤 Supplier_id from purchase:', props.purchase.supplier_id)
-    console.log('�📦 Items from purchase:', props.purchase.items)
     
     // Try different possible supplier field names
     const supplierId = props.purchase.supplier_id || 
@@ -366,31 +344,12 @@ const initializeForm = () => {
                       props.purchase.supplier?.id_supplier ||
                       props.purchase.supplier?.id
     
-    console.log('🎯 Raw supplier ID:', supplierId, 'type:', typeof supplierId)
     
     // Convert to number to match with VSelect item-value
     const supplierIdNumber = supplierId ? Number.parseInt(String(supplierId)) : null
-    console.log('🎯 Converted supplier ID:', supplierIdNumber)
     
-    console.log('📦 Items from purchase:', props.purchase.items)
-    
-    // Debug first item structure
-    if (props.purchase.items && props.purchase.items.length > 0) {
-      const firstItem = props.purchase.items[0]
-      console.log('� First item debug:', {
-        quantity: firstItem.quantity,
-        quantity_ordered: firstItem.quantity_ordered,
-        unit_cost: firstItem.unit_cost,
-        total_cost: firstItem.total_cost,
-        item_id: firstItem.item?.id_item || firstItem.id_item
-      })
-    }
-    
-    console.log('📅 Original purchase_date:', props.purchase.purchase_date)
-    console.log('📅 Purchase_date type:', typeof props.purchase.purchase_date)
     
     const formattedDate = props.purchase.purchase_date ? new Date(props.purchase.purchase_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
-    console.log('📅 Formatted purchase_date:', formattedDate)
     
     formData.value = {
       id_supplier: supplierIdNumber,
@@ -399,20 +358,10 @@ const initializeForm = () => {
       discount_amount: props.purchase.discount_amount || 0,
       discount_amount_display: new Intl.NumberFormat('id-ID').format(props.purchase.discount_amount || 0),
       items: props.purchase.items?.map((item: any) => {
-        console.log('🔄 Mapping item:', item)
-        console.log('📊 Item quantity_ordered:', item.quantity_ordered)
-        console.log('📊 Item quantity:', item.quantity)
         
         const quantity = Number.parseFloat(item.quantity_ordered || item.quantity || 0) || 0
         const unitCost = Number.parseFloat(item.unit_cost || 0) || 0
         const totalCost = quantity * unitCost
-        
-        console.log('📊 Calculated - quantity:', quantity, 'unitCost:', unitCost, 'totalCost:', totalCost)
-        console.log('🏷️ Item unit debug:', {
-          item_unit: item.item?.unit,
-          direct_unit: item.unit,
-          item_id: item.item?.id_item || item.id_item
-        })
         
         return {
           id_item: item.item?.id_item || item.id_item,
@@ -426,10 +375,8 @@ const initializeForm = () => {
       }) || [],
     }
     
-    console.log('📋 Form data after initialization:', formData.value)
   }
   else {
-    console.log('🆕 Initializing form for create mode')
     formData.value = {
       id_supplier: null,
       purchase_date: new Date().toISOString().split('T')[0],
@@ -499,7 +446,6 @@ const updateItemUnits = () => {
       const masterItem = items.value.find(item => item.id_item === formItem.id_item)
       if (masterItem) {
         formItem.unit = masterItem.unit
-        console.log(`🔄 Updated unit for item ${index}:`, formItem.unit)
       }
     }
   })

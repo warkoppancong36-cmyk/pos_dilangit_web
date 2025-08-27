@@ -50,7 +50,6 @@ const updateFilters = (key: keyof SupplierFilters, value: any) => {
   } else {
     // Debounce search
     debounceSearch(() => {
-      console.log('Emitting debounced search filter update:', { ...localFilters.value })
       emit('update:filters', { ...localFilters.value })
     })
   }

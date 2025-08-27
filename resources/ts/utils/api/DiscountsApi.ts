@@ -103,21 +103,14 @@ class DiscountsApi {
   private static readonly BASE_URL = '/api/discounts'
 
   static async getDiscounts(filters: DiscountFilters = {}): Promise<PaginatedDiscounts> {
-    console.log('=== DISCOUNTS API CALL ===')
-    console.log('Input filters:', filters)
-
     const response: AxiosResponse<{
       success: boolean
       data: PaginatedDiscounts
       message: string
     }> = await axios.get(this.BASE_URL, { params: filters })
 
-    console.log('Discounts API response:', response.data)
-
     return response.data.data
-  }
-
-  static async getDiscount(id: number): Promise<Discount> {
+  } static async getDiscount(id: number): Promise<Discount> {
     const response: AxiosResponse<{
       success: boolean
       data: Discount

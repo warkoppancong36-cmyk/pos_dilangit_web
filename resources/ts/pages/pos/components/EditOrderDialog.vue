@@ -489,7 +489,6 @@ const saveOrder = async () => {
       emit('order-updated', response.data)
       closeDialog()
       // Show success message
-      console.log('Order updated successfully')
     }
   } catch (error) {
     console.error('Error updating order:', error)

@@ -81,19 +81,15 @@ const debounceSearch = (callback: Function, delay: number = 500) => {
 
 // Handlers
 const handleSearchUpdate = (value: string) => {
-  console.log('=== CATEGORIES SEARCH UPDATE ===')
-  console.log('Search value:', value)
   emit('update:search', value)
   
   // Debounce search
   debounceSearch(() => {
-    console.log('Executing debounced search for categories')
     emit('search')
   })
 }
 
 const handleSearch = () => {
-  console.log('=== CATEGORIES SEARCH BUTTON CLICKED ===')
   emit('search')
 }
 

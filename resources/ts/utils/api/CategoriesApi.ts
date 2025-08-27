@@ -42,30 +42,17 @@ export class CategoriesApi {
       per_page: params.per_page.toString()
     })
 
-    console.log('=== CATEGORIES API CALL ===')
-    console.log('Input params:', params)
-
     if (params.search?.trim()) {
       searchParams.append('search', params.search.trim())
-      console.log('Added search param:', params.search.trim())
     }
 
     if (params.status && params.status !== 'all') {
       searchParams.append('status', params.status)
-      console.log('Added status param:', params.status)
     }
 
-    const url = `${this.baseUrl}?${searchParams.toString()}`
-    console.log('Request URL:', url)
-
-    const response = await axios.get(url)
-
-    console.log('Categories API response:', response.data)
-
+    const response = await axios.get(`${this.baseUrl}?${searchParams.toString()}`)
     return response.data
-  }
-
-  /**
+  }  /**
    * Create new category
    */
   static async createCategory(data: CategoryFormData): Promise<CategoryResponse> {

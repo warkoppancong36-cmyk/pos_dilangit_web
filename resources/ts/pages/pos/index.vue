@@ -462,22 +462,6 @@ const loadProducts = async () => {
       image: p.image_url || p.image,
       id_category: p.category?.id_category
     }))
-    
-    // Debug logging for TES AJA NIH
-    const tesProduct = response.data.find(p => p.name === 'TES AJA NIH')
-    if (tesProduct) {
-      console.log('🖼️ TES AJA NIH Image Debug:', {
-        image: tesProduct.image,
-        image_url: tesProduct.image_url,
-        mapped_image: tesProduct.image_url || tesProduct.image
-      })
-    }
-    
-    // Log for debugging
-    console.log('Loaded products with stock:', products.value.map(p => ({
-      name: p.name,
-      stock: p.stock
-    })))
   } catch (error) {
     console.error('Error loading products:', error)
   } finally {
@@ -528,7 +512,6 @@ const addToCart = (product: Product) => {
   const success = addToCartComposable(product)
   if (success) {
     // Show success feedback if needed
-    console.log('Produk berhasil ditambahkan ke keranjang')
   }
 }
 
@@ -582,7 +565,6 @@ const openPaymentDialog = () => {
 }
 
 const handlePaymentComplete = (orderData: any) => {
-  console.log('Payment completed:', orderData)
   
   // Show success snackbar
   snackbar.value = {

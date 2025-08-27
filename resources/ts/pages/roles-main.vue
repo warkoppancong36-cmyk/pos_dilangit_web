@@ -456,7 +456,6 @@ const toggleRoleStatus = async (role: Role) => {
 const viewRoleUsers = (role: Role) => {
   // Navigate to users page with role filter
   // This could be implemented based on your routing setup
-  console.log('View users for role:', role.name)
 }
 
 const closeModal = () => {

@@ -139,7 +139,6 @@ export const useSuppliers = () => {
           totalItems.value = response.pagination.total
           currentPage.value = response.pagination.current_page
         }
-        console.log('Suppliers loaded:', suppliersList.value.length)
       } else {
         throw new Error(response.message)
       }
@@ -190,8 +189,6 @@ export const useSuppliers = () => {
     try {
       saveLoading.value = true
       modalErrorMessage.value = ''
-
-      console.log('Saving supplier with data:', supplierData)
 
       let response
       if (editMode.value && selectedSupplier.value) {
@@ -351,14 +348,7 @@ export const useSuppliers = () => {
   }
 
   const handleFiltersUpdate = (newFilters: Partial<SupplierFilters>) => {
-    console.log('=== SUPPLIERS FILTERS UPDATE ===')
-    console.log('Old filters:', { ...filters })
-    console.log('New filters received:', newFilters)
-
     Object.assign(filters, newFilters)
-
-    console.log('Updated filters:', { ...filters })
-
     onFilterChange()
   }
 

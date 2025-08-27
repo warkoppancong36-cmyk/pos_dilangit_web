@@ -547,21 +547,12 @@ const isDuplicateIngredient = computed(() => {
   
   const duplicate = existingCompositions.value.some(comp => {
     if (form.ingredient_item_id && comp.ingredient_item_id === form.ingredient_item_id) {
-      console.log('Duplicate found - ingredient_item_id:', form.ingredient_item_id, 'in composition:', comp)
       return true
     }
     if (form.ingredient_base_product_id && comp.ingredient_base_product_id === form.ingredient_base_product_id) {
-      console.log('Duplicate found - ingredient_base_product_id:', form.ingredient_base_product_id, 'in composition:', comp)
       return true
     }
     return false
-  })
-  
-  console.log('Duplicate check:', {
-    ingredient_item_id: form.ingredient_item_id,
-    ingredient_base_product_id: form.ingredient_base_product_id,
-    existingCompositions: existingCompositions.value.length,
-    isDuplicate: duplicate
   })
   
   return duplicate
@@ -650,9 +641,7 @@ const updateSelectedBaseProduct = async () => {
     
     // Only load existing compositions immediately
     // Items will be loaded on-demand when user clicks autocomplete
-    console.log('Loading compositions for base product:', baseProductId)
     await loadExistingCompositions()
-    console.log('Compositions loading completed')
   } else {
     selectedBaseProduct.value = null
     existingCompositions.value = []
@@ -670,29 +659,22 @@ const updateSelectedIngredient = () => {
 
 // Ensure items are loaded when user interacts with autocomplete
 const ensureItemsLoaded = async () => {
-  console.log('ensureItemsLoaded called, itemsCached:', itemsCached.value, 'items length:', items.value.length)
   if (!itemsCached.value) {
-    console.log('Items not cached, loading...')
     await loadItems()
-  } else {
-    console.log('Items already cached, skipping load')
   }
 }
 
 const loadItems = async () => {
   // Skip loading if items are already cached
   if (itemsCached.value && items.value.length > 0) {
-    console.log('Using cached items:', items.value.length)
     return
   }
   
   try {
     itemsLoading.value = true
-    console.log('Loading items from API...')
     
     // Request all items without pagination
     const response = await axios.get('/api/items?per_page=all&active=true')
-    console.log('Items API response:', response.data)
     
     if (response.data.success && response.data.data) {
       // Handle pagination structure - data is in response.data.data.data
@@ -705,11 +687,6 @@ const loadItems = async () => {
       
       items.value = itemsData
       itemsCached.value = true // Mark as cached
-      console.log('Items loaded and cached:', itemsData.length)
-      
-      if (itemsData.length > 0) {
-        console.log('Sample item structure:', itemsData[0])
-      }
     } else {
       console.error('API response not successful:', response)
       items.value = []
@@ -719,7 +696,6 @@ const loadItems = async () => {
     
     // Fallback to fetch
     try {
-      console.log('Trying fallback for items...')
       const fallbackResponse = await fetch('/api/items?per_page=all&active=true', {
         headers: {
           'Content-Type': 'application/json',
@@ -727,7 +703,6 @@ const loadItems = async () => {
         }
       })
       const fallbackData = await fallbackResponse.json()
-      console.log('Items fallback response:', fallbackData)
       
       if (fallbackData.success && fallbackData.data) {
         let itemsData = []
@@ -739,7 +714,6 @@ const loadItems = async () => {
         
         items.value = itemsData
         itemsCached.value = true
-        console.log('Items loaded via fallback:', itemsData.length)
       }
     } catch (fallbackError) {
       console.error('Items fallback also failed:', fallbackError)
@@ -755,10 +729,8 @@ const loadExistingCompositions = async () => {
   if (!form.base_product_id) return
   
   try {
-    console.log('Loading existing compositions for base_product_id:', form.base_product_id)
     // Use the specific endpoint for getting compositions by base product
     const response = await axios.get(`/api/base-product-compositions/base-product/${form.base_product_id}`)
-    console.log('Full API response:', response.data)
     
     if (response.data.success) {
       const compositions = response.data.data || []
@@ -778,9 +750,7 @@ const loadExistingCompositions = async () => {
       })
       
       existingCompositions.value = compositions
-      console.log('Loaded existing compositions:', compositions.length)
       if (compositions.length > 0) {
-        console.log('Sample composition:', compositions[0])
       }
     } else {
       console.error('API response not successful:', response.data)
@@ -798,16 +768,11 @@ const loadExistingCompositions = async () => {
 // Watch for modal open to ensure data is loaded
 watch(() => props.show, async (newValue) => {
   if (newValue) {
-    console.log('Modal opened')
-    console.log('Current auth headers:', axios.defaults.headers.common)
-    console.log('Items cached:', itemsCached.value, 'Items count:', items.value.length)
     
     // Load items immediately when modal opens for better UX
     if (!itemsCached.value) {
-      console.log('Loading items on modal open...')
       await loadItems()
     } else {
-      console.log('Items already cached, not loading again')
     }
     
     // If there's already a base_product_id, load compositions
@@ -847,37 +812,22 @@ const calculateCost = () => {
 }
 
 const handleSubmit = async () => {
-  console.log('=== HANDLE SUBMIT START ===')
-  console.log('Form state:', {
-    base_product_id: form.base_product_id,
-    ingredient_item_id: form.ingredient_item_id,
-    ingredient_base_product_id: form.ingredient_base_product_id,
-    quantity: form.quantity
-  })
-  console.log('Existing compositions count:', existingCompositions.value.length)
-  console.log('Can submit:', canSubmit.value)
-  console.log('Is duplicate:', isDuplicateIngredient.value)
-  
   if (!canSubmit.value) {
-    console.log('Cannot submit - validation failed')
     return
   }
 
   // Enhanced duplicate check including both local and potentially saved compositions
   const isDuplicate = existingCompositions.value.some(comp => {
     if (form.ingredient_item_id && comp.ingredient_item_id === form.ingredient_item_id) {
-      console.log('DUPLICATE FOUND - ingredient_item_id match:', form.ingredient_item_id)
       return true
     }
     if (form.ingredient_base_product_id && comp.ingredient_base_product_id === form.ingredient_base_product_id) {
-      console.log('DUPLICATE FOUND - ingredient_base_product_id match:', form.ingredient_base_product_id)
       return true
     }
     return false
   })
 
   if (isDuplicate) {
-    console.log('Duplicate detected, showing error')
     const ingredientName = form.ingredient_item_id 
       ? selectedIngredient.value?.name 
       : selectedIngredient.value?.name
@@ -909,12 +859,10 @@ const handleSubmit = async () => {
       is_temporary: true
     }
 
-    console.log('Adding composition to list:', newComposition)
 
     // Add to local list
     existingCompositions.value.push(newComposition)
     
-    console.log('Total compositions:', existingCompositions.value.length)
 
     // Reset form for next item
     form.ingredient_base_product_id = 0
@@ -974,23 +922,14 @@ const editComposition = async (composition: Composition) => {
 const removeComposition = async (composition: Composition) => {
   loading.value = true;
   try {
-    console.log('Remove composition called:', composition);
-    console.log('is_temporary:', composition.is_temporary);
-    console.log('id:', composition.id);
-    console.log('id_base_product_composition:', composition.id_base_product_composition);
     
     // Jika composition memiliki ID (sudah tersimpan di database), hapus dari database
     // Gunakan id atau id_base_product_composition
     const compositionId = composition.id_base_product_composition || composition.id;
     const isTemporary = composition.is_temporary === true;
     
-    console.log('compositionId:', compositionId);
-    console.log('isTemporary:', isTemporary);
-    console.log('!isTemporary:', !isTemporary);
-    console.log('Should call API:', compositionId && !isTemporary);
     
     if (compositionId && !isTemporary) {
-      console.log('✅ Calling DELETE API for composition ID:', compositionId);
       
       // Gunakan pola yang sama seperti di purchases-management.vue
       const token = getAuthToken()
@@ -1003,10 +942,8 @@ const removeComposition = async (composition: Composition) => {
         headers['Authorization'] = `Bearer ${token}`
       }
       
-      console.log('Request headers:', headers)
       const response = await axios.delete(`/api/base-product-compositions/${compositionId}`, { headers });
       
-      console.log('DELETE API response:', response.data);
       
       if (response.data.success) {
         emit('notification', 'Item komposisi berhasil dihapus dari database', 'success');
@@ -1014,8 +951,6 @@ const removeComposition = async (composition: Composition) => {
         emit('notification', 'Gagal menghapus item komposisi', 'error');
       }
     } else {
-      console.log('❌ Skipping API call');
-      console.log('Reason - compositionId:', compositionId, ', isTemporary:', isTemporary);
       emit('notification', 'Item komposisi berhasil dihapus', 'success');
     }
     
@@ -1023,7 +958,6 @@ const removeComposition = async (composition: Composition) => {
     const index = existingCompositions.value.findIndex(c => c.id === composition.id)
     if (index > -1) {
       existingCompositions.value.splice(index, 1)
-      console.log('Item removed from composition list at index:', index)
     }
     
   } catch (error: any) {
@@ -1048,19 +982,14 @@ const saveAllCompositions = async () => {
       comp.is_temporary && comp.base_product_id && comp.quantity > 0
     )
     
-    console.log('Compositions to save:', compositionsToSave.length)
-    console.log('All existing compositions:', existingCompositions.value.length)
     
     if (compositionsToSave.length === 0) {
-      console.log('No compositions to save')
       return
     }
     
     for (let i = compositionsToSave.length - 1; i >= 0; i--) {
       const currentComposition = compositionsToSave[i]
       
-      console.log(`\n=== PROCESSING COMPOSITION ${i + 1}/${compositionsToSave.length} ===`)
-      console.log('Current composition raw data:', currentComposition)
       
       // Validate composition data before sending
       if (!currentComposition.base_product_id || currentComposition.quantity <= 0) {
@@ -1095,28 +1024,11 @@ const saveAllCompositions = async () => {
           continue
         }
 
-        console.log('Final savePayload constructed:', savePayload)
-        console.log('savePayload type checks:')
-        console.log('- base_product_id:', typeof savePayload.base_product_id, savePayload.base_product_id)
-        console.log('- quantity:', typeof savePayload.quantity, savePayload.quantity)
-        console.log('- ingredient_item_id:', typeof savePayload.ingredient_item_id, savePayload.ingredient_item_id)
-        console.log('- ingredient_base_product_id:', typeof savePayload.ingredient_base_product_id, savePayload.ingredient_base_product_id)
 
         // Debug: Log payload before sending
-        console.log('=== ABOUT TO SEND PAYLOAD ===')
-        console.log('savePayload stringified:', JSON.stringify(savePayload))
-        console.log('savePayload keys:', Object.keys(savePayload))
-        console.log('savePayload values:', Object.values(savePayload))
 
         // Add temporary request interceptor to debug
         const requestInterceptor = axios.interceptors.request.use(config => {
-          console.log('=== AXIOS REQUEST INTERCEPTOR ===')
-          console.log('Request URL:', config.url)
-          console.log('Request method:', config.method)
-          console.log('Request data type:', typeof config.data)
-          console.log('Request data:', config.data)
-          console.log('Request data stringified:', JSON.stringify(config.data))
-          console.log('Request headers:', config.headers)
           return config
         })
 
@@ -1130,9 +1042,6 @@ const saveAllCompositions = async () => {
         // Remove the interceptor
         axios.interceptors.request.eject(requestInterceptor)
         
-        console.log('=== POST RESPONSE ===')
-        console.log('Response status:', response.status)
-        console.log('Response data:', response.data)
         
         successCount++
         
@@ -1192,13 +1101,6 @@ const saveAllCompositions = async () => {
 
 // Debug function
 const debugLogState = () => {
-  console.log('=== DEBUG STATE ===')
-  console.log('Form:', form)
-  console.log('Existing compositions:', existingCompositions.value)
-  console.log('Selected ingredient:', selectedIngredient.value)
-  console.log('Is duplicate:', isDuplicateIngredient.value)
-  console.log('Can submit:', canSubmit.value)
-  console.log('Items loaded:', items.value.length)
 }
 
 // Make console available in template

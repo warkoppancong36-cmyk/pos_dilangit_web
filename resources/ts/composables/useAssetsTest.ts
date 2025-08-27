@@ -299,13 +299,11 @@ export const useAssetsTest = () => {
   }
 
   const deleteAsset = async (id: number) => {
-    console.log('Delete asset:', id)
     // Mock delete for now
     state.value.assets = state.value.assets.filter(asset => asset.id !== id)
   }
 
   const bulkDeleteAssets = async (ids: number[]) => {
-    console.log('Bulk delete assets:', ids)
     // Mock bulk delete for now
     state.value.assets = state.value.assets.filter(asset => !ids.includes(asset.id))
   }

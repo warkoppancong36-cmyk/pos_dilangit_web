@@ -679,7 +679,6 @@ const refreshHPP = async () => {
 // Open items setup (redirect to product-items management)
 const openItemsSetup = () => {
   // You can emit event to parent to handle navigation
-  console.log('Open items setup for product:', localFormData.id)
   // Or use router to navigate to product-items with filter
 }
 

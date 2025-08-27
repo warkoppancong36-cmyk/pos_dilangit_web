@@ -51,8 +51,6 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 // Debug: Check if product has id
-console.log('ProductVariantCards - Product prop:', props.product)
-console.log('ProductVariantCards - Product ID:', props.product?.id)
 
 // Dialog state
 const formDialog = ref(false)
@@ -180,18 +178,11 @@ const getMarginText = (price: number, cost: number) => {
 
 // Dialog handlers
 const openCreateDialog = () => {
-  console.log('🚀 OpenCreateDialog called')
-  console.log('🚀 Product:', props.product)
-  console.log('🚀 Product ID:', props.product?.id)
-  console.log('🚀 Product object keys:', props.product ? Object.keys(props.product) : 'no product')
-  console.log('🚀 Current formDialog state:', formDialog.value)
   
   selectedVariant.value = null
   editMode.value = false
   formDialog.value = true
   
-  console.log('🚀 After setting formDialog:', formDialog.value)
-  console.log('🚀 Products array to be passed:', props.product ? [props.product] : [])
 }
 
 const openEditDialog = (variant: Variant) => {

@@ -137,11 +137,9 @@ const loadPurchaseItems = async () => {
   loading.value = true
   try {
     // Debug: Check if props already has items
-    console.log('Purchase props:', props.purchase)
 
     // If props already has items, use them directly
     if (props.purchase.items && props.purchase.items.length > 0) {
-      console.log('Using items from props:', props.purchase.items)
       purchaseItems.value = props.purchase.items.map((item: any) => ({
         ...item,
         receive_quantity: 0,
@@ -154,7 +152,6 @@ const loadPurchaseItems = async () => {
     }
 
     // Otherwise, fetch from API
-    console.log('Fetching items from API...')
 
     const response = await axios.get(`/api/purchases/${props.purchase.id_purchase}`, {
       headers: {
@@ -162,10 +159,8 @@ const loadPurchaseItems = async () => {
       },
     })
 
-    console.log('API Response:', response.data)
 
     if (response.data.success && response.data.data?.items) {
-      console.log('Using items from API data.data:', response.data.data.items)
       purchaseItems.value = response.data.data.items.map((item: any) => ({
         ...item,
         receive_quantity: 0,

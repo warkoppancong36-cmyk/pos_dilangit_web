@@ -568,10 +568,8 @@ const apiBaseUrl = computed(() => import.meta.env.VITE_API_BASE_URL || 'Not set'
 
 const testApiConnection = async () => {
   try {
-    console.log('Testing API connection...')
     const response = await fetch('http://localhost:8000/api/test')
     const data = await response.json()
-    console.log('API test response:', data)
     alert('API connection successful! Check console for details.')
   } catch (err) {
     console.error('API connection failed:', err)
@@ -668,7 +666,6 @@ const confirmBulkDelete = async () => {
 
 const bulkUpdateStatus = () => {
   // TODO: Implement bulk status update
-  console.log('Bulk update status for:', selectedAssets.value)
 }
 
 const refreshAssets = () => {

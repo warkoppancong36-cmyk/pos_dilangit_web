@@ -214,9 +214,7 @@ const searchQuery = ref('')
 
 // Fetch categories on mount
 onMounted(async () => {
-  console.log('ProductSearchFilters mounted, fetching categories...')
   await fetchAllCategories() // Use fetchAllCategories instead of fetchCategories
-  console.log('Categories loaded in ProductSearchFilters:', categories.value.length)
   // Initialize search query with existing filter
   searchQuery.value = localFilters.search || ''
 })
@@ -234,12 +232,10 @@ watch(() => props.filters, (newFilters) => {
 watchDebounced(
   searchQuery,
   (newQuery) => {
-    console.log('🔍 Search query changed:', newQuery)
     localFilters.search = newQuery
     
     // Only trigger search if query is 3+ characters or empty (to clear search)
     if (newQuery.length >= 3 || newQuery.length === 0) {
-      console.log('✅ Triggering search with query:', newQuery)
       isSearching.value = true
       emit('search', newQuery)
       onFilterChange()
@@ -249,7 +245,6 @@ watchDebounced(
         isSearching.value = false
       }, 500)
     } else {
-      console.log('⏳ Query too short, waiting for more characters:', newQuery.length)
     }
   },
   { debounce: 500, maxWait: 1000 }

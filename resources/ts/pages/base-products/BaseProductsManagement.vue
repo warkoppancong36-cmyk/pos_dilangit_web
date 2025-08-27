@@ -546,18 +546,15 @@ export default {
 
     const loadCategories = async () => {
       try {
-        console.log('Loading categories from CategoriesApi...')
         categoriesLoading.value = true
         const response = await CategoriesApi.getCategories({
           page: 1,
           per_page: 100,
           status: 'active'
         })
-        console.log('Categories response:', response)
         
         if (response.success && response.data) {
           categories.value = response.data
-          console.log('Categories loaded successfully:', categories.value.length, 'items')
         } else {
           console.warn('No categories data in response')
         }
@@ -580,13 +577,11 @@ export default {
     }
 
     const openCreateModal = () => {
-      console.log('Opening create modal, categories:', categories.value)
       selectedBaseProduct.value = null
       showModal.value = true
     }
 
     const openEditModal = (baseProduct) => {
-      console.log('Opening edit modal, categories:', categories.value)
       selectedBaseProduct.value = baseProduct
       showModal.value = true
     }
@@ -774,14 +769,12 @@ export default {
 
     // Lifecycle
     onMounted(async () => {
-      console.log('Component mounted, loading data...')
       await loadCategories()
       await loadBaseProducts()
     })
 
     // Watch categories for debugging
     watch(categories, (newCategories) => {
-      console.log('Categories updated:', newCategories)
     }, { deep: true })
 
     return {

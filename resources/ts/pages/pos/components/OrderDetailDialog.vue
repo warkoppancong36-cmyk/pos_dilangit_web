@@ -353,13 +353,11 @@ const closeDialog = () => {
 
 const printOrder = () => {
   // Implement print functionality
-  console.log('Printing order:', props.order.order_number)
   window.print()
 }
 
 const editOrder = () => {
   // Implement edit functionality
-  console.log('Editing order:', props.order.order_number)
   // You could emit an event or navigate to edit page
 }
 
@@ -371,7 +369,6 @@ const cancelOrder = async () => {
     showCancelConfirm.value = false
     closeDialog()
     // Show success message (you can add toast notification here)
-    console.log('Order cancelled successfully')
   } catch (error) {
     console.error('Error cancelling order:', error)
     // Show error message (you can add toast notification here)
@@ -386,7 +383,6 @@ const completeOrder = async () => {
     await PosApi.updateOrderStatus(props.order.id_order, { status: 'completed' })
     emit('order-updated', { ...props.order, status: 'completed' })
     closeDialog()
-    console.log('Order completed successfully')
   } catch (error) {
     console.error('Error completing order:', error)
   } finally {

@@ -15,7 +15,6 @@ export function getAuthToken(): string | null {
   for (const key of possibleKeys) {
     const token = localStorage.getItem(key)
     if (token) {
-      console.log(`Found token in localStorage with key: ${key}`)
       return token
     }
   }
@@ -24,7 +23,6 @@ export function getAuthToken(): string | null {
   for (const key of possibleKeys) {
     const token = sessionStorage.getItem(key)
     if (token) {
-      console.log(`Found token in sessionStorage with key: ${key}`)
       return token
     }
   }
@@ -32,7 +30,6 @@ export function getAuthToken(): string | null {
   // Check meta tag
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
   if (csrfToken) {
-    console.log('Found CSRF token in meta tag')
     return csrfToken
   }
   
@@ -41,7 +38,6 @@ export function getAuthToken(): string | null {
   for (const cookie of cookies) {
     const [name, value] = cookie.trim().split('=')
     if (possibleKeys.includes(name)) {
-      console.log(`Found token in cookie with name: ${name}`)
       return value
     }
   }
@@ -59,7 +55,6 @@ export function setupAxiosAuth() {
     window.axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
     window.axios.defaults.headers.common['Accept'] = 'application/json'
     window.axios.defaults.headers.common['Content-Type'] = 'application/json'
-    console.log('Axios authentication configured')
     return true
   }
   return false

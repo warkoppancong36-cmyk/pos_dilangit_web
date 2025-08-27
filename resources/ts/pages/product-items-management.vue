@@ -131,12 +131,10 @@ const handleCheckCapacity = (product: any) => {
 
 const handleViewHpp = (product: any) => {
   // Navigate ke halaman HPP management
-  console.log('🏃‍♂️ Navigating to HPP management for product:', product.name)
   router.push('/hpp-management')
 }
 
 const handleViewDetail = (product: any) => {
-  console.log('👁️ Viewing product detail:', product.name)
   selectedProductForDetail.value = product
   detailDialog.value = true
 }

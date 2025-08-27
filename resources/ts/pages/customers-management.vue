@@ -140,9 +140,6 @@ onMounted(() => {
       @page-change="onPageChange"
       @items-per-page-change="(value: number) => handleFiltersUpdate({ per_page: value })"
       @update:selected-customers="(customers: number[]) => selectedCustomers = customers"
-      @view-detail="(customer: Customer) => console.log('View detail:', customer)"
-      @view-history="(customer: Customer) => console.log('View history:', customer)"
-      @view-notes="(customer: Customer) => console.log('View notes:', customer)"
     />
 
     <CustomerDialog

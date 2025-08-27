@@ -259,7 +259,6 @@ const showNotification = (message: string, type: 'success' | 'error' = 'success'
     }, 300)
   }, 3000)
   
-  console.log(`${type}: ${message}`)
 }
 
 const fetchProducts = async () => {
@@ -267,8 +266,6 @@ const fetchProducts = async () => {
   try {
     const response = await axios.get('/api/products')
     products.value = response.data.data || response.data || []
-    console.log('Fetched products:', products.value) // Debug log
-    console.log('First product structure:', products.value[0]) // Debug first item structure
   } catch (error) {
     console.error('Gagal mengambil data produk:', error)
     products.value = []
@@ -284,13 +281,10 @@ const searchProducts = (search: string) => {
 }
 
 const onProductChanged = (productId: number) => {
-  console.log('Product changed to ID:', productId)
-  console.log('Available products:', products.value)
   form.value.selectedProductId = productId
 }
 
 const onProductObjectChanged = (product: Product | null) => {
-  console.log('Product object changed:', product)
   form.value.selectedProduct = product
   if (product) {
     form.value.selectedProductId = product.id
@@ -300,39 +294,26 @@ const onProductObjectChanged = (product: Product | null) => {
 }
 
 const getSelectedProductInfo = computed(() => {
-  console.log('Computing selected product info...')
-  console.log('form.selectedProduct:', form.value.selectedProduct)
-  console.log('form.selectedProductId:', form.value.selectedProductId)
   
   // Try using selectedProduct object first
   if (form.value.selectedProduct) {
-    console.log('Using selectedProduct object:', form.value.selectedProduct)
     return form.value.selectedProduct
   }
   
   // Fallback to finding by ID
   if (form.value.selectedProductId && products.value.length > 0) {
-    console.log('Searching for product with ID:', form.value.selectedProductId)
-    console.log('Product IDs available:', products.value.map(p => ({ id: p.id, name: p.name })))
     
     const selectedProd = products.value.find(p => p.id === form.value.selectedProductId)
-    console.log('Found selected product by ID:', selectedProd)
     return selectedProd
   }
   
-  console.log('No product selected or no products available')
   return null
 })
 
 const generateSKU = () => {
-  console.log('Generating SKU...')
   const productInfo = getSelectedProductInfo.value
-  console.log('Product info for SKU:', productInfo)
-  console.log('Form name:', form.value.name)
-  console.log('Form selectedProductId:', form.value.selectedProductId)
   
   if (!productInfo || !form.value.name) {
-    console.log('Missing productInfo or name, returning empty SKU')
     return ''
   }
   
@@ -341,7 +322,6 @@ const generateSKU = () => {
   const timestamp = Date.now().toString().slice(-4)
   const generatedSKU = `${productSku}-${variantName}-${timestamp}`
   
-  console.log('Generated SKU:', generatedSKU)
   return generatedSKU
 }
 
@@ -352,7 +332,6 @@ const saveVariant = async () => {
   if (!valid) return
 
   const productInfo = getSelectedProductInfo.value
-  console.log('Product info in saveVariant:', productInfo)
   
   if (!productInfo) {
     showNotification('Produk tidak ditemukan', 'error')
@@ -378,19 +357,14 @@ const saveVariant = async () => {
       active: form.value.active
     }
 
-    console.log('Payload being sent:', payload) // Debug log
-    console.log('Payload JSON:', JSON.stringify(payload)) // Debug JSON string
 
     const response = await axios.post('/api/variants', payload)
     
-    console.log('API Response:', response.data) // Debug response
-    console.log('Response Status:', response.status) // Debug status
     
     if (response.data.success !== false && (response.status === 200 || response.status === 201)) {
       showNotification('Variant berhasil dibuat!', 'success')
       
       // Debug: Check if variant was actually created
-      console.log('Created variant data:', response.data.data)
       
       // Emit save event to refresh parent data
       emit('save')

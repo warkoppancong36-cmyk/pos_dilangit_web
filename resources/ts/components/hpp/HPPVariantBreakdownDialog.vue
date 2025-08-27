@@ -357,7 +357,6 @@ const applyPriceSuggestion = async () => {
       })
       
       // Don't auto-close dialog - let user see the success message and close manually
-      console.log('✅ Price update successful - dialog remains open for user confirmation')
     }
     catch (error: any) {
       console.error('Error applying price suggestion:', error)

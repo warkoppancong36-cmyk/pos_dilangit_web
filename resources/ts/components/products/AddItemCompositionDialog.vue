@@ -514,11 +514,9 @@ const hppDialog = ref(false)
 // Dialog state
 const dialog = computed({
   get: () => {
-    console.log('🔵 [DEBUG] Dialog getter called, props.modelValue:', props.modelValue)
     return props.modelValue
   },
   set: (value) => {
-    console.log('🔵 [DEBUG] Dialog setter called with value:', value)
     emit('update:modelValue', value)
   }
 })
@@ -647,18 +645,14 @@ const customFilter = (value: string, query: string, item?: any): boolean => {
 
 const loadAvailableItems = async () => {
   loadingItems.value = true
-  console.log('Loading available items...')
   try {
     // Use per_page=all to get all items without pagination, include inventory data
     const response = await axios.get('/api/items?per_page=all&include=inventory')
-    console.log('Items API response:', response.data)
     
     // API returns paginated data: response.data.data.data
     const items = response.data?.data?.data || response.data?.data || response.data || []
     availableItems.value = Array.isArray(items) ? items : []
     
-    console.log('Available items loaded:', availableItems.value.length, 'items')
-    console.log('Sample items with inventory:', availableItems.value.slice(0, 3))
   } catch (error: any) {
     console.error('Error loading items:', error)
     if (error?.response) {
@@ -676,10 +670,8 @@ const loadCompositionItems = async () => {
   
   try {
     const variantId = props.variant.id || props.variant.id_variant
-    console.log('Loading composition items for variant:', variantId)
     
     const response = await axios.get(`/api/variant-items/variant/${variantId}`)
-    console.log('Composition API response:', response.data)
     
     // The API returns data.composition according to the backend code
     const items = response.data?.data?.composition || response.data?.composition || []
@@ -712,7 +704,6 @@ const loadCompositionItems = async () => {
       } : null
     }))
     
-    console.log('Composition items loaded:', compositionItems.value)
   } catch (error: any) {
     console.error('Error loading composition items:', error)
     if (error?.response) {
@@ -734,26 +725,18 @@ const handleSave = async () => {
   const selectedItemId = selectedItem.value.id_item
   const quantityToSet = formData.value.quantity
 
-  console.log('🔍 Handle save - Mode:', isEditMode.value ? 'EDIT' : 'ADD')
-  console.log('🔍 Item:', selectedItemName, 'ID:', selectedItemId)
-  console.log('🔍 Quantity:', quantityToSet)
 
   if (isEditMode.value && editingItemIndex.value !== null) {
     // MODE EDIT: Update existing item dengan quantity baru (tidak akumulasi)
-    console.log('✏️ Edit mode: Updating existing item at index', editingItemIndex.value)
     
     const existingItem = compositionItems.value[editingItemIndex.value]
     const oldQuantity = existingItem.quantity
     
-    console.log(`📝 Updating item "${selectedItemName}":`)
-    console.log(`   - Old quantity: ${oldQuantity}`)
-    console.log(`   - New quantity: ${quantityToSet}`)
     
     // Update existing item quantity (replace, not accumulate)
     compositionItems.value[editingItemIndex.value].quantity = quantityToSet
     compositionItems.value[editingItemIndex.value].is_critical = formData.value.is_critical
     
-    console.log('✅ Item updated successfully in edit mode')
     
     // Reset edit mode
     isEditMode.value = false
@@ -761,7 +744,6 @@ const handleSave = async () => {
     
   } else {
     // MODE ADD: Check if item already exists
-    console.log('➕ Add mode: Checking for existing item')
     
     const existingItemIndex = compositionItems.value.findIndex(item => 
       item.name === selectedItemName || 
@@ -774,18 +756,12 @@ const handleSave = async () => {
       const oldQuantity = existingItem.quantity
       const newQuantity = oldQuantity + quantityToSet
       
-      console.log('📦 Item already exists! Accumulating quantity:')
-      console.log(`   - Item: ${selectedItemName}`)
-      console.log(`   - Old quantity: ${oldQuantity}`)
-      console.log(`   - Adding: ${quantityToSet}`)
-      console.log(`   - New quantity: ${newQuantity}`)
       
       // Update existing item quantity
       compositionItems.value[existingItemIndex].quantity = newQuantity
       
     } else {
       // Item doesn't exist, add new item
-      console.log('➕ Adding new item to composition:', selectedItemName)
       
       const newItem: CompositionItem = {
         name: selectedItemName,
@@ -807,17 +783,14 @@ const handleSave = async () => {
       }
 
       compositionItems.value.push(newItem)
-      console.log('✅ New item added successfully')
     }
   }
   
   // Reset form
   formData.value = defaultFormData()
-  console.log('🔄 Form reset')
 }
 
 const editItem = (item: CompositionItem, index: number) => {
-  console.log('🔍 Edit item called:', item, index)
   
   // Find item in available items to get the correct ID
   const foundItem = availableItems.value.find(availableItem => 
@@ -825,7 +798,6 @@ const editItem = (item: CompositionItem, index: number) => {
   )
   
   if (foundItem) {
-    console.log('✅ Found item in available items:', foundItem)
     
     // Aktifkan mode edit
     isEditMode.value = true
@@ -838,9 +810,6 @@ const editItem = (item: CompositionItem, index: number) => {
       is_critical: item.is_critical || false
     }
     
-    console.log('📝 Edit mode activated!')
-    console.log('📝 Form data set:', formData.value)
-    console.log('📝 Editing item at index:', index)
     
     // Scroll to form
     setTimeout(() => {
@@ -851,14 +820,11 @@ const editItem = (item: CompositionItem, index: number) => {
     }, 100)
   } else {
     console.error('❌ Could not find item in available items')
-    console.log('Available items:', availableItems.value.map(ai => ({ id: ai.id_item, name: ai.name })))
-    console.log('Looking for item:', { id: item.id, name: item.name })
   }
 }
 
 // Cancel edit mode
 const cancelEdit = () => {
-  console.log('❌ Edit mode cancelled')
   isEditMode.value = false
   editingItemIndex.value = null
   formData.value = defaultFormData()
@@ -879,35 +845,25 @@ const confirmDelete = async () => {
   const itemId = item.id
   deleting.value = true
   
-  console.log('🚀 Starting delete process for:', itemName, 'ID:', itemId, 'Index:', index)
   
   try {
     // If item has an ID, it exists in database and needs to be deleted via API
     if (itemId) {
-      console.log('🗑️ Deleting item from database:', itemName, 'with ID:', itemId)
       await axios.delete(`/api/variant-items/${itemId}`)
-      console.log('✅ Item deleted from database successfully')
     } else {
-      console.log('📝 Item has no ID, removing from local list only')
     }
     
     // Close dialog first
     deleteDialog.value = false
     itemToDelete.value = null
-    console.log('✅ Delete dialog closed')
     
     // Force refresh composition list from server
-    console.log('🔄 Force refreshing composition list...')
     await loadCompositionItems()
-    console.log('✅ Composition list refreshed from server. New count:', compositionItems.value.length)
     
     // Emit save event to notify parent component to refresh
-    console.log('📡 Emitting save event to parent component...')
     emit('save')
-    console.log('✅ Save event emitted to parent component')
     
     // Show success message
-    console.log('🎉 Item successfully deleted:', itemName)
     
   } catch (error: any) {
     console.error('❌ Error deleting item:', error)
@@ -915,7 +871,6 @@ const confirmDelete = async () => {
     alert('Gagal menghapus item: ' + (error.response?.data?.message || error.message))
   } finally {
     deleting.value = false
-    console.log('🏁 Delete process completed')
   }
 }
 
@@ -980,27 +935,17 @@ const saveComposition = async () => {
   try {
     const variantId = props.variant.id || props.variant.id_variant
     
-    console.log('🔍 [DEBUG] Composition items count:', compositionItems.value.length)
-    console.log('🔍 [DEBUG] Raw composition items:', JSON.stringify(compositionItems.value, null, 2))
     
     // Check if we're editing existing composition or creating new one
     const hasExistingItems = compositionItems.value.some(item => item.id)
-    console.log('🔍 [DEBUG] Has existing items:', hasExistingItems)
     
     if (hasExistingItems) {
       // EDIT MODE: Update existing composition
-      console.log('� [EDIT MODE] Updating existing composition')
       
       // Use bulk-update endpoint that replaces all items
       const payload = {
         items: compositionItems.value.map(item => {
           const foundItem = availableItems.value.find(ai => ai.name === item.name)
-          console.log(`Mapping item "${item.name}":`)
-          console.log(`  - Found item:`, foundItem?.id_item)
-          console.log(`  - Original ID (id_variant_item):`, item.id)
-          console.log(`  - Quantity:`, item.quantity)
-          console.log(`  - Unit:`, item.unit)
-          console.log(`  - Is critical:`, item.is_critical)
           
           return {
             id_variant_item: item.id, // Use item.id as id_variant_item
@@ -1011,25 +956,17 @@ const saveComposition = async () => {
         }).filter(item => item.id_variant_item && item.quantity_needed > 0)
       }
       
-      console.log('Edit payload:', JSON.stringify(payload, null, 2))
       
       // Use bulk-update endpoint dengan POST method dan variant ID di payload
       const response = await axios.post('/api/variant-items/bulk-update', payload)
-      console.log('Composition updated successfully:', response.data)
       
     } else {
       // CREATE MODE: Create new composition
-      console.log('✨ [CREATE MODE] Creating new composition')
       
       const payload = {
         id_variant: variantId,
         items: compositionItems.value.map(item => {
           const foundItem = availableItems.value.find(ai => ai.name === item.name)
-          console.log(`Mapping item "${item.name}":`)
-          console.log(`  - Found item:`, foundItem?.id_item)
-          console.log(`  - Quantity:`, item.quantity)
-          console.log(`  - Unit:`, item.unit)
-          console.log(`  - Is critical:`, item.is_critical)
           
           return {
             id_item: foundItem?.id_item,
@@ -1040,11 +977,9 @@ const saveComposition = async () => {
         }).filter(item => item.id_item && item.quantity_needed > 0)
       }
       
-      console.log('Create payload:', JSON.stringify(payload, null, 2))
       
       // Use bulk-store endpoint for new items
       const response = await axios.post('/api/variant-items/bulk-store', payload)
-      console.log('Composition created successfully:', response.data)
     }
     
     emit('save')
@@ -1088,7 +1023,6 @@ watch(() => props.modelValue, (newVal) => {
 // Watch for item selection changes to update unit
 watch(() => formData.value.item_id, (newItemId) => {
   if (newItemId && selectedItem.value) {
-    console.log('Item selected:', selectedItem.value.name, 'Unit:', selectedItem.value.unit)
   }
 })
 

@@ -88,7 +88,6 @@ const openDetailDialog = (product: any) => {
 
 // Handle composition save
 const handleCompositionSave = (data: any) => {
-  console.log('Composition saved:', data)
   emit('refresh')
 }
 

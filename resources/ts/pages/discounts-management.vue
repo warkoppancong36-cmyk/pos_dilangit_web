@@ -326,8 +326,6 @@ const headers = [
 
 // Computed
 const debouncedSearch = useDebounceFn(() => {
-  console.log('=== DISCOUNTS DEBOUNCED SEARCH ===')
-  console.log('Search term:', filters.value.search)
   currentPage.value = 1
   fetchDiscounts()
 }, 500)
@@ -347,18 +345,10 @@ const fetchDiscounts = async () => {
       per_page: itemsPerPage.value
     }
     
-    console.log('=== DISCOUNTS FETCH ===')
-    console.log('Filters:', filters.value)
-    console.log('Processed filters:', discountFilters)
-    
     const result = await DiscountsApi.getDiscounts(discountFilters)
-    
-    console.log('Discounts API result:', result)
     
     discounts.value = result.data
     totalItems.value = result.total
-    
-    console.log('Discounts loaded:', discounts.value.length)
     
   } catch (error) {
     console.error('Failed to fetch discounts:', error)

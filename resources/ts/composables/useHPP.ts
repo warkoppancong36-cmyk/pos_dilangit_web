@@ -124,8 +124,6 @@ export const useHPP = () => {
   const getProductHPPBreakdown = async (productId: number, method: 'current' | 'latest' | 'average' = 'current') => {
     loading.value = true
     try {
-      console.log('🔍 HPP Breakdown - Product ID:', productId, 'Method:', method)
-      console.log('🔍 Access Token:', useCookie('accessToken').value ? 'EXISTS' : 'NOT FOUND')
 
       const response = await axios.get(`/api/hpp/products/${productId}/breakdown?method=${method}`)
       const data = response.data
@@ -151,7 +149,6 @@ export const useHPP = () => {
   const updateProductHPP = async (productId: number, method: 'current' | 'latest' | 'average') => {
     loading.value = true
     try {
-      console.log('🔄 Updating HPP for product:', productId, 'with method:', method)
 
       // Get token from localStorage like other APIs
       const token = localStorage.getItem('token')
@@ -169,7 +166,6 @@ export const useHPP = () => {
       const data = response.data
 
       if (data.success) {
-        console.log(`✅ HPP updated successfully for ${data.data.product_name}`)
 
         return data.data
       }
@@ -213,7 +209,6 @@ export const useHPP = () => {
   const calculateSuggestedPrice = async (productId: number, markupPercentage: number) => {
     loading.value = true
     try {
-      console.log('🔄 Calculating suggested price for product:', productId, 'with markup:', markupPercentage)
 
       // Get token from localStorage like other APIs
       const token = localStorage.getItem('token')
@@ -232,7 +227,6 @@ export const useHPP = () => {
 
       if (data.success) {
         currentHPPSuggestion.value = data.data
-        console.log('✅ Suggested price calculated:', data.data)
 
         return data.data
       }
@@ -258,7 +252,6 @@ export const useHPP = () => {
   ) => {
     loading.value = true
     try {
-      console.log('🔄 Updating price from HPP for product:', productId)
 
       // Get token from localStorage like other APIs
       const token = localStorage.getItem('token')
@@ -271,10 +264,8 @@ export const useHPP = () => {
       // Add either markup_percentage or target_price based on mode
       if (useTargetPrice) {
         payload.target_price = markupPercentageOrTargetPrice
-        console.log('📊 Using target price mode:', markupPercentageOrTargetPrice)
       } else {
         payload.markup_percentage = markupPercentageOrTargetPrice
-        console.log('📊 Using markup percentage mode:', markupPercentageOrTargetPrice)
       }
 
       const response = await axios.post(`/api/hpp/products/${productId}/update-price`, payload, {
@@ -288,7 +279,6 @@ export const useHPP = () => {
       const data = response.data
 
       if (data.success) {
-        console.log(`✅ Price updated successfully for ${data.data.product_name}`)
 
         return data // Return full response object instead of just data.data
       }
@@ -315,7 +305,6 @@ export const useHPP = () => {
 
       if (data.success) {
         bulkUpdateResults.value = data.data.details
-        console.log(`Bulk HPP update completed for ${data.data.updated_products} products`)
 
         return data.data
       }

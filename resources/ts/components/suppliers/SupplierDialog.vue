@@ -64,7 +64,6 @@ const formData = computed(() => ({
 
 // Debug: watch form data changes
 watch(formData, (newData) => {
-  console.log('Form data changed:', newData)
 }, { deep: true })
 
 // Form validation
@@ -181,16 +180,12 @@ watch(localValue, (newValue) => {
 // Handle save
 const handleSave = async () => {
   // Debug: log form data sebelum validation
-  console.log('Form data before save:', formData.value)
-  console.log('Form data stringified:', JSON.stringify(formData.value))
   
   const { valid } = await formRef.value?.validate()
   
-  console.log('Form validation result:', valid)
   
   if (valid) {
     const payload = { ...formData.value }
-    console.log('Payload to emit:', payload)
     emit('save', payload)
   }
 }

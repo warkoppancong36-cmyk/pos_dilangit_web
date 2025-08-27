@@ -914,12 +914,10 @@ const processPayment = async () => {
       transaction_date: new Date().toISOString()
     }
     
-    console.log('Sending payment data:', paymentPayload)
     
     // Send request to Laravel backend using axios (same pattern as other modules)
     const response = await axios.post('/api/pos/process-direct-payment', paymentPayload)
     
-    console.log('Payment processed successfully:', response.data)
     
     // Store processed order data
     processedOrder.value = response.data.data
@@ -975,7 +973,6 @@ const processPayment = async () => {
 
 const printReceipt = () => {
   // Implement receipt printing
-  console.log('Printing receipt for order:', processedOrder.value)
   
   // For now, just open print dialog
   window.print()

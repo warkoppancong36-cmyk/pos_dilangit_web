@@ -175,7 +175,7 @@ export const useInventory = () => {
   const totalStockValue = computed(() => stats.value.total_stock_value)
   const lowStockCount = computed(() => stats.value.low_stock_items)
   const outOfStockCount = computed(() => stats.value.out_of_stock_items)
-  
+
   // Pagination computed properties
   const totalPages = computed(() => Math.ceil(totalItems.value / itemsPerPage.value))
   const hasNextPage = computed(() => currentPage.value < totalPages.value)
@@ -226,7 +226,7 @@ export const useInventory = () => {
   const fetchInventoryList = async () => {
     loading.value = true
     errorMessage.value = ''
-    
+
     try {
       const params = {
         ...filters.value,
@@ -242,37 +242,18 @@ export const useInventory = () => {
         }
       })
 
-      console.log('Fetching inventory with params:', params)
       const response = await InventoryApi.getAll(params)
-      
-      console.log('🔍 Full Inventory API Response:', response) // Debug full response
-      console.log('📄 Response Data Structure:', response.data) // Debug data structure
-      
+
+
       if (response.success) {
         // API mengembalikan data dalam structure: response.data.data (Laravel pagination)
         inventoryList.value = response.data.data || []
         totalItems.value = response.data.total || 0
-        
+
         // Update current page dari response untuk memastikan sinkronisasi
         if (response.data.current_page) {
           currentPage.value = response.data.current_page
         }
-        
-        // Log untuk debugging
-        console.log('Inventory data loaded:', {
-          total: response.data.total,
-          current_page: response.data.current_page,
-          per_page: response.data.per_page,
-          last_page: response.data.last_page,
-          itemsLength: inventoryList.value.length
-        })
-        
-        console.log('📊 Final Inventory State Values:', {
-          inventoryListLength: inventoryList.value.length,
-          totalItemsValue: totalItems.value,
-          currentPageValue: currentPage.value,
-          itemsPerPageValue: itemsPerPage.value
-        }) // Debug final state
       } else {
         throw new Error(response.message || 'Gagal mengambil data inventory')
       }
@@ -334,16 +315,16 @@ export const useInventory = () => {
 
   const updateStock = async () => {
     if (!selectedInventory.value) return
-    
+
     saveLoading.value = true
     modalErrorMessage.value = ''
-    
+
     try {
       const response = await InventoryApi.updateStock(
         selectedInventory.value.id_inventory,
         stockUpdateForm.value
       )
-      
+
       if (response.success) {
         successMessage.value = 'Stock berhasil diperbarui'
         closeStockUpdateDialog()
@@ -363,16 +344,16 @@ export const useInventory = () => {
 
   const setReorderLevel = async () => {
     if (!selectedInventory.value) return
-    
+
     saveLoading.value = true
     modalErrorMessage.value = ''
-    
+
     try {
       const response = await InventoryApi.setReorderLevel(
         selectedInventory.value.id_inventory,
         reorderForm.value
       )
-      
+
       if (response.success) {
         successMessage.value = 'Reorder level berhasil diperbarui'
         closeReorderDialog()
@@ -449,7 +430,6 @@ export const useInventory = () => {
 
   // Pagination and filters
   const onPageChange = (page: number) => {
-    console.log('Page changed to:', page, 'Current total items:', totalItems.value)
     if (page !== currentPage.value) {
       currentPage.value = page
       fetchInventoryList()
@@ -457,7 +437,6 @@ export const useInventory = () => {
   }
 
   const onItemsPerPageChange = (itemsPerPageValue: number) => {
-    console.log('Items per page changed to:', itemsPerPageValue)
     if (itemsPerPageValue !== itemsPerPage.value) {
       itemsPerPage.value = itemsPerPageValue
       currentPage.value = 1 // Reset to first page when changing items per page

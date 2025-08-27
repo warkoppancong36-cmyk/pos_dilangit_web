@@ -153,8 +153,6 @@ onMounted(() => {
 
 // Debug watcher for totalItems
 watch(totalItems, (newValue, oldValue) => {
-  console.log('🔍 totalItems changed:', { oldValue, newValue })
-  console.log('📊 VDataTable will receive server-items-length:', newValue)
 }, { immediate: true })
 </script>
 

@@ -330,7 +330,6 @@ const loadTransactions = async () => {
     loading.value = true
     const response = await PosApi.getOrders()
     
-    console.log('API Response structure:', response)
     
     // Data dari paginatedResponse berada di response.data (bukan response.data.data)
     if (response.success && Array.isArray(response.data)) {
@@ -340,7 +339,6 @@ const loadTransactions = async () => {
       transactions.value = []
     }
     
-    console.log('Loaded transactions:', transactions.value.length)
     
     // Calculate summary
     calculateSummary()
@@ -379,7 +377,6 @@ const viewOrderDetail = (order: any) => {
 
 const printOrder = (order: any) => {
   // Implement print functionality
-  console.log('Printing order:', order.order_number)
 }
 
 const editOrder = (order: any) => {

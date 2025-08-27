@@ -270,16 +270,13 @@ export default {
     const isEdit = computed(() => !!props.baseProduct)
 
     const categoryItems = computed(() => {
-      console.log('Computing categoryItems, props.categories:', props.categories)
       if (!props.categories || !Array.isArray(props.categories)) {
-        console.log('Categories is not an array:', props.categories)
         return []
       }
       const items = props.categories.map(category => ({
         title: category.name,
         value: category.id_category
       }))
-      console.log('CategoryItems result:', items)
       return items
     })
 

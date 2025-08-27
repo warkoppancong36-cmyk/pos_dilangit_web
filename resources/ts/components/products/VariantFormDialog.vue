@@ -178,29 +178,22 @@ const exampleText = computed(() => {
 
 // Methods
 const loadFormData = () => {
-  console.log('🔍 LoadFormData called - Props:', { 
     variant: props.variant, 
     productId: props.productId, 
     products: props.products?.length || 0,
     productsData: props.products 
   })
   
-  console.log('🔍 Current formData before load:', formData.value)
-  console.log('🔍 Is Edit Mode:', isEdit.value)
   
   if (props.variant) {
-    console.log('📝 Mode: EDIT - Loading variant data:', props.variant)
     // Mode edit - load variant data
     const newData = {
       ...props.variant,
       id: props.variant.id || props.variant.id_variant,
       attributes: props.variant.attributes || {}
     }
-    console.log('📝 New data to assign:', newData)
     Object.assign(formData.value, newData)
-    console.log('✅ Edit mode - FormData after assignment:', formData.value)
   } else {
-    console.log('🆕 Mode: CREATE - Setting default values')
     // Mode create - reset form and set default values
     clearFormData()
     
@@ -210,47 +203,39 @@ const loadFormData = () => {
     // Method 1: From productId prop
     if (props.productId) {
       resolvedProductId = props.productId
-      console.log('✅ Got product ID from productId prop:', resolvedProductId)
     }
     // Method 2: From products array with different field names
     else if (props.products && props.products.length > 0) {
       const product = props.products[0]
       resolvedProductId = product.id || product.id_product
-      console.log('✅ Got product ID from products array:', resolvedProductId, 'from product:', product)
     }
     
     if (resolvedProductId) {
       formData.value.product_id = resolvedProductId
     } else {
       console.error('❌ No valid product ID found in props!')
-      console.log('ProductId prop:', props.productId)
-      console.log('Products array:', props.products)
     }
     
     // Generate SKU after setting product
     if (formData.value.product_id) {
       generateSku()
     }
-    console.log('✅ Create mode - FormData initialized:', formData.value)
   }
   
-  console.log('🎯 Final FormData after load:', formData.value)
   
   // Also try to generate SKU immediately if both name and product_id are available
   if (formData.value.name && formData.value.product_id && !isEdit.value) {
-    console.log('🔄 Attempting immediate SKU generation...')
     generateSku()
   }
-}
+
 
 const generateSku = () => {
-  console.log('🔄 GenerateSku called with:', {
     name: formData.value.name,
     product_id: formData.value.product_id,
     productsLength: props.products?.length || 0,
     isEdit: isEdit.value,
     products: props.products
-  })
+  }
   
   if (!formData.value.name) {
     console.warn('⚠️ Cannot generate SKU: No variant name provided')
@@ -263,12 +248,9 @@ const generateSku = () => {
   }
   
   const product = props.products?.find(p => p.id === formData.value.product_id || p.id_product === formData.value.product_id)
-  console.log('🔍 Found product:', product)
   
   if (!product) {
     console.warn('⚠️ Cannot generate SKU: Product not found in products array')
-    console.log('⚠️ Available products:', props.products)
-    console.log('⚠️ Looking for product_id:', formData.value.product_id)
     
     // Fallback: generate SKU without product code
     const variantName = formData.value.name
@@ -277,7 +259,6 @@ const generateSku = () => {
       .toUpperCase()
     
     const generatedSku = `PRD-${variantName}`
-    console.log('✅ Generated fallback SKU:', generatedSku)
     formData.value.sku = generatedSku
     return
   }
@@ -293,16 +274,13 @@ const generateSku = () => {
     .toUpperCase()
   
   const generatedSku = `${productCode}-${variantName}`
-  console.log('✅ Generated SKU:', generatedSku, 'from productCode:', productCode, 'variantName:', variantName)
   
   formData.value.sku = generatedSku
-}
 
 const handleSave = async () => {
   const { valid } = await form.value.validate()
   if (!valid) return
 
-  console.log('FormData before save:', formData.value)
 
   // Get product_id with fallback
   let productId = formData.value.product_id
@@ -337,7 +315,6 @@ const handleSave = async () => {
       active: formData.value.is_active !== false
     }
 
-    console.log('Payload that will be sent:', payload)
 
     if (isEdit.value) {
       const editPayload = {
@@ -371,21 +348,18 @@ const clearFormData = () => {
 
 // Watchers
 watch(() => props.modelValue, (newVal, oldVal) => {
-  console.log('🟡 Watcher modelValue triggered:', { newVal, oldVal })
   if (newVal) {
     loadFormData()
   }
 })
 
 watch(() => props.variant, (newVal, oldVal) => {
-  console.log('🟡 Watcher variant triggered:', { newVal, oldVal })
   if (props.modelValue) {
     loadFormData()
   }
 })
 
 watch(() => formData.value.name, (newName) => {
-  console.log('🟡 Watcher name triggered:', { newName, isEdit: isEdit.value })
   if (!isEdit.value && newName) {
     generateSku()
   }
@@ -393,7 +367,6 @@ watch(() => formData.value.name, (newName) => {
 
 // Also watch for product_id changes to regenerate SKU
 watch(() => formData.value.product_id, (newProductId) => {
-  console.log('🟡 Watcher product_id triggered:', { newProductId, isEdit: isEdit.value })
   if (!isEdit.value && newProductId && formData.value.name) {
     generateSku()
   }

@@ -169,7 +169,7 @@ const unitOptions = computed(() => {
 const fetchItemsList = async () => {
   loading.value = true
   errorMessage.value = ''
-  
+
   try {
     const params: any = {
       page: currentPage.value,
@@ -184,35 +184,16 @@ const fetchItemsList = async () => {
       }
     })
 
-    console.log('Fetching items with params:', params) // Debug log
-    console.log('Filters state:', filters) // Debug log
 
     const response = await ItemsApi.getAll(params)
-    
-    console.log('🔍 Full API Response:', response) // Debug full response
-    
+
+
     if (response.success && response.data) {
       const paginatedData = response.data as PaginatedResponse<Item>
-      console.log('📄 Paginated Data Object:', paginatedData) // Debug paginated data
-      
+
       itemsList.value = paginatedData.data || []
       totalItems.value = paginatedData.total || 0
       currentPage.value = paginatedData.current_page || 1
-      
-      console.log('Items fetched:', {
-        data: paginatedData.data?.length,
-        total: paginatedData.total,
-        current_page: paginatedData.current_page,
-        per_page: paginatedData.per_page,
-        last_page: paginatedData.last_page
-      }) // Debug log
-      
-      console.log('📊 Final State Values:', {
-        itemsListLength: itemsList.value.length,
-        totalItemsValue: totalItems.value,
-        currentPageValue: currentPage.value,
-        itemsPerPageValue: itemsPerPage.value
-      }) // Debug final state
     }
   } catch (error: any) {
     console.error('Error fetching items:', error)
@@ -245,7 +226,7 @@ const saveItem = async () => {
 
   try {
     let response
-    
+
     if (editMode.value && selectedItem.value) {
       response = await ItemsApi.update(selectedItem.value.id_item, formData)
     } else {
@@ -275,7 +256,7 @@ const deleteItem = async () => {
 
   try {
     const response = await ItemsApi.delete(selectedItem.value.id_item)
-    
+
     if (response.success) {
       successMessage.value = 'Item berhasil dihapus!'
       closeDeleteDialog()
@@ -297,7 +278,7 @@ const validateForm = (): boolean => {
     modalErrorMessage.value = 'Nama item harus diisi'
     return false
   }
-  
+
   if (!formData.unit.trim()) {
     modalErrorMessage.value = 'Satuan harus diisi'
     return false
@@ -377,8 +358,6 @@ const clearModalError = () => {
 
 // Pagination
 const onPageChange = (page: number) => {
-  console.log('🔄 Items onPageChange called with page:', page)
-  console.log('📄 Current state - currentPage:', currentPage.value, 'totalItems:', totalItems.value, 'itemsPerPage:', itemsPerPage.value)
   if (page !== currentPage.value) {
     currentPage.value = page
     fetchItemsList()
@@ -386,8 +365,6 @@ const onPageChange = (page: number) => {
 }
 
 const onItemsPerPageChange = (newItemsPerPage: number) => {
-  console.log('🔄 Items onItemsPerPageChange called with itemsPerPage:', newItemsPerPage)
-  console.log('📄 Current state - currentPage:', currentPage.value, 'totalItems:', totalItems.value)
   if (newItemsPerPage !== itemsPerPage.value) {
     itemsPerPage.value = newItemsPerPage
     currentPage.value = 1  // Reset to first page when changing items per page
@@ -399,7 +376,6 @@ const onItemsPerPageChange = (newItemsPerPage: number) => {
 const handleFiltersUpdate = (newFilters?: ItemFilters) => {
   if (newFilters) {
     Object.assign(filters, newFilters)
-    console.log('useItems - Filters updated:', filters)
   }
   currentPage.value = 1
   fetchItemsList()
@@ -439,13 +415,13 @@ export const useItems = () => {
     successMessage,
     modalErrorMessage,
     formData,
-    
+
     // Computed
     canCreateEdit,
     hasSelectedItems,
     stockStatusOptions,
     unitOptions,
-    
+
     // Methods
     fetchItemsList,
     fetchStats,
