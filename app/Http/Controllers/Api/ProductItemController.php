@@ -131,7 +131,7 @@ class ProductItemController extends Controller
                 'product_id' => 'required|exists:products,id_product',
                 'item_id' => 'required|exists:items,id_item',
                 'quantity_needed' => 'required|numeric|min:0.01',
-                // Removed 'unit' validation - will be retrieved from items table
+                'unit' => 'required|string|max:50', // Unit for this specific relationship
                 'cost_per_unit' => 'nullable|numeric|min:0',
                 'is_critical' => 'boolean',
                 'notes' => 'nullable|string',
@@ -210,6 +210,7 @@ class ProductItemController extends Controller
 
             $validator = Validator::make($request->all(), [
                 'quantity_needed' => 'required|numeric|min:0.01',
+                'unit' => 'required|string|max:50', // Unit for this specific relationship
                 'cost_per_unit' => 'nullable|numeric|min:0',
                 'is_critical' => 'boolean',
                 'notes' => 'nullable|string',
