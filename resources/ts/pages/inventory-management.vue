@@ -2,7 +2,7 @@
 import InventoryMovementsDialog from '@/components/InventoryMovementsDialog.vue'
 import { useInventory } from '@/composables/useInventory'
 import { useStockMovements } from '@/composables/useStockMovements'
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useDisplay } from 'vuetify'
 
 // Vuetify display composable for responsive design
@@ -150,6 +150,92 @@ onMounted(() => {
   fetchStats()
   fetchLowStockAlerts()
 })
+
+// Export functionality
+const exportLoading = ref(false)
+
+const exportToExcel = async () => {
+  try {
+    exportLoading.value = true
+    
+    // Dynamic import for better performance
+    const XLSX = await import('xlsx')
+    
+    // Prepare data for export
+    const exportData = inventoryList.value.map((item, index) => ({
+      'No': index + 1,
+      'Produk/Variant': item.item?.name || item.product?.name || 'Unknown Item',
+      'SKU': item.item?.item_code || item.product?.sku || '-',
+      'Deskripsi': item.item?.description || item.product?.description || '-',
+      'Unit': item.item?.unit || 'pcs',
+      'Stok Saat Ini': item.current_stock || 0,
+      'Stok Tersedia': item.available_stock || 0,
+      'Stok Minimum': item.reorder_level || 0,
+      'Status': getStockStatusText(item.current_stock, item.reorder_level),
+      'Harga Rata-rata': formatCurrency(item.average_cost || 0),
+      'Nilai Stok': formatCurrency(item.stock_value || 0),
+      'Lokasi Penyimpanan': item.item?.storage_location || '-',
+      'Dibuat': item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID') : '-',
+      'Diperbarui': item.updated_at ? new Date(item.updated_at).toLocaleDateString('id-ID') : '-'
+    }))
+    
+    // Create workbook and worksheet
+    const workbook = XLSX.utils.book_new()
+    const worksheet = XLSX.utils.json_to_sheet(exportData)
+    
+    // Add title and summary
+    const titleData = [
+      ['LAPORAN INVENTORY MANAGEMENT'],
+      ['Tanggal Export: ' + new Date().toLocaleDateString('id-ID')],
+      ['Total Items: ' + totalItems.value],
+      ['Total Nilai Stok: ' + formatCurrency(totalStockValue.value || 0)],
+      ['Items Low Stock: ' + lowStockCount.value],
+      ['Items Out of Stock: ' + outOfStockCount.value],
+      [],
+    ]
+    
+    XLSX.utils.sheet_add_aoa(worksheet, titleData, { origin: 'A1' })
+    XLSX.utils.sheet_add_json(worksheet, exportData, { origin: 'A8' })
+    
+    // Set column widths
+    const columnWidths = [
+      { wch: 5 },   // No
+      { wch: 30 },  // Produk/Variant
+      { wch: 15 },  // SKU
+      { wch: 30 },  // Deskripsi
+      { wch: 8 },   // Unit
+      { wch: 12 },  // Stok Saat Ini
+      { wch: 12 },  // Stok Tersedia
+      { wch: 12 },  // Stok Minimum
+      { wch: 15 },  // Status
+      { wch: 15 },  // Harga Rata-rata
+      { wch: 15 },  // Nilai Stok
+      { wch: 20 },  // Lokasi Penyimpanan
+      { wch: 12 },  // Dibuat
+      { wch: 12 },  // Diperbarui
+    ]
+    worksheet['!cols'] = columnWidths
+    
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventory Report')
+    
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+    const filename = `inventory-report-${timestamp}.xlsx`
+    
+    // Download file
+    XLSX.writeFile(workbook, filename)
+    
+    // Show success message
+    successMessage.value = 'Laporan berhasil di-export ke Excel!'
+    
+  } catch (error) {
+    console.error('Export error:', error)
+    errorMessage.value = 'Gagal mengexport laporan: ' + (error instanceof Error ? error.message : 'Unknown error')
+  } finally {
+    exportLoading.value = false
+  }
+}
 
 // Debug watcher for totalItems
 watch(totalItems, (newValue, oldValue) => {
@@ -493,6 +579,18 @@ watch(totalItems, (newValue, oldValue) => {
             />
             <span class="text-white">Inventory Produk</span>
             <VSpacer />
+            
+            <!-- Export Excel Button -->
+            <VBtn
+              color="success"
+              variant="elevated"
+              prepend-icon="tabler-file-spreadsheet"
+              :loading="exportLoading"
+              @click="exportToExcel"
+            >
+              Export Excel
+            </VBtn>
+            
             <VChip
               color="white"
               size="small"
@@ -514,7 +612,7 @@ watch(totalItems, (newValue, oldValue) => {
               { title: 'Reorder Level', key: 'reorder_level', sortable: false },
               { title: 'Harga Rata-rata', key: 'average_cost', sortable: false },
               { title: 'Nilai Stok', key: 'stock_value', sortable: false },
-              { title: 'Aksi', key: 'actions', sortable: false },
+              { title: 'Aksi', key: 'actions', sortable: false, width: '200px', fixed: true },
             ]"
             :items="inventoryList"
             :loading="loading"
@@ -525,7 +623,9 @@ watch(totalItems, (newValue, oldValue) => {
             :items-per-page-text="'Items per page:'"
             :page-text="'{0}-{1} of {2}'"
             :no-data-text="'Tidak ada data inventory'"
-            class="text-no-wrap"
+            class="text-no-wrap fixed-actions-table"
+            fixed-header
+            height="500px"
             @update:page="onPageChange"
             @update:items-per-page="onItemsPerPageChange"
           >
@@ -1422,6 +1522,30 @@ watch(totalItems, (newValue, oldValue) => {
     .products-table {
       .v-data-table__td {
         border-block-end: 1px solid rgba(176, 113, 36, 10%);
+      }
+    }
+  }
+
+  // Fixed actions table styling
+  .fixed-actions-table {
+    :deep(.v-data-table) {
+      .v-data-table__wrapper {
+        overflow-x: auto;
+      }
+
+      .v-data-table__th:last-child,
+      .v-data-table__td:last-child {
+        position: sticky;
+        right: 0;
+        background: rgb(var(--v-theme-surface));
+        border-left: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+        z-index: 2;
+        box-shadow: -4px 0 8px rgba(0, 0, 0, 0.1);
+      }
+
+      .v-data-table__th:last-child {
+        background: rgb(var(--v-theme-surface-variant));
+        z-index: 3;
       }
     }
   }

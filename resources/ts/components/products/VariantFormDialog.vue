@@ -176,66 +176,19 @@ const exampleText = computed(() => {
   return 'Mangga Manis, Mangga Asam, dll'
 })
 
-// Methods
-const loadFormData = () => {
-    variant: props.variant, 
-    productId: props.productId, 
-    products: props.products?.length || 0,
-    productsData: props.products 
-  })
-  
-  
-  if (props.variant) {
-    // Mode edit - load variant data
-    const newData = {
-      ...props.variant,
-      id: props.variant.id || props.variant.id_variant,
-      attributes: props.variant.attributes || {}
-    }
-    Object.assign(formData.value, newData)
-  } else {
-    // Mode create - reset form and set default values
-    clearFormData()
-    
-    // Try multiple ways to get product ID
-    let resolvedProductId = null
-    
-    // Method 1: From productId prop
-    if (props.productId) {
-      resolvedProductId = props.productId
-    }
-    // Method 2: From products array with different field names
-    else if (props.products && props.products.length > 0) {
-      const product = props.products[0]
-      resolvedProductId = product.id || product.id_product
-    }
-    
-    if (resolvedProductId) {
-      formData.value.product_id = resolvedProductId
-    } else {
-      console.error('❌ No valid product ID found in props!')
-    }
-    
-    // Generate SKU after setting product
-    if (formData.value.product_id) {
-      generateSku()
-    }
-  }
-  
-  
-  // Also try to generate SKU immediately if both name and product_id are available
-  if (formData.value.name && formData.value.product_id && !isEdit.value) {
-    generateSku()
-  }
-
+// Helper functions
+const clearFormData = () => {
+  Object.assign(formData.value, defaultFormData())
+}
 
 const generateSku = () => {
+  console.log({
     name: formData.value.name,
     product_id: formData.value.product_id,
     productsLength: props.products?.length || 0,
     isEdit: isEdit.value,
     products: props.products
-  }
+  })
   
   if (!formData.value.name) {
     console.warn('⚠️ Cannot generate SKU: No variant name provided')
@@ -276,6 +229,7 @@ const generateSku = () => {
   const generatedSku = `${productCode}-${variantName}`
   
   formData.value.sku = generatedSku
+}
 
 const handleSave = async () => {
   const { valid } = await form.value.validate()
@@ -342,8 +296,59 @@ const closeDialog = () => {
   })
 }
 
-const clearFormData = () => {
-  Object.assign(formData.value, defaultFormData())
+// Methods
+const loadFormData = () => {
+  console.log({
+    variant: props.variant, 
+    productId: props.productId, 
+    products: props.products?.length || 0,
+    productsData: props.products 
+  })
+}
+  
+  
+  if (props.variant) {
+    // Mode edit - load variant data
+    const newData = {
+      ...props.variant,
+      id: props.variant.id || props.variant.id_variant,
+      attributes: props.variant.attributes || {}
+    }
+    Object.assign(formData.value, newData)
+  } else {
+    // Mode create - reset form and set default values
+    clearFormData()
+    
+    // Try multiple ways to get product ID
+    let resolvedProductId = null
+    
+    // Method 1: From productId prop
+    if (props.productId) {
+      resolvedProductId = props.productId
+    }
+    // Method 2: From products array with different field names
+    else if (props.products && props.products.length > 0) {
+      const product = props.products[0]
+      resolvedProductId = product.id || product.id_product
+    }
+    
+    if (resolvedProductId) {
+      formData.value.product_id = resolvedProductId
+    } else {
+      console.error('❌ No valid product ID found in props!')
+    }
+    
+    // Generate SKU after setting product
+    if (formData.value.product_id) {
+      generateSku()
+    }
+  }
+  
+  
+  // Also try to generate SKU immediately if both name and product_id are available
+  if (formData.value.name && formData.value.product_id && !isEdit.value) {
+    generateSku()
+  }
 }
 
 // Watchers
