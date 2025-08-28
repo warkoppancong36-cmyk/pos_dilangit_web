@@ -199,6 +199,33 @@
         </div>
       </template>
 
+      <!-- Station Availability -->
+      <template #item.station_availability="{ item }">
+        <div class="d-flex flex-column gap-1">
+          <VChip
+            v-if="item.available_in_kitchen"
+            color="orange"
+            size="x-small"
+            variant="tonal"
+          >
+            <VIcon icon="tabler-tools-kitchen-2" size="12" class="me-1" />
+            Kitchen
+          </VChip>
+          <VChip
+            v-if="item.available_in_bar"
+            color="purple"
+            size="x-small"
+            variant="tonal"
+          >
+            <VIcon icon="tabler-glass-cocktail" size="12" class="me-1" />
+            Bar
+          </VChip>
+          <div v-if="!item.available_in_kitchen && !item.available_in_bar" class="text-caption text-medium-emphasis">
+            Tidak Tersedia
+          </div>
+        </div>
+      </template>
+
       <!-- Created Date -->
       <template #item.created_at="{ item }">
         <div class="text-body-2">
@@ -585,6 +612,12 @@ const headers = [
     key: 'active',
     sortable: true,
     width: '140px'
+  },
+  {
+    title: 'Station',
+    key: 'station_availability',
+    sortable: false,
+    width: '150px'
   },
   {
     title: 'Dibuat',

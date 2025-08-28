@@ -483,6 +483,8 @@ export const useProducts = () => {
       status: product.status,
       active: product.active,
       featured: product.featured,
+      available_in_kitchen: product.available_in_kitchen,
+      available_in_bar: product.available_in_bar,
       tags: product.tags || [],
       meta_title: product.meta_title || '',
       meta_description: product.meta_description || ''
