@@ -40,9 +40,18 @@ export interface ApiResponse<T = any> {
 }
 
 export const useAuthStore = defineStore('auth', () => {
+  // Initialize token from both localStorage and cookie
+  const getInitialToken = () => {
+    const localToken = localStorage.getItem('token')
+    const cookieToken = useCookie('accessToken', { default: () => '' }).value
+
+    // Prefer cookie token if available, fallback to localStorage
+    return cookieToken || localToken || null
+  }
+
   // State
   const user = ref<User | null>(null)
-  const token = ref<string | null>(localStorage.getItem('token'))
+  const token = ref<string | null>(getInitialToken())
   const isLoading = ref(false)
   const errors = ref<Record<string, string[]>>({})
 
@@ -58,12 +67,29 @@ export const useAuthStore = defineStore('auth', () => {
   const setToken = (tokenValue: string) => {
     token.value = tokenValue
     localStorage.setItem('token', tokenValue)
+
+    // Also set in cookie for useApi compatibility
+    const accessTokenCookie = useCookie('accessToken', {
+      default: () => '',
+      secure: true,
+      sameSite: 'strict',
+      maxAge: 60 * 60 * 24 * 7 // 7 days
+    })
+    accessTokenCookie.value = tokenValue
+
     axios.defaults.headers.common['Authorization'] = `Bearer ${tokenValue}`
   }
 
   const clearToken = () => {
     token.value = null
     localStorage.removeItem('token')
+
+    // Also clear cookie
+    const accessTokenCookie = useCookie('accessToken', {
+      default: () => ''
+    })
+    accessTokenCookie.value = ''
+
     delete axios.defaults.headers.common['Authorization']
   }
 
@@ -85,28 +111,28 @@ export const useAuthStore = defineStore('auth', () => {
       clearErrors()
 
       const response = await axios.post<AuthResponse>('/api/auth/login', credentials)
-      
+
       if (response.data.success) {
         const { user: userData, token: tokenValue } = response.data.data
-        
+
         setUser(userData)
         setToken(tokenValue)
-        
+
         return { success: true, message: response.data.message }
       } else {
         return { success: false, message: response.data.message }
       }
     } catch (error: any) {
       const errorResponse = error.response?.data as ApiResponse
-      
+
       if (errorResponse?.errors) {
         errors.value = errorResponse.errors
       }
-      
-      return { 
-        success: false, 
+
+      return {
+        success: false,
         message: errorResponse?.message || 'Login failed',
-        errors: errorResponse?.errors 
+        errors: errorResponse?.errors
       }
     } finally {
       isLoading.value = false
@@ -127,28 +153,28 @@ export const useAuthStore = defineStore('auth', () => {
       clearErrors()
 
       const response = await axios.post<AuthResponse>('/api/auth/register', userData)
-      
+
       if (response.data.success) {
         const { user: newUser, token: tokenValue } = response.data.data
-        
+
         setUser(newUser)
         setToken(tokenValue)
-        
+
         return { success: true, message: response.data.message }
       } else {
         return { success: false, message: response.data.message }
       }
     } catch (error: any) {
       const errorResponse = error.response?.data as ApiResponse
-      
+
       if (errorResponse?.errors) {
         errors.value = errorResponse.errors
       }
-      
-      return { 
-        success: false, 
+
+      return {
+        success: false,
         message: errorResponse?.message || 'Registration failed',
-        errors: errorResponse?.errors 
+        errors: errorResponse?.errors
       }
     } finally {
       isLoading.value = false
@@ -186,7 +212,7 @@ export const useAuthStore = defineStore('auth', () => {
   const fetchProfile = async () => {
     try {
       const response = await axios.get<ApiResponse<{ user: User }>>('/api/auth/profile')
-      
+
       if (response.data.success && response.data.data) {
         setUser(response.data.data.user)
         return true
@@ -213,7 +239,7 @@ export const useAuthStore = defineStore('auth', () => {
       clearErrors()
 
       const response = await axios.post<ApiResponse>('/api/auth/change-password', passwordData)
-      
+
       if (response.data.success) {
         return { success: true, message: response.data.message }
       } else {
@@ -221,15 +247,15 @@ export const useAuthStore = defineStore('auth', () => {
       }
     } catch (error: any) {
       const errorResponse = error.response?.data as ApiResponse
-      
+
       if (errorResponse?.errors) {
         errors.value = errorResponse.errors
       }
-      
-      return { 
-        success: false, 
+
+      return {
+        success: false,
         message: errorResponse?.message || 'Password change failed',
-        errors: errorResponse?.errors 
+        errors: errorResponse?.errors
       }
     } finally {
       isLoading.value = false
@@ -239,7 +265,7 @@ export const useAuthStore = defineStore('auth', () => {
   const refreshToken = async () => {
     try {
       const response = await axios.post<ApiResponse<{ token: string; token_type: string }>>('/api/auth/refresh')
-      
+
       if (response.data.success && response.data.data) {
         setToken(response.data.data.token)
         return true
@@ -258,7 +284,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const hasPermission = (permission: string): boolean => {
     if (!user.value?.role?.permissions) return false
-    
+
     const permissions = user.value.role.permissions
     return permissions[permission] === true || permissions[permission] === 1
   }
@@ -276,21 +302,21 @@ export const useAuthStore = defineStore('auth', () => {
     if (requiredRole) {
       const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole]
       const userRoleName = user.value?.role?.name
-      
+
       if (!userRoleName || !roles.includes(userRoleName)) {
         return false
       }
     }
-    
+
     // Check permission
     if (requiredPermission) {
       const permissions = Array.isArray(requiredPermission) ? requiredPermission : [requiredPermission]
-      
+
       if (!hasAnyPermission(permissions)) {
         return false
       }
     }
-    
+
     return true
   }
 
@@ -305,7 +331,7 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     isLoading,
     errors,
-    
+
     // Getters
     isLoggedIn,
     userRole,
@@ -313,7 +339,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAdmin,
     isManager,
     isCashier,
-    
+
     // Actions
     login,
     register,

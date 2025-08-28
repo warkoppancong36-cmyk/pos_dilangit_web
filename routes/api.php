@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\InventoryController;
+use App\Http\Controllers\InventoryUploadController;
 use App\Http\Controllers\Api\PosController;
 use App\Http\Controllers\Api\DiscountController;
 use App\Http\Controllers\Api\CashDrawerController;
@@ -340,6 +341,10 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
         Route::post('/{id}/update-stock', [InventoryController::class, 'updateStock']);
         Route::post('/{id}/reorder-level', [InventoryController::class, 'setReorderLevel']);
         Route::post('/bulk-update-stock', [InventoryController::class, 'bulkUpdateStock']);
+        
+        // Inventory upload routes
+        Route::post('/upload-data', [InventoryUploadController::class, 'uploadInventoryData']);
+        Route::get('/upload-history', [InventoryUploadController::class, 'getUploadHistory']);
     });
 
     Route::prefix('discounts')->group(function () {

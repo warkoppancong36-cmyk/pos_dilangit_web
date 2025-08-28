@@ -2,6 +2,8 @@
 import InventoryMovementsDialog from '@/components/InventoryMovementsDialog.vue'
 import { useInventory } from '@/composables/useInventory'
 import { useStockMovements } from '@/composables/useStockMovements'
+import { useApi } from '@/composables/useApi'
+import { useAuthStore } from '@/stores/auth'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useDisplay } from 'vuetify'
 
@@ -154,26 +156,219 @@ onMounted(() => {
 // Export functionality
 const exportLoading = ref(false)
 
+// Function to check current authentication status
+const checkAuthStatus = () => {
+  console.log('🔍 === AUTH STATUS CHECK ===')
+  
+  // Check all possible token sources
+  const cookieToken = useCookie('accessToken').value
+  const localToken = localStorage.getItem('token')
+  const authToken = localStorage.getItem('auth_token')
+  const accessToken = localStorage.getItem('accessToken')
+  
+  console.log('🍪 Cookie accessToken:', cookieToken ? `Found (${cookieToken.substring(0, 20)}...)` : 'Not found')
+  console.log('💾 localStorage token:', localToken ? `Found (${localToken.substring(0, 20)}...)` : 'Not found')
+  console.log('💾 localStorage auth_token:', authToken ? `Found (${authToken.substring(0, 20)}...)` : 'Not found')
+  console.log('💾 localStorage accessToken:', accessToken ? `Found (${accessToken.substring(0, 20)}...)` : 'Not found')
+  
+  // Check if any auth store exists
+  try {
+    const authStore = useAuthStore()
+    console.log('🏪 Auth Store isLoggedIn:', authStore.isLoggedIn)
+    console.log('🏪 Auth Store user:', authStore.user?.name || 'No user')
+    console.log('🏪 Auth Store token:', authStore.token ? `Found (${authStore.token.substring(0, 20)}...)` : 'Not found')
+  } catch (e) {
+    console.log('🏪 Auth Store not available:', e)
+  }
+  
+  console.log('=========================')
+  
+  return {
+    cookieToken,
+    localToken,
+    authToken,
+    accessToken
+  }
+}
+
+// Helper function to get authentication token with detailed debugging
+const getAuthToken = () => {
+  try {
+    // First check auth status
+    const authStatus = checkAuthStatus()
+    
+    // Try to get token from cookie first (primary method)
+    const cookieToken = useCookie('accessToken').value
+    console.log('🔍 Checking cookie token:', cookieToken ? 'Token found in cookie' : 'No token in cookie')
+    
+    if (cookieToken) {
+      console.log('✅ Using cookie token (first 20 chars):', cookieToken.substring(0, 20) + '...')
+      return cookieToken
+    }
+    
+    // Fallback to localStorage methods used in other parts
+    console.log('🔍 Checking localStorage methods...')
+    const localToken = localStorage.getItem('token') || 
+                      localStorage.getItem('auth_token') || 
+                      localStorage.getItem('accessToken')
+    
+    if (localToken) {
+      console.log('✅ Using localStorage token (first 20 chars):', localToken.substring(0, 20) + '...')
+    } else {
+      console.log('❌ No token found in any storage')
+    }
+    
+    return localToken || null
+  } catch (error) {
+    console.warn('❌ Error getting auth token:', error)
+    // Fallback to localStorage
+    const fallbackToken = localStorage.getItem('token') || 
+                         localStorage.getItem('auth_token') || 
+                         localStorage.getItem('accessToken') || 
+                         null
+    console.log('🔄 Fallback token result:', fallbackToken ? 'Found fallback token' : 'No fallback token')
+    return fallbackToken
+  }
+}
+
+// Function to fetch ALL inventory data for export (bypass pagination)
+const fetchAllInventoryForExport = async () => {
+  try {
+    console.log('🚀 Starting fetchAllInventoryForExport...')
+    
+    const params = new URLSearchParams({
+      per_page: '999999', // Very large number to get all data
+      page: '1',
+      // Include current filters but with unlimited results
+      search: filters.value.search || '',
+      stock_status: filters.value.stock_status || 'all'
+    })
+
+    console.log('📝 Request params:', params.toString())
+
+    // Check all available cookies and localStorage items for debugging
+    console.log('🍪 Available cookies:')
+    document.cookie.split(';').forEach(cookie => {
+      const [name, ...rest] = cookie.trim().split('=')
+      if (name.toLowerCase().includes('token') || name.toLowerCase().includes('auth')) {
+        console.log(`  - ${name}: ${rest.join('=').substring(0, 20)}...`)
+      }
+    })
+    
+    console.log('💾 Available localStorage items:')
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && (key.toLowerCase().includes('token') || key.toLowerCase().includes('auth'))) {
+        const value = localStorage.getItem(key)
+        console.log(`  - ${key}: ${value?.substring(0, 20)}...`)
+      }
+    }
+
+    // Try using useApi composable first (preferred method)
+    try {
+      console.log('🔄 Attempting to fetch with useApi composable...')
+      const { data } = await useApi(`/inventory?${params}`).get().json()
+      
+      if (data.value && data.value.success) {
+        console.log('✅ Successfully fetched with useApi:', data.value.data.data?.length || 0, 'items')
+        return data.value.data.data || []
+      } else {
+        console.log('❌ useApi response not successful:', data.value)
+        throw new Error(data.value?.message || 'useApi failed')
+      }
+    } catch (useApiError) {
+      console.warn('❌ useApi failed, trying manual fetch:', useApiError)
+      
+      // Fallback to manual fetch
+      const accessToken = getAuthToken()
+      console.log('🔐 Token for manual fetch:', accessToken ? `Token available (${accessToken.substring(0, 20)}...)` : 'No token')
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(accessToken && { 'Authorization': `Bearer ${accessToken}` }),
+      }
+      
+      console.log('📋 Request headers:', {
+        ...headers,
+        Authorization: headers.Authorization ? headers.Authorization.substring(0, 30) + '...' : 'Not set'
+      })
+
+      const response = await fetch(`/api/inventory?${params}`, {
+        method: 'GET',
+        headers
+      })
+
+      console.log('📊 Response status:', response.status, response.statusText)
+      console.log('📋 Response headers:', Object.fromEntries(response.headers.entries()))
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('❌ Manual fetch API Error Response:', errorText)
+        console.error('📊 Error details - Status:', response.status, 'StatusText:', response.statusText)
+        
+        // Try to parse error as JSON for better debugging
+        try {
+          const errorJson = JSON.parse(errorText)
+          console.error('📋 Parsed error JSON:', errorJson)
+        } catch (e) {
+          console.error('📋 Error response is not JSON:', errorText)
+        }
+        
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      console.log('✅ Manual fetch successful response:', {
+        success: result.success,
+        dataLength: result.data?.data?.length || 0,
+        message: result.message
+      })
+      
+      if (result.success) {
+        console.log('✅ Successfully fetched with manual fetch:', result.data.data?.length || 0, 'items')
+        return result.data.data || []
+      } else {
+        console.error('❌ Manual fetch response not successful:', result)
+        throw new Error(result.message || 'Failed to fetch inventory data')
+      }
+    }
+    
+  } catch (error) {
+    console.error('💥 Fetch all inventory error:', error)
+    throw new Error('Gagal mengambil data inventory lengkap: ' + (error instanceof Error ? error.message : 'Unknown error'))
+  }
+}
+
+// Upload history state
+const uploadHistoryDialog = ref(false)
+const uploadHistory = ref<any[]>([])
+const uploadHistoryLoading = ref(false)
+const uploadHistoryPage = ref(1)
+const uploadHistoryPerPage = ref(10)
+const uploadHistoryTotal = ref(0)
+
 const exportToExcel = async () => {
   try {
     exportLoading.value = true
     
+    // Fetch ALL inventory data for export (not limited to current page)
+    const allInventoryData = await fetchAllInventoryForExport()
+    
     // Dynamic import for better performance
     const XLSX = await import('xlsx')
     
-    // Prepare data for export
-    const exportData = inventoryList.value.map((item, index) => ({
+    // Prepare data for export using ALL data
+    const exportData = allInventoryData.map((item: any, index: number) => ({
       'No': index + 1,
       'Produk/Variant': `${item.item?.name || item.product?.name || 'Unknown Item'} (SKU: ${item.item?.item_code || item.product?.sku || '-'})`,
-      'Deskripsi': item.item?.description || item.product?.description || '-',
       'Unit': item.item?.unit || 'pcs',
       'Stok Saat Ini': item.current_stock || 0,
       'Stok Tersedia': item.available_stock || 0,
       'Stok Minimum': item.reorder_level || 0,
-      'Status': getStockStatusText(item.current_stock, item.reorder_level),
+      'Status': getStockStatusText(item),
       'Harga Rata-rata': formatCurrency(item.average_cost || 0),
-      'Nilai Stok': formatCurrency(item.stock_value || 0),
-      'Lokasi Penyimpanan': item.item?.storage_location || '-',
       'Dibuat': item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID') : '-',
       'Diperbarui': item.updated_at ? new Date(item.updated_at).toLocaleDateString('id-ID') : '-'
     }))
@@ -182,19 +377,32 @@ const exportToExcel = async () => {
     const workbook = XLSX.utils.book_new()
     const worksheet = XLSX.utils.json_to_sheet(exportData)
     
-    // Add title and summary
+    // Add title and summary using ALL data
+    const totalAllItems = allInventoryData.length
+    const lowStockItemsAll = allInventoryData.filter((item: any) => 
+      item.current_stock <= item.reorder_level
+    ).length
+    const outOfStockItemsAll = allInventoryData.filter((item: any) => 
+      item.current_stock === 0
+    ).length
+    const totalStockValueAll = allInventoryData.reduce((sum: number, item: any) => 
+      sum + ((item.current_stock || 0) * (item.average_cost || 0)), 0
+    )
+    
     const titleData = [
       ['LAPORAN INVENTORY MANAGEMENT'],
       ['Tanggal Export: ' + new Date().toLocaleDateString('id-ID')],
-      ['Total Items: ' + totalItems.value],
-      ['Total Nilai Stok: ' + formatCurrency(totalStockValue.value || 0)],
-      ['Items Low Stock: ' + lowStockCount.value],
-      ['Items Out of Stock: ' + outOfStockCount.value],
+      ['Total Items: ' + totalAllItems],
+      ['Total Nilai Stok: ' + formatCurrency(totalStockValueAll)],
+      ['Items Low Stock: ' + lowStockItemsAll],
+      ['Items Out of Stock: ' + outOfStockItemsAll],
+      ['Filter Diterapkan: ' + (filters.value.search ? `Pencarian: "${filters.value.search}", ` : '') + 
+       (filters.value.stock_status !== 'all' ? `Status: ${filters.value.stock_status}` : 'Semua Data')],
       [],
     ]
     
     XLSX.utils.sheet_add_aoa(worksheet, titleData, { origin: 'A1' })
-    XLSX.utils.sheet_add_json(worksheet, exportData, { origin: 'A8' })
+    XLSX.utils.sheet_add_json(worksheet, exportData, { origin: 'A9' })
     
     // Set column widths
     const columnWidths = [
@@ -225,14 +433,430 @@ const exportToExcel = async () => {
     // Download file
     XLSX.writeFile(workbook, filename)
     
-    // Show success message
-    successMessage.value = 'Laporan berhasil di-export ke Excel!'
+    // Upload inventory data to server using ALL data
+    try {
+      await uploadInventoryData(allInventoryData, {
+        total_items: totalAllItems,
+        total_stock_value: totalStockValueAll,
+        low_stock_count: lowStockItemsAll,
+        out_of_stock_count: outOfStockItemsAll
+      })
+      successMessage.value = ``
+    } catch (uploadError) {
+      console.error('Upload error:', uploadError)
+      successMessage.value = ''
+    }
     
   } catch (error) {
     console.error('Export error:', error)
     errorMessage.value = 'Gagal mengexport laporan: ' + (error instanceof Error ? error.message : 'Unknown error')
   } finally {
     exportLoading.value = false
+  }
+}
+
+// Upload inventory data to server
+const uploadInventoryData = async (inventoryData?: any[], customSummary?: any) => {
+  try {
+    // Use provided data or fallback to current inventoryList
+    const dataToUpload = inventoryData || inventoryList.value
+    const summaryToUpload = customSummary || {
+      total_items: totalItems.value,
+      total_stock_value: totalStockValue.value || 0,
+      low_stock_count: lowStockCount.value,
+      out_of_stock_count: outOfStockCount.value
+    }
+    
+    // Prepare comprehensive inventory data for upload
+    const uploadData = {
+      inventory_data: dataToUpload.map(item => ({
+        id_inventory: item.id_inventory,
+        id_product: item.id_product,
+        id_item: item.id_item,
+        current_stock: item.current_stock || 0,
+        available_stock: item.available_stock || 0,
+        reserved_stock: item.reserved_stock || 0,
+        reorder_level: item.reorder_level || 0,
+        max_stock_level: item.max_stock_level || null,
+        average_cost: item.average_cost || 0,
+        product_name: item.product?.name || item.item?.name || 'Unknown',
+        product_sku: item.product?.sku || item.item?.item_code || null,
+        unit: item.item?.unit || 'pcs',
+        category: item.product?.category?.name || null,
+        status: getStockStatusText(item),
+        stock_value: (item.current_stock || 0) * (item.average_cost || 0),
+        created_at: item.created_at,
+        updated_at: item.updated_at
+      })),
+      summary: {
+        total_items: summaryToUpload.total_items,
+        total_stock_value: summaryToUpload.total_stock_value,
+        low_stock_count: summaryToUpload.low_stock_count,
+        out_of_stock_count: summaryToUpload.out_of_stock_count,
+        export_timestamp: new Date().toISOString(),
+        filters_applied: {
+          search: filters.value.search || null,
+          stock_status: filters.value.stock_status !== 'all' ? filters.value.stock_status : null
+        }
+      }
+    }
+
+    // Send data to API endpoint
+    const accessToken = getAuthToken()
+    const response = await fetch('/api/inventory/upload-data', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        // Add authorization header if needed
+        ...(accessToken && { 'Authorization': `Bearer ${accessToken}` }),
+      },
+      body: JSON.stringify(uploadData)
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    const result = await response.json()
+    console.log('Upload result:', result)
+    
+    return result
+  } catch (error) {
+    console.error('Upload inventory data error:', error)
+    throw error
+  }
+}
+
+// Print functionality
+const printInventory = async () => {
+  try {
+    // Show loading state
+    exportLoading.value = true
+    
+    // Fetch ALL inventory data for print
+    const allInventoryData = await fetchAllInventoryForExport()
+    
+    const printContent = generatePrintContent(allInventoryData)
+    const printWindow = window.open('', '_blank')
+    
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Laporan Inventory - ${new Date().toLocaleDateString('id-ID')}</title>
+            <meta charset="utf-8">
+            <style>
+              @media print {
+                @page { 
+                  margin: 1cm; 
+                  size: A4 landscape;
+                }
+                body { 
+                  font-family: Arial, sans-serif; 
+                  font-size: 12px; 
+                  margin: 0;
+                  color: #000;
+                }
+              }
+              body { 
+                font-family: Arial, sans-serif; 
+                margin: 20px;
+                color: #000;
+              }
+              .header {
+                text-align: center;
+                margin-bottom: 30px;
+                border-bottom: 2px solid #333;
+                padding-bottom: 10px;
+              }
+              .company-name {
+                font-size: 24px;
+                font-weight: bold;
+                margin-bottom: 5px;
+              }
+              .report-title {
+                font-size: 18px;
+                color: #666;
+                margin-bottom: 5px;
+              }
+              .report-date {
+                font-size: 14px;
+                color: #888;
+              }
+              .summary {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 20px;
+                padding: 10px;
+                background-color: #f5f5f5;
+                border-radius: 5px;
+              }
+              table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 20px;
+              }
+              th, td {
+                border: 1px solid #ddd;
+                padding: 8px;
+                text-align: left;
+                font-size: 11px;
+              }
+              th {
+                background-color: #f8f9fa;
+                font-weight: bold;
+                text-align: center;
+              }
+              .text-center { text-align: center; }
+              .text-right { text-align: right; }
+              .low-stock { background-color: #ffebee; }
+              .out-of-stock { background-color: #ffcdd2; }
+              .footer {
+                margin-top: 30px;
+                text-align: center;
+                font-size: 10px;
+                color: #666;
+                border-top: 1px solid #ddd;
+                padding-top: 10px;
+              }
+            </style>
+          </head>
+          <body>
+            ${printContent}
+          </body>
+        </html>
+      `)
+      
+      printWindow.document.close()
+      printWindow.focus()
+      
+      setTimeout(() => {
+        printWindow.print()
+        printWindow.close()
+      }, 250)
+    }
+  } catch (error) {
+    console.error('Print error:', error)
+    errorMessage.value = 'Gagal memprint laporan: ' + (error instanceof Error ? error.message : 'Unknown error')
+  } finally {
+    exportLoading.value = false
+  }
+}
+
+const generatePrintContent = (inventoryData?: any[]) => {
+  const currentDate = new Date().toLocaleDateString('id-ID', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  })
+  
+  // Use provided data or fallback to current inventoryList
+  const dataToUse = inventoryData || inventoryList.value
+  
+  const totalProducts = dataToUse.length
+  const lowStockItems = dataToUse.filter(item => 
+    item.current_stock <= item.reorder_level
+  ).length
+  const outOfStockItems = dataToUse.filter(item => 
+    item.current_stock === 0
+  ).length
+  
+  let tableRows = ''
+  dataToUse.forEach((item, index) => {
+    const productName = item.product?.name || item.item?.name || '-'
+    const sku = item.product?.sku || item.item?.item_code || '-'
+    const category = item.product?.category?.name || '-'
+    const currentStock = item.current_stock || 0
+    const reorderLevel = item.reorder_level || 0
+    const maxStock = item.max_stock_level || '-'
+    const unit = item.item?.unit || 'pcs'
+    const averageCost = item.average_cost ? formatCurrency(item.average_cost) : '-'
+    
+    const isLowStock = currentStock <= reorderLevel && currentStock > 0
+    const isOutOfStock = currentStock === 0
+    const rowClass = isOutOfStock ? 'out-of-stock' : (isLowStock ? 'low-stock' : '')
+    
+    tableRows += `
+      <tr class="${rowClass}">
+        <td class="text-center">${index + 1}</td>
+        <td>${productName}<br><small style="color: #666;">${sku}</small></td>
+        <td class="text-center">${category}</td>
+        <td class="text-center">${currentStock}</td>
+        <td class="text-center">${unit}</td>
+        <td class="text-center">${reorderLevel}</td>
+        <td class="text-center">${maxStock}</td>
+        <td class="text-right">${averageCost}</td>
+      </tr>
+    `
+  })
+  
+  return `
+    <div class="header">
+      <div class="company-name">SISTEM INVENTORY MANAGEMENT</div>
+      <div class="report-title">Laporan Stok Inventory (Semua Data)</div>
+      <div class="report-date">Dicetak pada: ${currentDate}</div>
+    </div>
+    
+    <div class="summary">
+      <div><strong>Total Produk:</strong> ${totalProducts}</div>
+      <div><strong>Stok Menipis:</strong> ${lowStockItems}</div>
+      <div><strong>Stok Habis:</strong> ${outOfStockItems}</div>
+      <div><strong>Filter:</strong> ${filters.value.search ? `"${filters.value.search}"` : 'Semua Data'}</div>
+    </div>
+    
+    <table>
+      <thead>
+        <tr>
+          <th width="5%">No</th>
+          <th width="25%">Nama Produk</th>
+          <th width="15%">Kategori</th>
+          <th width="10%">Stok</th>
+          <th width="10%">Unit</th>
+          <th width="10%">Min. Stok</th>
+          <th width="10%">Max. Stok</th>
+          <th width="15%">Harga Rata-rata</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${tableRows}
+      </tbody>
+    </table>
+    
+    <div class="footer">
+      <p>Laporan ini dicetak secara otomatis oleh sistem pada ${new Date().toLocaleString('id-ID')}</p>
+      <p>Total ${totalProducts} item inventory | Filter: ${filters.value.search ? `Pencarian "${filters.value.search}"` : 'Semua Data'}</p>
+      <p>© ${new Date().getFullYear()} Sistem Inventory Management</p>
+    </div>
+  `
+}
+
+// Upload history functions
+const openUploadHistoryDialog = () => {
+  uploadHistoryDialog.value = true
+  fetchUploadHistory()
+}
+
+const fetchUploadHistory = async () => {
+  try {
+    uploadHistoryLoading.value = true
+    
+    const accessToken = getAuthToken()
+    const response = await fetch(`/api/inventory/upload-history?page=${uploadHistoryPage.value}&per_page=${uploadHistoryPerPage.value}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(accessToken && { 'Authorization': `Bearer ${accessToken}` }),
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    const result = await response.json()
+    
+    if (result.success) {
+      uploadHistory.value = result.data || []
+      uploadHistoryTotal.value = result.pagination?.total || 0
+    } else {
+      throw new Error(result.message || 'Failed to fetch upload history')
+    }
+    
+  } catch (error) {
+    console.error('Fetch upload history error:', error)
+    errorMessage.value = 'Gagal mengambil riwayat upload: ' + (error instanceof Error ? error.message : 'Unknown error')
+  } finally {
+    uploadHistoryLoading.value = false
+  }
+}
+
+const onUploadHistoryPageChange = (page: number) => {
+  uploadHistoryPage.value = page
+  fetchUploadHistory()
+}
+
+const closeUploadHistoryDialog = () => {
+  uploadHistoryDialog.value = false
+  uploadHistory.value = []
+  uploadHistoryPage.value = 1
+}
+
+// Function to test login and refresh token
+const testLogin = async () => {
+  try {
+    console.log('🚀 Testing login to get fresh token...')
+    
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: JSON.stringify({
+        login: 'admin',
+        password: 'password123'
+      })
+    })
+    
+    console.log('📊 Login Response Status:', response.status, response.statusText)
+    
+    const data = await response.json()
+    console.log('📋 Login Response Data:', data)
+    
+    if (data.success && data.data.token) {
+      const token = data.data.token
+      console.log('✅ Login successful! Token:', token.substring(0, 30) + '...')
+      
+      // Save to localStorage
+      localStorage.setItem('token', token)
+      console.log('💾 Token saved to localStorage')
+      
+      // Also save to cookie
+      const accessTokenCookie = useCookie('accessToken', {
+        default: () => '',
+        secure: true,
+        sameSite: 'strict',
+        maxAge: 60 * 60 * 24 * 7 // 7 days
+      })
+      accessTokenCookie.value = token
+      console.log('🍪 Token saved to cookie')
+      
+      successMessage.value = 'Login berhasil! Token telah diperbarui. Silakan coba export lagi.'
+      
+      // Test API call with new token
+      console.log('🌐 Testing API call with new token...')
+      const testResponse = await fetch('/api/inventory?per_page=1', {
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Accept': 'application/json'
+        }
+      })
+      
+      console.log('📊 Test API Response Status:', testResponse.status, testResponse.statusText)
+      
+      if (testResponse.ok) {
+        console.log('✅ New token works! You can now try the export function.')
+      } else {
+        console.log('❌ New token still doesn\'t work')
+        errorMessage.value = 'Token baru tidak bekerja. Mungkin ada masalah dengan server.'
+      }
+      
+    } else {
+      console.log('❌ Login failed:', data.message)
+      errorMessage.value = 'Login gagal: ' + (data.message || 'Unknown error')
+    }
+    
+  } catch (error) {
+    console.log('💥 Login error:', error)
+    errorMessage.value = 'Error saat login: ' + (error instanceof Error ? error.message : 'Unknown error')
   }
 }
 
@@ -254,6 +878,27 @@ watch(totalItems, (newValue, oldValue) => {
         </p>
       </div>
       <div class="d-flex gap-3 align-center">
+        <!-- Debug Buttons for Authentication Testing -->
+        <VBtn
+          color="info"
+          prepend-icon="tabler-bug"
+          variant="outlined"
+          size="small"
+          @click="checkAuthStatus"
+        >
+          Check Auth
+        </VBtn>
+        
+        <VBtn
+          color="warning"
+          prepend-icon="tabler-login"
+          variant="outlined"
+          size="small"
+          @click="testLogin"
+        >
+          Test Login
+        </VBtn>
+        
         <VBtn
           color="primary"
           prepend-icon="tabler-refresh"
@@ -578,7 +1223,7 @@ watch(totalItems, (newValue, oldValue) => {
             />
             <span class="text-white">Inventory Produk</span>
             <VSpacer />
-            
+
             <!-- Export Excel Button -->
             <VBtn
               color="success"
@@ -587,7 +1232,7 @@ watch(totalItems, (newValue, oldValue) => {
               :loading="exportLoading"
               @click="exportToExcel"
             >
-              Export Excel
+              Export Semua Data
             </VBtn>
             
             <VChip
@@ -1420,6 +2065,212 @@ watch(totalItems, (newValue, oldValue) => {
             @click="recordStockMovement"
           >
             Simpan
+          </VBtn>
+        </VCardActions>
+      </VCard>
+    </VDialog>
+    
+    <!-- Upload History Dialog -->
+    <VDialog
+      v-model="uploadHistoryDialog"
+      max-width="1200px"
+      :fullscreen="xs"
+      persistent
+      class="upload-history-dialog"
+    >
+      <VCard>
+        <VCardTitle class="d-flex align-center justify-space-between coffee-header">
+          <div class="d-flex align-center gap-2">
+            <VIcon
+              icon="tabler-history"
+              class="text-white"
+            />
+            <span class="text-white">Riwayat Upload Data Inventory</span>
+          </div>
+          <VBtn
+            icon="tabler-x"
+            variant="text"
+            color="white"
+            @click="closeUploadHistoryDialog"
+          />
+        </VCardTitle>
+
+        <VDivider />
+
+        <VCardText class="pa-6">
+          <!-- Loading State -->
+          <div
+            v-if="uploadHistoryLoading"
+            class="text-center py-8"
+          >
+            <VProgressCircular
+              indeterminate
+              color="primary"
+              size="40"
+            />
+            <div class="mt-4 text-medium-emphasis">
+              Memuat riwayat upload...
+            </div>
+          </div>
+
+          <!-- History Table -->
+          <div v-else>
+            <VDataTable
+              :headers="[
+                { title: 'Tanggal Upload', key: 'created_at', sortable: false },
+                { title: 'User', key: 'user_name', sortable: false },
+                { title: 'Total Items', key: 'total_items_processed', sortable: false },
+                { title: 'Berhasil Update', key: 'total_items_updated', sortable: false },
+                { title: 'Dilewati', key: 'total_items_skipped', sortable: false },
+                { title: 'Total Nilai Stok', key: 'total_stock_value', sortable: false },
+                { title: 'Status', key: 'upload_status', sortable: false },
+              ]"
+              :items="uploadHistory"
+              :items-per-page="uploadHistoryPerPage"
+              class="elevation-1"
+            >
+              <!-- Date Column -->
+              <template #item.created_at="{ item }">
+                <div class="text-body-2">
+                  {{ new Date(item.created_at).toLocaleDateString('id-ID', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  }) }}
+                </div>
+              </template>
+
+              <!-- User Column -->
+              <template #item.user_name="{ item }">
+                <div class="d-flex align-center gap-2">
+                  <VAvatar
+                    size="32"
+                    color="primary"
+                    variant="tonal"
+                  >
+                    <VIcon icon="tabler-user" />
+                  </VAvatar>
+                  <div>
+                    <div class="text-body-2 font-weight-medium">
+                      {{ item.user_name || 'Unknown User' }}
+                    </div>
+                    <div class="text-caption text-medium-emphasis">
+                      {{ item.user_email || '-' }}
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Total Items Column -->
+              <template #item.total_items_processed="{ item }">
+                <VChip
+                  color="info"
+                  variant="tonal"
+                  size="small"
+                >
+                  {{ item.total_items_processed }}
+                </VChip>
+              </template>
+
+              <!-- Updated Items Column -->
+              <template #item.total_items_updated="{ item }">
+                <VChip
+                  color="success"
+                  variant="tonal"
+                  size="small"
+                >
+                  {{ item.total_items_updated }}
+                </VChip>
+              </template>
+
+              <!-- Skipped Items Column -->
+              <template #item.total_items_skipped="{ item }">
+                <VChip
+                  :color="item.total_items_skipped > 0 ? 'warning' : 'success'"
+                  variant="tonal"
+                  size="small"
+                >
+                  {{ item.total_items_skipped }}
+                </VChip>
+              </template>
+
+              <!-- Stock Value Column -->
+              <template #item.total_stock_value="{ item }">
+                <div class="text-end font-weight-medium text-success">
+                  {{ formatCurrency(item.total_stock_value || 0) }}
+                </div>
+              </template>
+
+              <!-- Status Column -->
+              <template #item.upload_status="{ item }">
+                <VChip
+                  :color="
+                    item.upload_status === 'success' ? 'success'
+                    : item.upload_status === 'failed' ? 'error'
+                    : 'warning'
+                  "
+                  variant="tonal"
+                  size="small"
+                >
+                  {{
+                    item.upload_status === 'success' ? 'Berhasil'
+                    : item.upload_status === 'failed' ? 'Gagal'
+                    : 'Sebagian'
+                  }}
+                </VChip>
+              </template>
+
+              <!-- No Data -->
+              <template #no-data>
+                <div class="text-center py-8">
+                  <VIcon
+                    icon="tabler-database-off"
+                    size="64"
+                    class="text-medium-emphasis mb-4"
+                  />
+                  <div class="text-h6 text-medium-emphasis mb-2">
+                    Belum Ada Riwayat Upload
+                  </div>
+                  <div class="text-body-2 text-medium-emphasis">
+                    Riwayat upload akan muncul setelah Anda melakukan export data inventory.
+                  </div>
+                </div>
+              </template>
+            </VDataTable>
+
+            <!-- Pagination -->
+            <div
+              v-if="uploadHistoryTotal > uploadHistoryPerPage"
+              class="d-flex justify-center mt-4"
+            >
+              <VPagination
+                v-model="uploadHistoryPage"
+                :length="Math.ceil(uploadHistoryTotal / uploadHistoryPerPage)"
+                :total-visible="7"
+                @update:model-value="onUploadHistoryPageChange"
+              />
+            </div>
+          </div>
+        </VCardText>
+
+        <VDivider />
+
+        <VCardActions class="pa-4">
+          <VSpacer />
+          <VBtn
+            variant="outlined"
+            @click="closeUploadHistoryDialog"
+          >
+            Tutup
+          </VBtn>
+          <VBtn
+            color="primary"
+            prepend-icon="tabler-refresh"
+            @click="fetchUploadHistory"
+          >
+            Refresh
           </VBtn>
         </VCardActions>
       </VCard>
