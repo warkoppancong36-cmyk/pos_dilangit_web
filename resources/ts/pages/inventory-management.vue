@@ -1236,7 +1236,7 @@ watch(totalItems, (newValue, oldValue) => {
             </VBtn>
             
             <VChip
-              color="white"
+              color="black"
               size="small"
               variant="tonal"
             >
