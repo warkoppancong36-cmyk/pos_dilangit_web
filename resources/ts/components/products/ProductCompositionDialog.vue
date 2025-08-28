@@ -204,17 +204,6 @@
                 />
               </VCol>
               <VCol cols="12" md="2">
-                <VTextField
-                  v-model="newItem.unit"
-                  label="Satuan"
-                  variant="outlined"
-                  placeholder="kg, pcs, ml"
-                  :readonly="!!selectedItemUnit"
-                  :hint="selectedItemUnit ? `Satuan dari item: ${selectedItemUnit}` : ''"
-                  persistent-hint
-                />
-              </VCol>
-              <VCol cols="12" md="2">
                 <VSwitch
                   v-model="newItem.isCritical"
                   label="Item Kritis"
@@ -467,7 +456,6 @@ interface AvailableItem {
 interface NewItemForm {
   itemId: string | number | null
   quantity: number
-  unit: string
   isCritical: boolean
 }
 
@@ -475,7 +463,6 @@ interface ProductItemFormData {
   product_id: number
   item_id: number
   quantity_needed: number
-  unit: string
   is_critical: boolean
   notes: string
 }
@@ -548,7 +535,6 @@ const productMarginPercentage = computed(() => {
 const newItem = ref<NewItemForm>({
   itemId: null as string | number | null,
   quantity: 1,
-  unit: 'pcs',
   isCritical: false
 })
 
@@ -615,8 +601,7 @@ const fetchAvailableItems = async () => {
 // Computed
 const canAddItem = computed(() => {
   return newItem.value.itemId && 
-         newItem.value.quantity > 0 && 
-         newItem.value.unit.trim().length > 0
+         newItem.value.quantity > 0
 })
 
 const selectedItemUnit = computed(() => {
@@ -670,16 +655,6 @@ const getStockLabel = (item: any): string => {
   if (stock > 0) return 'Kritis'
   return 'Habis'
 }
-
-// Watch for item selection to auto-fill unit
-watch(() => newItem.value.itemId, (newItemId) => {
-  if (newItemId) {
-    const selectedItem = availableItems.value.find(item => item.id === newItemId)
-    if (selectedItem?.unit) {
-      newItem.value.unit = selectedItem.unit
-    }
-  }
-})
 
 // Watch for props changes
 watch(() => props.items, (newItems) => {
@@ -914,7 +889,6 @@ const saveComposition = async () => {
         product_id: productId,
         item_id: parseInt(item.item?.id || '0'),
         quantity_needed: parseFloat(item.quantity_needed.toString()), // Ensure decimal is preserved
-        unit: item.unit,
         is_critical: item.is_critical,
         notes: item.notes || ''
       }
