@@ -420,7 +420,7 @@ const snackbar = ref({
 // Dialog states
 const dialogOpen = ref(false)
 const viewDialogOpen = ref(false)
-const receiveDialogOpen = ref(false)
+const receiveDialogOpen = ref(false) 
 const deleteDialogOpen = ref(false)
 const selectedPurchase = ref<any>(null)
 const purchaseToDelete = ref<any>(null)
