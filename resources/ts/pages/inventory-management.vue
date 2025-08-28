@@ -246,24 +246,6 @@ const fetchAllInventoryForExport = async () => {
 
     console.log('📝 Request params:', params.toString())
 
-    // Check all available cookies and localStorage items for debugging
-    console.log('🍪 Available cookies:')
-    document.cookie.split(';').forEach(cookie => {
-      const [name, ...rest] = cookie.trim().split('=')
-      if (name.toLowerCase().includes('token') || name.toLowerCase().includes('auth')) {
-        console.log(`  - ${name}: ${rest.join('=').substring(0, 20)}...`)
-      }
-    })
-    
-    console.log('💾 Available localStorage items:')
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (key && (key.toLowerCase().includes('token') || key.toLowerCase().includes('auth'))) {
-        const value = localStorage.getItem(key)
-        console.log(`  - ${key}: ${value?.substring(0, 20)}...`)
-      }
-    }
-
     // Try using useApi composable first (preferred method)
     try {
       console.log('🔄 Attempting to fetch with useApi composable...')
@@ -271,7 +253,15 @@ const fetchAllInventoryForExport = async () => {
       
       if (data.value && data.value.success) {
         console.log('✅ Successfully fetched with useApi:', data.value.data.data?.length || 0, 'items')
-        return data.value.data.data || []
+        const inventoryData = data.value.data.data || []
+        
+        // Remove duplicates based on id_inventory
+        const uniqueData = inventoryData.filter((item: any, index: number, self: any[]) => 
+          index === self.findIndex((t: any) => t.id_inventory === item.id_inventory)
+        )
+        
+        console.log('🔍 After deduplication:', uniqueData.length, 'unique items')
+        return uniqueData
       } else {
         console.log('❌ useApi response not successful:', data.value)
         throw new Error(data.value?.message || 'useApi failed')
@@ -327,8 +317,16 @@ const fetchAllInventoryForExport = async () => {
       })
       
       if (result.success) {
-        console.log('✅ Successfully fetched with manual fetch:', result.data.data?.length || 0, 'items')
-        return result.data.data || []
+        const inventoryData = result.data.data || []
+        
+        // Remove duplicates based on id_inventory
+        const uniqueData = inventoryData.filter((item: any, index: number, self: any[]) => 
+          index === self.findIndex((t: any) => t.id_inventory === item.id_inventory)
+        )
+        
+        console.log('✅ Successfully fetched with manual fetch:', inventoryData.length, 'items')
+        console.log('🔍 After deduplication:', uniqueData.length, 'unique items')
+        return uniqueData
       } else {
         console.error('❌ Manual fetch response not successful:', result)
         throw new Error(result.message || 'Failed to fetch inventory data')
@@ -356,28 +354,12 @@ const exportToExcel = async () => {
     // Fetch ALL inventory data for export (not limited to current page)
     const allInventoryData = await fetchAllInventoryForExport()
     
+    console.log('📊 Exporting', allInventoryData.length, 'inventory items to Excel')
+    
     // Dynamic import for better performance
     const XLSX = await import('xlsx')
     
-    // Prepare data for export using ALL data
-    const exportData = allInventoryData.map((item: any, index: number) => ({
-      'No': index + 1,
-      'Produk/Variant': `${item.item?.name || item.product?.name || 'Unknown Item'} (SKU: ${item.item?.item_code || item.product?.sku || '-'})`,
-      'Unit': item.item?.unit || 'pcs',
-      'Stok Saat Ini': item.current_stock || 0,
-      'Stok Tersedia': item.available_stock || 0,
-      'Stok Minimum': item.reorder_level || 0,
-      'Status': getStockStatusText(item),
-      'Harga Rata-rata': formatCurrency(item.average_cost || 0),
-      'Dibuat': item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID') : '-',
-      'Diperbarui': item.updated_at ? new Date(item.updated_at).toLocaleDateString('id-ID') : '-'
-    }))
-    
-    // Create workbook and worksheet
-    const workbook = XLSX.utils.book_new()
-    const worksheet = XLSX.utils.json_to_sheet(exportData)
-    
-    // Add title and summary using ALL data
+    // Calculate summary statistics first
     const totalAllItems = allInventoryData.length
     const lowStockItemsAll = allInventoryData.filter((item: any) => 
       item.current_stock <= item.reorder_level
@@ -389,27 +371,50 @@ const exportToExcel = async () => {
       sum + ((item.current_stock || 0) * (item.average_cost || 0)), 0
     )
     
+    // Prepare clean data for export - avoid duplication
+    const exportData = allInventoryData.map((item: any, index: number) => ({
+      'No': index + 1,
+      'Produk/Variant': item.item?.name || item.product?.name || 'Unknown Item',
+      'SKU': item.item?.item_code || item.product?.sku || '-',
+      'Unit': item.item?.unit || 'pcs',
+      'Stok Saat Ini': item.current_stock || 0,
+      'Stok Tersedia': item.available_stock || 0,
+      'Stok Minimum': item.reorder_level || 0,
+      'Status': getStockStatusText(item),
+      'Harga Rata-rata': item.average_cost || 0,
+      'Nilai Stok': (item.current_stock || 0) * (item.average_cost || 0),
+      'Dibuat': item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID') : '-',
+      'Diperbarui': item.updated_at ? new Date(item.updated_at).toLocaleDateString('id-ID') : '-'
+    }))
+    
+    // Create workbook and worksheet
+    const workbook = XLSX.utils.book_new()
+    
+    // Create title and summary data first
     const titleData = [
       ['LAPORAN INVENTORY MANAGEMENT'],
-      ['Tanggal Export: ' + new Date().toLocaleDateString('id-ID')],
-      ['Total Items: ' + totalAllItems],
-      ['Total Nilai Stok: ' + formatCurrency(totalStockValueAll)],
-      ['Items Low Stock: ' + lowStockItemsAll],
-      ['Items Out of Stock: ' + outOfStockItemsAll],
-      ['Filter Diterapkan: ' + (filters.value.search ? `Pencarian: "${filters.value.search}", ` : '') + 
-       (filters.value.stock_status !== 'all' ? `Status: ${filters.value.stock_status}` : 'Semua Data')],
-      [],
+      ['Tanggal Export:', new Date().toLocaleDateString('id-ID', { 
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+      })],
+      ['Total Items:', totalAllItems],
+      ['Total Nilai Stok:', `Rp ${totalStockValueAll.toLocaleString('id-ID')}`],
+      ['Items Low Stock:', lowStockItemsAll],
+      ['Items Out of Stock:', outOfStockItemsAll],
+      ['Filter Diterapkan:', filters.value.search ? `Pencarian: "${filters.value.search}"` : 'Semua Data'],
+      [], // Empty row
     ]
     
-    XLSX.utils.sheet_add_aoa(worksheet, titleData, { origin: 'A1' })
+    // Create worksheet starting with title
+    const worksheet = XLSX.utils.aoa_to_sheet(titleData)
+    
+    // Add main data starting from row 9 (after title and summary)
     XLSX.utils.sheet_add_json(worksheet, exportData, { origin: 'A9' })
     
-    // Set column widths
+    // Set column widths to match actual columns
     const columnWidths = [
       { wch: 5 },   // No
-      { wch: 30 },  // Produk/Variant
+      { wch: 35 },  // Produk/Variant
       { wch: 15 },  // SKU
-      { wch: 30 },  // Deskripsi
       { wch: 8 },   // Unit
       { wch: 12 },  // Stok Saat Ini
       { wch: 12 },  // Stok Tersedia
@@ -417,7 +422,6 @@ const exportToExcel = async () => {
       { wch: 15 },  // Status
       { wch: 15 },  // Harga Rata-rata
       { wch: 15 },  // Nilai Stok
-      { wch: 20 },  // Lokasi Penyimpanan
       { wch: 12 },  // Dibuat
       { wch: 12 },  // Diperbarui
     ]
@@ -433,6 +437,8 @@ const exportToExcel = async () => {
     // Download file
     XLSX.writeFile(workbook, filename)
     
+    console.log('✅ Excel file generated successfully:', filename)
+    
     // Upload inventory data to server using ALL data
     try {
       await uploadInventoryData(allInventoryData, {
@@ -441,10 +447,11 @@ const exportToExcel = async () => {
         low_stock_count: lowStockItemsAll,
         out_of_stock_count: outOfStockItemsAll
       })
-      successMessage.value = ``
+      successMessage.value = `Laporan berhasil di-export ke Excel dengan ${totalAllItems} item lengkap dan data berhasil diupload ke server!`
     } catch (uploadError) {
       console.error('Upload error:', uploadError)
-      successMessage.value = ''
+      successMessage.value = `Laporan berhasil di-export ke Excel dengan ${totalAllItems} item lengkap, tetapi gagal upload data ke server: ` + 
+                           (uploadError instanceof Error ? uploadError.message : 'Unknown error')
     }
     
   } catch (error) {
