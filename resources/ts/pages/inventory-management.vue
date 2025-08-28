@@ -602,16 +602,18 @@ watch(totalItems, (newValue, oldValue) => {
 
           <VDivider />
 
-          <VDataTableServer
+          <!-- Wrapper div untuk horizontal scroll -->
+          <div class="table-container">
+            <VDataTableServer
             :headers="[
-              { title: 'Produk/Variant', key: 'item_name', sortable: false },
-              { title: 'SKU', key: 'sku', sortable: false },
-              { title: 'Stok Saat Ini', key: 'current_stock', sortable: false },
-              { title: 'Stok Tersedia', key: 'available_stock', sortable: false },
-              { title: 'Status', key: 'status', sortable: false },
-              { title: 'Reorder Level', key: 'reorder_level', sortable: false },
-              { title: 'Harga Rata-rata', key: 'average_cost', sortable: false },
-              { title: 'Nilai Stok', key: 'stock_value', sortable: false },
+              { title: 'Produk/Variant', key: 'item_name', sortable: false, width: '250px' },
+              { title: 'SKU', key: 'sku', sortable: false, width: '150px' },
+              { title: 'Stok Saat Ini', key: 'current_stock', sortable: false, width: '120px' },
+              { title: 'Stok Tersedia', key: 'available_stock', sortable: false, width: '120px' },
+              { title: 'Status', key: 'status', sortable: false, width: '120px' },
+              { title: 'Reorder Level', key: 'reorder_level', sortable: false, width: '120px' },
+              { title: 'Harga Rata-rata', key: 'average_cost', sortable: false, width: '150px' },
+              { title: 'Nilai Stok', key: 'stock_value', sortable: false, width: '150px' },
               { title: 'Aksi', key: 'actions', sortable: false, width: '200px', fixed: true },
             ]"
             :items="inventoryList"
@@ -624,6 +626,7 @@ watch(totalItems, (newValue, oldValue) => {
             :page-text="'{0}-{1} of {2}'"
             :no-data-text="'Tidak ada data inventory'"
             class="text-no-wrap fixed-actions-table"
+            id="inventory-table"
             fixed-header
             height="500px"
             @update:page="onPageChange"
@@ -843,6 +846,7 @@ watch(totalItems, (newValue, oldValue) => {
               </div>
             </template>
           </VDataTableServer>
+          </div> <!-- End table-container -->
           
           <!-- Total Data Info -->
         </VCard>
@@ -1526,26 +1530,84 @@ watch(totalItems, (newValue, oldValue) => {
     }
   }
 
+  // Table container for horizontal scroll
+  .table-container {
+    overflow-x: auto;
+    width: 100%;
+    position: relative;
+    max-width: 100%;
+    
+    // Ensure scrollbar appears when needed
+    &::-webkit-scrollbar {
+      height: 8px;
+    }
+    
+    &::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 4px;
+    }
+    
+    &::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 4px;
+    }
+    
+    &::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
+  }
+
   // Fixed actions table styling
-  .fixed-actions-table {
+  #inventory-table {
     :deep(.v-data-table) {
       .v-data-table__wrapper {
-        overflow-x: auto;
+        overflow-x: auto !important;
+        position: relative;
       }
 
-      .v-data-table__th:last-child,
-      .v-data-table__td:last-child {
-        position: sticky;
-        right: 0;
-        background: rgb(var(--v-theme-surface));
-        border-left: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-        z-index: 2;
-        box-shadow: -4px 0 8px rgba(0, 0, 0, 0.1);
+      table {
+        min-width: 1400px !important; // Force horizontal scroll
       }
 
-      .v-data-table__th:last-child {
-        background: rgb(var(--v-theme-surface-variant));
-        z-index: 3;
+      // Target action column specifically (9th column = Aksi)
+      thead tr th:nth-child(9),
+      tbody tr td:nth-child(9) {
+        position: sticky !important;
+        right: 0px !important;
+        background: rgb(var(--v-theme-surface)) !important;
+        border-left: 3px solid #e0e0e0 !important;
+        z-index: 100 !important;
+        box-shadow: -8px 0 16px rgba(0, 0, 0, 0.25) !important;
+        min-width: 200px !important;
+        max-width: 200px !important;
+        width: 200px !important;
+      }
+
+      // Header styling for action column
+      thead tr th:nth-child(9) {
+        background: rgb(var(--v-theme-surface-variant)) !important;
+        z-index: 101 !important;
+        font-weight: 700 !important;
+        text-align: center !important;
+      }
+
+      // Data cell styling for action column
+      tbody tr td:nth-child(9) {
+        text-align: center !important;
+        padding: 8px !important;
+      }
+
+      // Ensure other columns have proper width to trigger scroll
+      thead tr th:not(:nth-child(9)),
+      tbody tr td:not(:nth-child(9)) {
+        min-width: 150px;
+        white-space: nowrap;
+      }
+
+      // First column (Product name) wider
+      thead tr th:first-child,
+      tbody tr td:first-child {
+        min-width: 250px;
       }
     }
   }
