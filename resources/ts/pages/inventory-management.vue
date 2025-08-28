@@ -164,8 +164,7 @@ const exportToExcel = async () => {
     // Prepare data for export
     const exportData = inventoryList.value.map((item, index) => ({
       'No': index + 1,
-      'Produk/Variant': item.item?.name || item.product?.name || 'Unknown Item',
-      'SKU': item.item?.item_code || item.product?.sku || '-',
+      'Produk/Variant': `${item.item?.name || item.product?.name || 'Unknown Item'} (SKU: ${item.item?.item_code || item.product?.sku || '-'})`,
       'Deskripsi': item.item?.description || item.product?.description || '-',
       'Unit': item.item?.unit || 'pcs',
       'Stok Saat Ini': item.current_stock || 0,
@@ -606,8 +605,7 @@ watch(totalItems, (newValue, oldValue) => {
           <div class="table-container">
             <VDataTableServer
             :headers="[
-              { title: 'Produk/Variant', key: 'item_name', sortable: false, width: '250px' },
-              { title: 'SKU', key: 'sku', sortable: false, width: '150px' },
+              { title: 'Produk/Variant', key: 'item_name', sortable: false, width: '280px' },
               { title: 'Stok Saat Ini', key: 'current_stock', sortable: false, width: '120px' },
               { title: 'Stok Tersedia', key: 'available_stock', sortable: false, width: '120px' },
               { title: 'Status', key: 'status', sortable: false, width: '120px' },
@@ -632,16 +630,21 @@ watch(totalItems, (newValue, oldValue) => {
             @update:page="onPageChange"
             @update:items-per-page="onItemsPerPageChange"
           >
-            <!-- Item Name -->
+            <!-- Item Name with SKU -->
             <template #item.item_name="{ item }">
               <div class="d-flex align-center">
                 <div>
                   <div class="font-weight-medium">
                     {{ item.item?.name || item.product?.name || 'Unknown Item' }}
                   </div>
-                  <small class="text-medium-emphasis">
-                    {{ item.item?.description || item.product?.category?.name || '-' }}
-                  </small>
+                  <div class="d-flex flex-column">
+                    <small class="text-primary font-weight-medium">
+                      SKU: {{ item.item?.item_code || item.product?.sku || '-' }}
+                    </small>
+                    <small class="text-medium-emphasis">
+                      {{ item.item?.description || item.product?.category?.name || '-' }}
+                    </small>
+                  </div>
                 </div>
               </div>
             </template>
@@ -1566,12 +1569,12 @@ watch(totalItems, (newValue, oldValue) => {
       }
 
       table {
-        min-width: 1400px !important; // Force horizontal scroll
+        min-width: 1300px !important; // Adjusted for one less column
       }
 
-      // Target action column specifically (9th column = Aksi)
-      thead tr th:nth-child(9),
-      tbody tr td:nth-child(9) {
+      // Target action column specifically (8th column = Aksi, since SKU column removed)
+      thead tr th:nth-child(8),
+      tbody tr td:nth-child(8) {
         position: sticky !important;
         right: 0px !important;
         background: rgb(var(--v-theme-surface)) !important;
@@ -1584,7 +1587,7 @@ watch(totalItems, (newValue, oldValue) => {
       }
 
       // Header styling for action column
-      thead tr th:nth-child(9) {
+      thead tr th:nth-child(8) {
         background: rgb(var(--v-theme-surface-variant)) !important;
         z-index: 101 !important;
         font-weight: 700 !important;
@@ -1592,22 +1595,22 @@ watch(totalItems, (newValue, oldValue) => {
       }
 
       // Data cell styling for action column
-      tbody tr td:nth-child(9) {
+      tbody tr td:nth-child(8) {
         text-align: center !important;
         padding: 8px !important;
       }
 
       // Ensure other columns have proper width to trigger scroll
-      thead tr th:not(:nth-child(9)),
-      tbody tr td:not(:nth-child(9)) {
+      thead tr th:not(:nth-child(8)),
+      tbody tr td:not(:nth-child(8)) {
         min-width: 150px;
         white-space: nowrap;
       }
 
-      // First column (Product name) wider
+      // First column (Product name + SKU) wider
       thead tr th:first-child,
       tbody tr td:first-child {
-        min-width: 250px;
+        min-width: 280px;
       }
     }
   }
