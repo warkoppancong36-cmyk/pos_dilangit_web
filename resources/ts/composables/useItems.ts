@@ -19,6 +19,8 @@ export interface Item {
   active: boolean
   is_delivery?: boolean
   is_takeaway?: boolean
+  available_in_kitchen?: boolean
+  available_in_bar?: boolean
   properties?: Record<string, any>
   created_by?: number
   updated_by?: number
@@ -55,6 +57,8 @@ export interface ItemFormData {
   active?: boolean
   is_delivery?: boolean
   is_takeaway?: boolean
+  available_in_kitchen?: boolean
+  available_in_bar?: boolean
   properties?: Record<string, any>
 }
 
@@ -65,6 +69,8 @@ export interface ItemFilters {
   stock_status?: string
   expiring_days?: number
   show_expired?: boolean
+  available_in_kitchen?: boolean
+  available_in_bar?: boolean
 }
 
 export interface ItemStats {
@@ -140,6 +146,8 @@ const formData = reactive<ItemFormData>({
   active: true,
   is_delivery: false,
   is_takeaway: false,
+  available_in_kitchen: true,
+  available_in_bar: true,
   properties: {}
 })
 
@@ -348,6 +356,8 @@ const fillFormData = (item: Item) => {
     active: item.active,
     is_delivery: item.is_delivery || false,
     is_takeaway: item.is_takeaway || false,
+    available_in_kitchen: item.available_in_kitchen ?? true,
+    available_in_bar: item.available_in_bar ?? true,
     properties: item.properties || {}
   })
 }

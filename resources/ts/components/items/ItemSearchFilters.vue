@@ -184,6 +184,26 @@ const hasActiveFilters = computed(() => {
                   @update:model-value="onFilterChange"
                 />
               </VCol>
+
+              <!-- Kitchen Availability -->
+              <VCol cols="12" md="3" class="d-flex align-center">
+                <VCheckbox
+                  v-model="localFilters.available_in_kitchen"
+                  label="Tersedia di Kitchen"
+                  color="primary"
+                  @update:model-value="onFilterChange"
+                />
+              </VCol>
+
+              <!-- Bar Availability -->
+              <VCol cols="12" md="3" class="d-flex align-center">
+                <VCheckbox
+                  v-model="localFilters.available_in_bar"
+                  label="Tersedia di Bar"
+                  color="secondary"
+                  @update:model-value="onFilterChange"
+                />
+              </VCol>
             </VRow>
           </VExpansionPanelText>
         </VExpansionPanel>

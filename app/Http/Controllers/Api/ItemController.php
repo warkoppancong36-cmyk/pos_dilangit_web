@@ -70,6 +70,16 @@ class ItemController extends Controller
                 $query->expired();
             }
 
+            // Filter by kitchen availability
+            if ($request->has('available_in_kitchen') && $request->available_in_kitchen === 'true') {
+                $query->where('available_in_kitchen', true);
+            }
+
+            // Filter by bar availability
+            if ($request->has('available_in_bar') && $request->available_in_bar === 'true') {
+                $query->where('available_in_bar', true);
+            }
+
             // Handle pagination - support 'all' parameter to get all items
             $perPage = $request->get('per_page', 15);
             
@@ -127,6 +137,8 @@ class ItemController extends Controller
                 'active' => 'boolean',
                 'is_delivery' => 'boolean',  // Add new field validation
                 'is_takeaway' => 'boolean',  // Add new field validation
+                'available_in_kitchen' => 'boolean',  // Add kitchen availability validation
+                'available_in_bar' => 'boolean',  // Add bar availability validation
                 'properties' => 'nullable|array',
             ]);
 
@@ -145,6 +157,8 @@ class ItemController extends Controller
             $validated['cost_per_unit'] = $validated['cost_per_unit'] ?? 0;
             $validated['is_delivery'] = $validated['is_delivery'] ?? false;
             $validated['is_takeaway'] = $validated['is_takeaway'] ?? false;
+            $validated['available_in_kitchen'] = $validated['available_in_kitchen'] ?? true;
+            $validated['available_in_bar'] = $validated['available_in_bar'] ?? true;
             
             DB::beginTransaction();
             
@@ -233,6 +247,8 @@ class ItemController extends Controller
                 'active' => 'boolean',
                 'is_delivery' => 'boolean',  // Add new field validation
                 'is_takeaway' => 'boolean',  // Add new field validation
+                'available_in_kitchen' => 'boolean',  // Add kitchen availability validation
+                'available_in_bar' => 'boolean',  // Add bar availability validation
                 'properties' => 'nullable|array',
             ]);
 
@@ -256,6 +272,12 @@ class ItemController extends Controller
             }
             if (isset($validated['is_takeaway']) && $validated['is_takeaway'] === null) {
                 $validated['is_takeaway'] = false;
+            }
+            if (isset($validated['available_in_kitchen']) && $validated['available_in_kitchen'] === null) {
+                $validated['available_in_kitchen'] = true;
+            }
+            if (isset($validated['available_in_bar']) && $validated['available_in_bar'] === null) {
+                $validated['available_in_bar'] = true;
             }
 
             DB::beginTransaction();

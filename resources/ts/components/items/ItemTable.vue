@@ -31,8 +31,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<Emits>()
 
 const headers = [
-  { title: 'KODE ITEM', key: 'item_code', align: 'start' as const },
-  { title: 'NAMA ITEM', key: 'name', align: 'start' as const },
+  { title: 'ITEM', key: 'item_info', align: 'start' as const },
   { title: 'SATUAN', key: 'unit', align: 'center' as const },
   { title: 'HARGA/UNIT', key: 'cost_per_unit', align: 'end' as const },
   { title: 'STOK', key: 'current_stock', align: 'center' as const },
@@ -40,6 +39,7 @@ const headers = [
   { title: 'STATUS STOK', key: 'stock_status', align: 'center' as const },
   { title: 'LOKASI', key: 'storage_location', align: 'center' as const },
   { title: 'STATUS', key: 'active', align: 'center' as const },
+  { title: 'STATION', key: 'station_availability', align: 'center' as const },
   { title: 'JENIS LAYANAN', key: 'service_type', align: 'center' as const },
   { title: 'AKSI', key: 'actions', align: 'center' as const, sortable: false }
 ]
@@ -124,20 +124,17 @@ const getStockProgressColor = (percentage: number) => {
       @update:items-per-page="$emit('update:items-per-page', $event)"
       class="text-no-wrap"
     >
-      <template #item.item_code="{ item }">
-        <VChip
-          color="primary"
-          variant="outlined"
-          size="small"
-          class="font-mono"
-        >
-          {{ item.item_code }}
-        </VChip>
-      </template>
-
-      <template #item.name="{ item }">
-        <div>
+      <template #item.item_info="{ item }">
+        <div class="d-flex flex-column">
           <div class="font-weight-medium text-high-emphasis">{{ item.name }}</div>
+          <VChip
+            color="primary"
+            variant="outlined"
+            size="small"
+            class="font-mono mt-1 align-self-start"
+          >
+            {{ item.item_code }}
+          </VChip>
           <div v-if="item.description" class="text-caption text-medium-emphasis mt-1">
             {{ item.description }}
           </div>
@@ -199,6 +196,32 @@ const getStockProgressColor = (percentage: number) => {
         >
           {{ item.active ? 'Aktif' : 'Nonaktif' }}
         </VChip>
+      </template>
+
+      <template #item.station_availability="{ item }">
+        <div class="d-flex flex-column gap-1">
+          <VChip
+            v-if="item.available_in_kitchen"
+            color="warning"
+            variant="tonal"
+            size="x-small"
+            prepend-icon="tabler-chef-hat"
+          >
+            Kitchen
+          </VChip>
+          <VChip
+            v-if="item.available_in_bar"
+            color="info"
+            variant="tonal"
+            size="x-small"
+            prepend-icon="tabler-glass-cocktail"
+          >
+            Bar
+          </VChip>
+          <span v-if="!item.available_in_kitchen && !item.available_in_bar" class="text-caption text-medium-emphasis">
+            Tidak tersedia
+          </span>
+        </div>
       </template>
 
       <template #item.service_type="{ item }">

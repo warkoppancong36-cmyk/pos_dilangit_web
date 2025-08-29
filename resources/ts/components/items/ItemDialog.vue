@@ -265,6 +265,46 @@ const updatePropertyKey = (oldKey: string, newKey: string) => {
               </div>
             </VCol>
 
+            <!-- Station Availability -->
+            <VCol cols="12">
+              <h6 class="text-h6 mb-4 d-flex align-center gap-2">
+                <VIcon
+                  icon="tabler-tools-kitchen-2"
+                  size="20"
+                  class="coffee-icon"
+                />
+                Ketersediaan Station
+              </h6>
+            </VCol>
+
+            <VCol cols="12" md="6">
+              <div class="d-flex align-center">
+                <VSwitch
+                  v-model="formData.available_in_kitchen"
+                  color="warning"
+                  class="me-3"
+                />
+                <VLabel class="text-body-1">
+                  <VIcon icon="tabler-chef-hat" class="me-2" size="18" />
+                  Tersedia di Kitchen
+                </VLabel>
+              </div>
+            </VCol>
+
+            <VCol cols="12" md="6">
+              <div class="d-flex align-center">
+                <VSwitch
+                  v-model="formData.available_in_bar"
+                  color="info"
+                  class="me-3"
+                />
+                <VLabel class="text-body-1">
+                  <VIcon icon="tabler-glass-cocktail" class="me-2" size="18" />
+                  Tersedia di Bar
+                </VLabel>
+              </div>
+            </VCol>
+
             <!-- Additional Properties -->
             <VCol cols="12">
               <h6 class="text-h6 mb-4 d-flex align-center gap-2">
