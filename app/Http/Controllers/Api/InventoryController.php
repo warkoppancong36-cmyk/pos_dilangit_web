@@ -75,6 +75,61 @@ class InventoryController extends Controller
                 });
             }
 
+            // Filter by station availability with exact matching
+            $kitchenFilter = $request->get('available_in_kitchen');
+            $barFilter = $request->get('available_in_bar');
+            $stationMode = $request->get('station_mode', 'inclusive');
+            
+            if ($kitchenFilter === 'true' && $barFilter === 'true') {
+                if ($stationMode === 'exclusive') {
+                    // Show items available in BOTH stations only (exact match)
+                    $query->whereHas('item', function($q) {
+                        $q->where('available_in_kitchen', '=', true)
+                          ->where('available_in_bar', '=', true);
+                    });
+                } else {
+                    // Show items available in either kitchen OR bar
+                    $query->whereHas('item', function($q) {
+                        $q->where('available_in_kitchen', '=', true)
+                          ->orWhere('available_in_bar', '=', true);
+                    });
+                }
+            } elseif ($kitchenFilter === 'true' && ($barFilter !== 'true')) {
+                if ($stationMode === 'exclusive') {
+                    // Show items available ONLY in kitchen (not in bar) - exact match
+                    $query->whereHas('item', function($q) {
+                        $q->where('available_in_kitchen', '=', true)
+                          ->where('available_in_bar', '=', false);
+                    });
+                } else {
+                    // Show all items available in kitchen (exact match)
+                    $query->whereHas('item', function($q) {
+                        $q->where('available_in_kitchen', '=', true);
+                    });
+                }
+            } elseif ($barFilter === 'true' && ($kitchenFilter !== 'true')) {
+                if ($stationMode === 'exclusive') {
+                    // Show items available ONLY in bar (not in kitchen) - exact match
+                    $query->whereHas('item', function($q) {
+                        $q->where('available_in_bar', '=', true)
+                          ->where('available_in_kitchen', '=', false);
+                    });
+                } else {
+                    // Show all items available in bar (exact match)
+                    $query->whereHas('item', function($q) {
+                        $q->where('available_in_bar', '=', true);
+                    });
+                }
+            }
+
+            // Debug logging untuk station filtering
+            \Log::info('Station Filter Debug:', [
+                'kitchen_filter' => $kitchenFilter,
+                'bar_filter' => $barFilter,
+                'station_mode' => $stationMode,
+                'request_params' => $request->only(['available_in_kitchen', 'available_in_bar', 'station_mode'])
+            ]);
+
             // Sorting
             $sortBy = $request->get('sort_by', 'current_stock');
             $sortOrder = $request->get('sort_order', 'asc');
