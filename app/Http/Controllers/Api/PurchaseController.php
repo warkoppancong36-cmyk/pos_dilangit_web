@@ -33,6 +33,13 @@ class PurchaseController extends Controller
                 $query->where('supplier_id', $request->supplier_id);
             }
 
+            // Filter by item - purchases that contain specific item
+            if ($request->has('item_id') && !empty($request->item_id)) {
+                $query->whereHas('items', function($q) use ($request) {
+                    $q->where('item_id', $request->item_id);
+                });
+            }
+
             // Filter by date range
             if ($request->has('start_date') && !empty($request->start_date)) {
                 $query->whereDate('purchase_date', '>=', $request->start_date);
@@ -42,13 +49,17 @@ class PurchaseController extends Controller
                 $query->whereDate('purchase_date', '<=', $request->end_date);
             }
 
-            // Search by purchase number or supplier name
+            // Enhanced search: purchase number, supplier name, or item name
             if ($request->has('search') && !empty($request->search)) {
                 $searchTerm = $request->search;
                 $query->where(function($q) use ($searchTerm) {
                     $q->where('purchase_number', 'like', '%' . $searchTerm . '%')
                       ->orWhereHas('supplier', function($supplierQuery) use ($searchTerm) {
                           $supplierQuery->where('name', 'like', '%' . $searchTerm . '%');
+                      })
+                      ->orWhereHas('items.item', function($itemQuery) use ($searchTerm) {
+                          $itemQuery->where('name', 'like', '%' . $searchTerm . '%')
+                                   ->orWhere('item_code', 'like', '%' . $searchTerm . '%');
                       });
                 });
             }

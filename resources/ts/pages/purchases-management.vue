@@ -80,11 +80,11 @@
     <VCard class="mb-6">
       <VCardText>
         <VRow>
-          <VCol cols="12" md="3">
+          <VCol cols="12" md="4">
             <VTextField
               v-model="filters.search"
-              label="Cari Purchase Number atau Supplier"
-              placeholder="Masukkan nomor purchase atau nama supplier"
+              label="Cari Purchase, Supplier, atau Item"
+              placeholder="Masukkan nomor purchase, nama supplier, atau nama item"
               prepend-inner-icon="mdi-magnify"
               variant="outlined"
               density="compact"
@@ -104,7 +104,7 @@
               clearable
             />
           </VCol>
-          <VCol cols="12" md="2">
+          <VCol cols="12" md="3">
             <VSelect
               v-model="filters.supplier_id"
               label="Supplier"
@@ -116,7 +116,21 @@
               clearable
             />
           </VCol>
-          <VCol cols="12" md="2">
+          <VCol cols="12" md="3">
+            <VSelect
+              v-model="filters.item_id"
+              label="Item/Produk"
+              :items="items"
+              item-title="name"
+              item-value="id_item"
+              variant="outlined"
+              density="compact"
+              clearable
+            />
+          </VCol>
+        </VRow>
+        <VRow>
+          <VCol cols="12" md="3">
             <VTextField
               v-model="filters.start_date"
               label="Tanggal Mulai"
@@ -126,7 +140,7 @@
               clearable
             />
           </VCol>
-          <VCol cols="12" md="2">
+          <VCol cols="12" md="3">
             <VTextField
               v-model="filters.end_date"
               label="Tanggal Akhir"
@@ -136,17 +150,44 @@
               clearable
             />
           </VCol>
-          <VCol cols="12" md="1">
+          <VCol cols="12" md="6" class="d-flex align-center gap-2">
             <VBtn
               color="primary"
               variant="tonal"
-              icon="mdi-refresh"
+              prepend-icon="mdi-refresh"
               @click="loadPurchases"
-            />
+            >
+              Refresh
+            </VBtn>
+            <VBtn
+              color="secondary"
+              variant="outlined"
+              prepend-icon="mdi-filter-off"
+              @click="clearFilters"
+            >
+              Clear Filters
+            </VBtn>
           </VCol>
         </VRow>
       </VCardText>
     </VCard>
+
+    <!-- Info Card -->
+    <VAlert
+      type="info"
+      variant="tonal"
+      class="mb-4"
+      density="compact"
+    >
+      <template #text>
+        <div class="d-flex align-center gap-2">
+          <VIcon icon="mdi-information" size="16" />
+          <span class="text-caption">
+            <strong>Tips:</strong> Gunakan kotak pencarian untuk mencari purchase berdasarkan nomor purchase, nama supplier, atau nama item yang dibeli.
+          </span>
+        </div>
+      </template>
+    </VAlert>
 
     <!-- Purchase Table -->
     <VCard>
@@ -177,6 +218,27 @@
           <div>
             <p class="mb-0 font-weight-medium">{{ item.supplier?.name || '-' }}</p>
             <p class="text-caption text-medium-emphasis mb-0">{{ item.supplier?.phone || '-' }}</p>
+          </div>
+        </template>
+
+        <template #item.items="{ item }">
+          <div class="max-width-200">
+            <div v-if="item.items && item.items.length > 0" class="d-flex flex-column ga-1">
+              <div v-for="(purchaseItem, index) in item.items.slice(0, 2)" :key="index" class="d-flex align-center ga-1">
+                <VChip
+                  size="x-small"
+                  color="primary"
+                  variant="tonal"
+                >
+                  {{ purchaseItem.item?.name || 'Unknown Item' }}
+                </VChip>
+                <span class="text-caption">x{{ purchaseItem.quantity_ordered }}</span>
+              </div>
+              <div v-if="item.items.length > 2" class="text-caption text-medium-emphasis">
+                +{{ item.items.length - 2 }} item lainnya
+              </div>
+            </div>
+            <span v-else class="text-caption text-medium-emphasis">Tidak ada item</span>
           </div>
         </template>
 
@@ -404,6 +466,7 @@ import { onMounted, ref, watch } from 'vue'
 // Data
 const purchases = ref<any[]>([])
 const suppliers = ref<any[]>([])
+const items = ref<any[]>([])
 const statistics = ref<any>({})
 const loading = ref(false)
 const page = ref(1)
@@ -432,6 +495,7 @@ const filters = ref({
   search: '',
   status: '',
   supplier_id: '',
+  item_id: '',
   start_date: '',
   end_date: ''
 })
@@ -440,6 +504,7 @@ const filters = ref({
 const headers = [
   { title: 'Purchase Number', key: 'purchase_number', sortable: true },
   { title: 'Supplier', key: 'supplier.name', sortable: false },
+  { title: 'Items', key: 'items', sortable: false },
   { title: 'Tanggal', key: 'purchase_date', sortable: true },
   { title: 'Status', key: 'status', sortable: true },
   { title: 'Total', key: 'total_amount', sortable: true },
@@ -525,6 +590,28 @@ const loadSuppliers = async () => {
   }
 }
 
+const loadItems = async () => {
+  try {
+    const token = getAuthToken()
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    }
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
+    const response = await axios.get('/api/items', { 
+      headers,
+      params: { per_page: 'all' } // Get all items untuk dropdown
+    })
+    items.value = response.data.data || []
+  } catch (error) {
+    console.error('Error loading items:', error)
+  }
+}
+
 const loadStatistics = async () => {
   try {
     const token = getAuthToken()
@@ -542,6 +629,18 @@ const loadStatistics = async () => {
   } catch (error) {
     console.error('Error loading statistics:', error)
   }
+}
+
+const clearFilters = () => {
+  filters.value = {
+    search: '',
+    status: '',
+    supplier_id: '',
+    item_id: '',
+    start_date: '',
+    end_date: ''
+  }
+  loadPurchases()
 }
 
 const openCreateDialog = () => {
@@ -758,6 +857,7 @@ watch(filters, () => {
 onMounted(() => {
   loadPurchases()
   loadSuppliers()
+  loadItems()
   loadStatistics()
 })
 </script>
@@ -769,5 +869,9 @@ onMounted(() => {
 
 .max-height-150 {
   max-height: 150px;
+}
+
+.max-width-200 {
+  max-width: 200px;
 }
 </style>
