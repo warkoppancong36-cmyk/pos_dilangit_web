@@ -66,6 +66,8 @@ export interface InventoryFilters {
   stock_status?: 'all' | 'in_stock' | 'low_stock' | 'out_of_stock' | 'overstock'
   category_id?: number
   supplier_id?: number
+  available_in_kitchen?: boolean
+  available_in_bar?: boolean
   sort_by?: string
   sort_order?: 'asc' | 'desc'
   per_page?: number
@@ -145,6 +147,8 @@ export const useInventory = () => {
     stock_status: 'all',
     category_id: undefined,
     supplier_id: undefined,
+    available_in_kitchen: false,
+    available_in_bar: false,
     sort_by: 'current_stock',
     sort_order: 'asc'
   })

@@ -343,13 +343,6 @@ const loadFormData = () => {
       generateSku()
     }
   }
-  
-  
-  // Also try to generate SKU immediately if both name and product_id are available
-  if (formData.value.name && formData.value.product_id && !isEdit.value) {
-    generateSku()
-  }
-}
 
 // Watchers
 watch(() => props.modelValue, (newVal, oldVal) => {

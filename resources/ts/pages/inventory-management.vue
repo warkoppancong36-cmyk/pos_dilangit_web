@@ -155,6 +155,17 @@ onMounted(() => {
 
 // Export functionality
 const exportLoading = ref(false)
+const exportDialog = ref(false)
+
+// Function to open export dialog
+const openExportDialog = () => {
+  exportDialog.value = true
+}
+
+// Function to close export dialog
+const closeExportDialog = () => {
+  exportDialog.value = false
+}
 
 // Function to check current authentication status
 const checkAuthStatus = () => {
@@ -243,6 +254,14 @@ const fetchAllInventoryForExport = async () => {
       search: filters.value.search || '',
       stock_status: filters.value.stock_status || 'all'
     })
+
+    // Add station availability filters if they are set
+    if (filters.value.available_in_kitchen) {
+      params.append('available_in_kitchen', 'true')
+    }
+    if (filters.value.available_in_bar) {
+      params.append('available_in_bar', 'true')
+    }
 
     console.log('📝 Request params:', params.toString())
 
@@ -381,6 +400,8 @@ const exportToExcel = async () => {
       'Stok Tersedia': item.available_stock || 0,
       'Stok Minimum': item.reorder_level || 0,
       'Status': getStockStatusText(item),
+      'Kitchen': item.item?.available_in_kitchen ? 'Ya' : 'Tidak',
+      'Bar': item.item?.available_in_bar ? 'Ya' : 'Tidak',
       'Harga Rata-rata': item.average_cost || 0,
       'Nilai Stok': (item.current_stock || 0) * (item.average_cost || 0),
       'Dibuat': item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID') : '-',
@@ -391,6 +412,20 @@ const exportToExcel = async () => {
     const workbook = XLSX.utils.book_new()
     
     // Create title and summary data first
+    const filterInfo = []
+    if (filters.value.search) {
+      filterInfo.push(`Pencarian: "${filters.value.search}"`)
+    }
+    if (filters.value.stock_status && filters.value.stock_status !== 'all') {
+      filterInfo.push(`Status: ${filters.value.stock_status}`)
+    }
+    if (filters.value.available_in_kitchen) {
+      filterInfo.push('Kitchen: Ya')
+    }
+    if (filters.value.available_in_bar) {
+      filterInfo.push('Bar: Ya')
+    }
+    
     const titleData = [
       ['LAPORAN INVENTORY MANAGEMENT'],
       ['Tanggal Export:', new Date().toLocaleDateString('id-ID', { 
@@ -400,7 +435,7 @@ const exportToExcel = async () => {
       ['Total Nilai Stok:', `Rp ${totalStockValueAll.toLocaleString('id-ID')}`],
       ['Items Low Stock:', lowStockItemsAll],
       ['Items Out of Stock:', outOfStockItemsAll],
-      ['Filter Diterapkan:', filters.value.search ? `Pencarian: "${filters.value.search}"` : 'Semua Data'],
+      ['Filter Diterapkan:', filterInfo.length > 0 ? filterInfo.join(', ') : 'Semua Data'],
       [], // Empty row
     ]
     
@@ -420,6 +455,8 @@ const exportToExcel = async () => {
       { wch: 12 },  // Stok Tersedia
       { wch: 12 },  // Stok Minimum
       { wch: 15 },  // Status
+      { wch: 8 },   // Kitchen
+      { wch: 8 },   // Bar
       { wch: 15 },  // Harga Rata-rata
       { wch: 15 },  // Nilai Stok
       { wch: 12 },  // Dibuat
@@ -1147,7 +1184,7 @@ watch(totalItems, (newValue, oldValue) => {
             <VRow>
               <VCol
                 cols="12"
-                md="4"
+                md="3"
               >
                 <VTextField
                   v-model="filters.search"
@@ -1162,7 +1199,7 @@ watch(totalItems, (newValue, oldValue) => {
 
               <VCol
                 cols="12"
-                md="4"
+                md="3"
               >
                 <VSelect
                   v-model="filters.stock_status"
@@ -1176,7 +1213,33 @@ watch(totalItems, (newValue, oldValue) => {
 
               <VCol
                 cols="12"
-                md="4"
+                md="2"
+                class="d-flex align-center"
+              >
+                <VCheckbox
+                  v-model="filters.available_in_kitchen"
+                  label="Kitchen"
+                  color="warning"
+                  @update:model-value="handleFiltersUpdate({ available_in_kitchen: $event })"
+                />
+              </VCol>
+
+              <VCol
+                cols="12"
+                md="2"
+                class="d-flex align-center"
+              >
+                <VCheckbox
+                  v-model="filters.available_in_bar"
+                  label="Bar"
+                  color="info"
+                  @update:model-value="handleFiltersUpdate({ available_in_bar: $event })"
+                />
+              </VCol>
+
+              <VCol
+                cols="12"
+                md="2"
                 class="d-flex align-center gap-2"
               >
                 <VBtn
@@ -1188,11 +1251,11 @@ watch(totalItems, (newValue, oldValue) => {
                 </VBtn>
                 
                 <VBtn
-                  v-if="filters.search || filters.stock_status !== 'all'"
+                  v-if="filters.search || filters.stock_status !== 'all' || filters.available_in_kitchen || filters.available_in_bar"
                   variant="outlined"
                   color="warning"
                   prepend-icon="tabler-filter-off"
-                  @click="handleFiltersUpdate({ search: '', stock_status: 'all' })"
+                  @click="handleFiltersUpdate({ search: '', stock_status: 'all', available_in_kitchen: false, available_in_bar: false })"
                 >
                   Clear
                 </VBtn>
@@ -1237,9 +1300,9 @@ watch(totalItems, (newValue, oldValue) => {
               variant="elevated"
               prepend-icon="tabler-file-spreadsheet"
               :loading="exportLoading"
-              @click="exportToExcel"
+              @click="openExportDialog"
             >
-              Export Semua Data
+              Export Excel
             </VBtn>
             
             <VChip
@@ -1261,6 +1324,7 @@ watch(totalItems, (newValue, oldValue) => {
               { title: 'Stok Saat Ini', key: 'current_stock', sortable: false, width: '120px' },
               { title: 'Stok Tersedia', key: 'available_stock', sortable: false, width: '120px' },
               { title: 'Status', key: 'status', sortable: false, width: '120px' },
+              { title: 'Station', key: 'station_availability', sortable: false, width: '150px' },
               { title: 'Reorder Level', key: 'reorder_level', sortable: false, width: '120px' },
               { title: 'Harga Rata-rata', key: 'average_cost', sortable: false, width: '150px' },
               { title: 'Nilai Stok', key: 'stock_value', sortable: false, width: '150px' },
@@ -1349,6 +1413,33 @@ watch(totalItems, (newValue, oldValue) => {
               >
                 {{ getStockStatusText(item) }}
               </VChip>
+            </template>
+
+            <!-- Station Availability -->
+            <template #item.station_availability="{ item }">
+              <div class="d-flex flex-column gap-1">
+                <VChip
+                  v-if="item.item?.available_in_kitchen"
+                  color="warning"
+                  variant="tonal"
+                  size="x-small"
+                  prepend-icon="tabler-chef-hat"
+                >
+                  Kitchen
+                </VChip>
+                <VChip
+                  v-if="item.item?.available_in_bar"
+                  color="info"
+                  variant="tonal"
+                  size="x-small"
+                  prepend-icon="tabler-glass-cocktail"
+                >
+                  Bar
+                </VChip>
+                <span v-if="!item.item?.available_in_kitchen && !item.item?.available_in_bar" class="text-caption text-medium-emphasis">
+                  Tidak tersedia
+                </span>
+              </div>
             </template>
 
             <!-- Reorder Level -->
@@ -2278,6 +2369,215 @@ watch(totalItems, (newValue, oldValue) => {
             @click="fetchUploadHistory"
           >
             Refresh
+          </VBtn>
+        </VCardActions>
+      </VCard>
+    </VDialog>
+
+    <!-- Export Dialog -->
+    <VDialog
+      v-model="exportDialog"
+      max-width="500"
+      persistent
+    >
+      <VCard>
+        <VCardTitle class="d-flex align-center gap-2">
+          <VIcon icon="tabler-file-spreadsheet" color="success" />
+          Export Inventory ke Excel
+        </VCardTitle>
+
+        <VDivider />
+
+        <VCardText>
+          <div class="mb-4">
+            <h6 class="text-h6 mb-2">Filter yang akan diterapkan:</h6>
+            <div class="d-flex flex-column gap-2">
+              <VChip
+                v-if="filters.search"
+                color="primary"
+                variant="tonal"
+                size="small"
+                prepend-icon="tabler-search"
+              >
+                Pencarian: "{{ filters.search }}"
+              </VChip>
+              
+              <VChip
+                v-if="filters.stock_status && filters.stock_status !== 'all'"
+                color="info"
+                variant="tonal"
+                size="small"
+                prepend-icon="tabler-package"
+              >
+                Status: {{ filters.stock_status }}
+              </VChip>
+              
+              <VChip
+                v-if="filters.available_in_kitchen"
+                color="warning"
+                variant="tonal"
+                size="small"
+                prepend-icon="tabler-chef-hat"
+              >
+                Kitchen: Ya
+              </VChip>
+              
+              <VChip
+                v-if="filters.available_in_bar"
+                color="info"
+                variant="tonal"
+                size="small"
+                prepend-icon="tabler-glass-cocktail"
+              >
+                Bar: Ya
+              </VChip>
+              
+              <VChip
+                v-if="!filters.search && (!filters.stock_status || filters.stock_status === 'all') && !filters.available_in_kitchen && !filters.available_in_bar"
+                color="success"
+                variant="tonal"
+                size="small"
+                prepend-icon="tabler-check"
+              >
+                Semua Data (Tanpa Filter)
+              </VChip>
+            </div>
+          </div>
+
+          <VAlert
+            type="info"
+            variant="tonal"
+            class="mb-4"
+          >
+            Data yang akan di-export akan mengikuti filter yang sedang aktif. 
+            File Excel akan berisi kolom Station (Kitchen & Bar) untuk setiap item.
+          </VAlert>
+        </VCardText>
+
+        <VDivider />
+
+        <VCardActions>
+          <VSpacer />
+          <VBtn
+            variant="outlined"
+            @click="closeExportDialog"
+            :disabled="exportLoading"
+          >
+            Batal
+          </VBtn>
+          <VBtn
+            color="success"
+            prepend-icon="tabler-file-spreadsheet"
+            :loading="exportLoading"
+            @click="exportToExcel(); closeExportDialog()"
+          >
+            Export ke Excel
+          </VBtn>
+        </VCardActions>
+      </VCard>
+    </VDialog>
+
+    <!-- Export Excel Dialog -->
+    <VDialog
+      v-model="exportDialog"
+      max-width="500"
+      persistent
+    >
+      <VCard>
+        <VCardTitle class="d-flex align-center gap-2">
+          <VIcon
+            icon="tabler-file-spreadsheet"
+            color="success"
+          />
+          Export Data ke Excel
+        </VCardTitle>
+        
+        <VDivider />
+        
+        <VCardText>
+          <div class="mb-4">
+            <h6 class="text-h6 mb-2">Filter yang akan diterapkan:</h6>
+            <div class="d-flex flex-column gap-2">
+              <VChip
+                v-if="filters.search"
+                color="primary"
+                variant="tonal"
+                size="small"
+                prepend-icon="tabler-search"
+              >
+                Pencarian: "{{ filters.search }}"
+              </VChip>
+              
+              <VChip
+                v-if="filters.stock_status && filters.stock_status !== 'all'"
+                color="info"
+                variant="tonal"
+                size="small"
+                prepend-icon="tabler-package"
+              >
+                Status: {{ filters.stock_status }}
+              </VChip>
+              
+              <VChip
+                v-if="filters.available_in_kitchen"
+                color="warning"
+                variant="tonal"
+                size="small"
+                prepend-icon="tabler-chef-hat"
+              >
+                Kitchen: Ya
+              </VChip>
+              
+              <VChip
+                v-if="filters.available_in_bar"
+                color="info"
+                variant="tonal"
+                size="small"
+                prepend-icon="tabler-glass-cocktail"
+              >
+                Bar: Ya
+              </VChip>
+              
+              <VChip
+                v-if="!filters.search && (!filters.stock_status || filters.stock_status === 'all') && !filters.available_in_kitchen && !filters.available_in_bar"
+                color="success"
+                variant="tonal"
+                size="small"
+                prepend-icon="tabler-database"
+              >
+                Semua Data
+              </VChip>
+            </div>
+          </div>
+          
+          <VAlert
+            type="info"
+            variant="tonal"
+            class="mb-4"
+          >
+            Data yang akan di-export sesuai dengan filter yang aktif saat ini. 
+            File Excel akan mencakup kolom Station (Kitchen/Bar) untuk setiap item.
+          </VAlert>
+        </VCardText>
+        
+        <VDivider />
+        
+        <VCardActions>
+          <VSpacer />
+          <VBtn
+            variant="outlined"
+            @click="closeExportDialog"
+          >
+            Batal
+          </VBtn>
+          <VBtn
+            color="success"
+            variant="elevated"
+            prepend-icon="tabler-download"
+            :loading="exportLoading"
+            @click="exportToExcel(); closeExportDialog()"
+          >
+            Export Excel
           </VBtn>
         </VCardActions>
       </VCard>
