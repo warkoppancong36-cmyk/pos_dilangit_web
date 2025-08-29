@@ -130,21 +130,33 @@ export const useSuppliers = () => {
         }
       })
 
+      console.log('🔍 Fetching suppliers with params:', params)
+
       const response = await SuppliersApi.getAll(params)
 
+      console.log('📊 API Response:', {
+        success: response.success,
+        dataLength: response.data?.length || 0,
+        pagination: response.pagination
+      })
 
       if (response.success) {
         suppliersList.value = response.data
         if (response.pagination) {
           totalItems.value = response.pagination.total
           currentPage.value = response.pagination.current_page
+          console.log('✅ Pagination updated:', {
+            total: totalItems.value,
+            currentPage: currentPage.value,
+            itemsPerPage: itemsPerPage.value
+          })
         }
       } else {
         throw new Error(response.message)
       }
 
     } catch (error: any) {
-      console.error('Error fetching suppliers:', error)
+      console.error('❌ Error fetching suppliers:', error)
       errorMessage.value = error.message || 'Gagal mengambil data supplier'
       suppliersList.value = []
     } finally {
@@ -333,7 +345,15 @@ export const useSuppliers = () => {
   }
 
   const onPageChange = (page: number) => {
+    console.log('🔄 Page change triggered:', { from: currentPage.value, to: page })
     currentPage.value = page
+    fetchSuppliersList()
+  }
+
+  const onItemsPerPageChange = (perPage: number) => {
+    console.log('📄 Items per page change triggered:', { from: itemsPerPage.value, to: perPage })
+    itemsPerPage.value = perPage
+    currentPage.value = 1
     fetchSuppliersList()
   }
 
@@ -450,6 +470,7 @@ export const useSuppliers = () => {
     closeDialog,
     clearModalError,
     onPageChange,
+    onItemsPerPageChange,
     onSearch,
     onFilterChange,
     handleFiltersUpdate,

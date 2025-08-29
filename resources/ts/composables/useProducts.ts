@@ -248,11 +248,20 @@ export const useProducts = () => {
         per_page: itemsPerPage.value
       }
 
+      // Clean up parameters but preserve search even if empty
       Object.keys(params).forEach(key => {
-        if (params[key as keyof typeof params] === '' || params[key as keyof typeof params] === 'all') {
+        const value = params[key as keyof typeof params]
+        // Don't delete search parameter - let backend handle empty search
+        if (key === 'search') {
+          return
+        }
+        // Delete other empty/null parameters
+        if (value === '' || value === 'all' || value === null || value === undefined) {
           delete params[key as keyof typeof params]
         }
       })
+
+      console.log('Fetching products with params:', params)
 
       const response = await ProductsApi.getAll(params)
       if (response.success) {

@@ -44,6 +44,7 @@ const {
   closeDialog,
   clearModalError,
   onPageChange,
+  onItemsPerPageChange,
   handleFiltersUpdate,
 } = useSuppliers()
 
@@ -132,16 +133,13 @@ onMounted(() => {
         <SupplierTable
           :suppliers="suppliersList"
           :loading="loading"
-          :toggle-loading="toggleLoading"
-          :current-page="currentPage"
+          :page="currentPage"
           :total-items="totalItems"
           :items-per-page="itemsPerPage"
-          :selected-suppliers="selectedSuppliers"
-          :can-create-edit="canCreateEdit"
           @edit="openEditDialog"
           @delete="openDeleteDialog"
-          @toggle-active="toggleActiveStatus"
-          @page-change="onPageChange"
+          @update:page="onPageChange"
+          @update:items-per-page="onItemsPerPageChange"
         />
       </VCardText>
     </VCard>

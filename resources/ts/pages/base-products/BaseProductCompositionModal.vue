@@ -447,18 +447,22 @@ interface BaseProduct {
 
 interface Composition {
   id?: number
+  id_base_product_composition?: number
   base_product_id: number
-  ingredient_base_product_id?: number
-  ingredient_item_id?: number
+  ingredient_base_product_id?: number | null
+  ingredient_item_id?: number | null
   quantity: number
   is_active: boolean
   is_critical?: boolean
-  notes?: string
+  notes?: string | null
   ingredient?: BaseProduct
-  ingredient_item?: any
-  ingredient_base_product?: BaseProduct
+  ingredient_item?: any | null
+  ingredient_base_product?: BaseProduct | null
   total_cost?: number
   is_temporary?: boolean
+  is_editing?: boolean
+  edit_mode?: boolean
+  is_modified?: boolean
 }
 
 interface Props {
@@ -816,7 +820,73 @@ const handleSubmit = async () => {
     return
   }
 
-  // Enhanced duplicate check including both local and potentially saved compositions
+  // Check if we're editing an existing composition
+  const editingIndex = existingCompositions.value.findIndex(comp => comp.is_editing === true)
+  
+  if (editingIndex > -1) {
+    // We're editing an existing composition
+    const editingComposition = existingCompositions.value[editingIndex]
+    
+    // For edit mode, check duplicate only against OTHER compositions (exclude the one being edited)
+    const isDuplicateEdit = existingCompositions.value.some(comp => {
+      // Skip the composition being edited
+      if (comp.is_editing === true) return false
+      
+      if (form.ingredient_item_id && comp.ingredient_item_id === form.ingredient_item_id) {
+        return true
+      }
+      if (form.ingredient_base_product_id && comp.ingredient_base_product_id === form.ingredient_base_product_id) {
+        return true
+      }
+      return false
+    })
+
+    if (isDuplicateEdit) {
+      const ingredientName = form.ingredient_item_id 
+        ? selectedIngredient.value?.name 
+        : selectedIngredient.value?.name
+      errors.value = { 
+        general: `Item "${ingredientName || 'yang dipilih'}" sudah ada dalam daftar komposisi. Silakan pilih item yang berbeda.` 
+      }
+      return
+    }
+    
+    // Update the existing composition in place
+    editingComposition.quantity = Number(form.quantity)
+    editingComposition.notes = form.notes || null
+    editingComposition.is_active = form.is_active
+    editingComposition.is_critical = form.is_critical
+    
+    // Update ingredient if changed
+    if (form.ingredient_item_id > 0) {
+      editingComposition.ingredient_item_id = Number(form.ingredient_item_id)
+      editingComposition.ingredient_base_product_id = null
+      editingComposition.ingredient_item = selectedIngredient.value
+      editingComposition.ingredient_base_product = null
+    } else if (form.ingredient_base_product_id > 0) {
+      editingComposition.ingredient_base_product_id = Number(form.ingredient_base_product_id)
+      editingComposition.ingredient_item_id = null
+      editingComposition.ingredient_base_product = selectedIngredient.value
+      editingComposition.ingredient_item = null
+    }
+    
+    // Mark as modified for saving
+    editingComposition.is_modified = true
+    editingComposition.is_editing = false
+    editingComposition.edit_mode = false
+    
+    // Reset form
+    form.ingredient_base_product_id = 0
+    form.ingredient_item_id = 0
+    form.quantity = 0
+    form.notes = ''
+    form.is_critical = false
+    selectedIngredient.value = null
+    
+    return
+  }
+
+  // Enhanced duplicate check for new items only
   const isDuplicate = existingCompositions.value.some(comp => {
     if (form.ingredient_item_id && comp.ingredient_item_id === form.ingredient_item_id) {
       return true
@@ -903,9 +973,16 @@ const editComposition = async (composition: Composition) => {
     selectedIngredient.value = composition.ingredient_base_product
   }
   
-  // Remove the composition temporarily so it can be re-added after editing
-  // Note: For non-temporary items, this will delete from database
-  await removeComposition(composition)
+  // Mark this composition for update instead of removing it
+  const existingIndex = existingCompositions.value.findIndex(
+    c => (c.id_base_product_composition || c.id) === (composition.id_base_product_composition || composition.id)
+  )
+  
+  if (existingIndex > -1) {
+    // Mark existing composition as being edited (don't remove it yet)
+    existingCompositions.value[existingIndex].is_editing = true
+    existingCompositions.value[existingIndex].edit_mode = true
+  }
   
   // Clear errors
   errors.value = {}
@@ -933,7 +1010,7 @@ const removeComposition = async (composition: Composition) => {
       
       // Gunakan pola yang sama seperti di purchases-management.vue
       const token = getAuthToken()
-      const headers = {
+      const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       }
@@ -977,19 +1054,67 @@ const saveAllCompositions = async () => {
   let errorMessages: string[] = []
 
   try {
-    // Save all temporary/unsaved compositions
+    // Process new compositions to save
     const compositionsToSave = existingCompositions.value.filter(comp => 
       comp.is_temporary && comp.base_product_id && comp.quantity > 0
     )
     
+    // Process existing compositions that have been modified
+    const compositionsToUpdate = existingCompositions.value.filter(comp =>
+      comp.is_modified && !comp.is_temporary && comp.id_base_product_composition
+    )
     
-    if (compositionsToSave.length === 0) {
+    console.log('Compositions to save (new):', compositionsToSave.length)
+    console.log('Compositions to update:', compositionsToUpdate.length)
+    
+    if (compositionsToSave.length === 0 && compositionsToUpdate.length === 0) {
       return
     }
     
+    // First, handle updates for existing compositions
+    for (const composition of compositionsToUpdate) {
+      try {
+        const updatePayload: any = {
+          base_product_id: Number(composition.base_product_id),
+          quantity: Number(composition.quantity),
+          is_active: Boolean(composition.is_active),
+          is_critical: Boolean(composition.is_critical),
+          notes: composition.notes || null
+        }
+
+        // Handle ingredient fields
+        if (composition.ingredient_item_id && Number(composition.ingredient_item_id) > 0) {
+          updatePayload.ingredient_item_id = Number(composition.ingredient_item_id)
+        }
+        if (composition.ingredient_base_product_id && Number(composition.ingredient_base_product_id) > 0) {
+          updatePayload.ingredient_base_product_id = Number(composition.ingredient_base_product_id)
+        }
+
+        console.log('Updating composition ID:', composition.id_base_product_composition)
+        
+        const response = await axios.put(`/api/base-product-compositions/${composition.id_base_product_composition}`, updatePayload, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        })
+        
+        console.log('Update response:', response.data)
+        successCount++
+        
+        // Clear the modification flag
+        composition.is_modified = false
+        
+      } catch (error: any) {
+        console.error('Error updating composition:', error)
+        const ingredientName = getIngredientName(composition)
+        errorMessages.push(`${ingredientName}: ${error.response?.data?.message || 'Update failed'}`)
+      }
+    }
+    
+    // Then handle new compositions to save
     for (let i = compositionsToSave.length - 1; i >= 0; i--) {
       const currentComposition = compositionsToSave[i]
-      
       
       // Validate composition data before sending
       if (!currentComposition.base_product_id || currentComposition.quantity <= 0) {
@@ -1024,24 +1149,12 @@ const saveAllCompositions = async () => {
           continue
         }
 
-
-        // Debug: Log payload before sending
-
-        // Add temporary request interceptor to debug
-        const requestInterceptor = axios.interceptors.request.use(config => {
-          return config
-        })
-
         const response = await axios.post('/api/base-product-compositions', savePayload, {
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           }
         })
-        
-        // Remove the interceptor
-        axios.interceptors.request.eject(requestInterceptor)
-        
         
         successCount++
         
@@ -1085,6 +1198,10 @@ const saveAllCompositions = async () => {
       }
       // Reload to refresh the list
       await loadExistingCompositions()
+    } else if (successCount === 0 && errorMessages.length === 0) {
+      // No changes to save
+      emit('save', { success: true })
+      emit('close')
     } else {
       // All failed
       errors.value = { 

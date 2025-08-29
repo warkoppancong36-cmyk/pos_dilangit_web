@@ -174,7 +174,9 @@ const handleFiltersUpdate = (newFilters: any) => {
 
 const handleSearch = (query: string) => {
   // Update search filter and fetch
+  console.log('Search query received:', query)
   filters.search = query
+  console.log('Filters after search update:', filters)
   fetchProductsList()
 }
 
