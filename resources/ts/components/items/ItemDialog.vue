@@ -225,46 +225,6 @@ const updatePropertyKey = (oldKey: string, newKey: string) => {
               </div>
             </VCol>
 
-            <!-- Service Type -->
-            <VCol cols="12">
-              <h6 class="text-h6 mb-4 d-flex align-center gap-2">
-                <VIcon
-                  icon="tabler-truck-delivery"
-                  size="20"
-                  class="coffee-icon"
-                />
-                Jenis Layanan
-              </h6>
-            </VCol>
-
-            <VCol cols="12" md="6">
-              <div class="d-flex align-center">
-                <VSwitch
-                  v-model="formData.is_delivery"
-                  color="primary"
-                  class="me-3"
-                />
-                <VLabel class="text-body-1">
-                  <VIcon icon="tabler-truck-delivery" class="me-2" size="18" />
-                  Tersedia untuk Delivery
-                </VLabel>
-              </div>
-            </VCol>
-
-            <VCol cols="12" md="6">
-              <div class="d-flex align-center">
-                <VSwitch
-                  v-model="formData.is_takeaway"
-                  color="secondary"
-                  class="me-3"
-                />
-                <VLabel class="text-body-1">
-                  <VIcon icon="tabler-package" class="me-2" size="18" />
-                  Tersedia untuk Take Away
-                </VLabel>
-              </div>
-            </VCol>
-
             <!-- Station Availability -->
             <VCol cols="12">
               <h6 class="text-h6 mb-4 d-flex align-center gap-2">

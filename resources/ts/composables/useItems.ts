@@ -17,8 +17,6 @@ export interface Item {
   storage_location?: string
   expiry_date?: string
   active: boolean
-  is_delivery?: boolean
-  is_takeaway?: boolean
   available_in_kitchen?: boolean
   available_in_bar?: boolean
   properties?: Record<string, any>
@@ -55,8 +53,6 @@ export interface ItemFormData {
   storage_location?: string
   expiry_date?: string
   active?: boolean
-  is_delivery?: boolean
-  is_takeaway?: boolean
   available_in_kitchen?: boolean
   available_in_bar?: boolean
   properties?: Record<string, any>
@@ -67,10 +63,7 @@ export interface ItemFilters {
   active?: string | boolean
   unit?: string
   stock_status?: string
-  expiring_days?: number
-  show_expired?: boolean
-  available_in_kitchen?: boolean
-  available_in_bar?: boolean
+  station?: string
 }
 
 export interface ItemStats {
@@ -119,14 +112,15 @@ const totalItems = ref(0)
 const itemsPerPage = ref(15)
 
 // Filters
-const filters = reactive<ItemFilters>({
+const initialFilters: ItemFilters = {
   search: '',
-  active: 'all',
+  active: true,
   unit: '',
-  stock_status: 'all',
-  expiring_days: undefined,
-  show_expired: false
-})
+  stock_status: '',
+  station: 'all',
+}
+
+const filters = reactive<ItemFilters>({ ...initialFilters })
 
 // Messages
 const errorMessage = ref('')
@@ -144,8 +138,6 @@ const formData = reactive<ItemFormData>({
   storage_location: '',
   expiry_date: undefined,
   active: true,
-  is_delivery: false,
-  is_takeaway: false,
   available_in_kitchen: true,
   available_in_bar: true,
   properties: {}
@@ -337,8 +329,8 @@ const resetForm = () => {
     storage_location: '',
     expiry_date: undefined,
     active: true,
-    is_delivery: false,
-    is_takeaway: false,
+    available_in_kitchen: true,
+    available_in_bar: true,
     properties: {}
   })
 }
@@ -354,8 +346,6 @@ const fillFormData = (item: Item) => {
     storage_location: item.storage_location || '',
     expiry_date: item.expiry_date,
     active: item.active,
-    is_delivery: item.is_delivery || false,
-    is_takeaway: item.is_takeaway || false,
     available_in_kitchen: item.available_in_kitchen ?? true,
     available_in_bar: item.available_in_bar ?? true,
     properties: item.properties || {}
@@ -395,11 +385,9 @@ const clearFilters = () => {
   Object.assign(filters, {
     search: '',
     active: 'all',
-    supplier_id: undefined,
     unit: '',
     stock_status: 'all',
-    expiring_days: undefined,
-    show_expired: false
+    station: 'all',
   })
   handleFiltersUpdate()
 }

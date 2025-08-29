@@ -60,24 +60,22 @@ class ItemController extends Controller
                 $query->search($request->search);
             }
 
-            // Filter expiring items
-            if ($request->has('expiring_days')) {
-                $query->expiringSoon((int) $request->expiring_days);
-            }
-
-            // Filter expired items
-            if ($request->has('show_expired') && $request->show_expired === 'true') {
-                $query->expired();
-            }
-
-            // Filter by kitchen availability
-            if ($request->has('available_in_kitchen') && $request->available_in_kitchen === 'true') {
-                $query->where('available_in_kitchen', true);
-            }
-
-            // Filter by bar availability
-            if ($request->has('available_in_bar') && $request->available_in_bar === 'true') {
-                $query->where('available_in_bar', true);
+            // Station filtering
+            if ($request->has('station') && $request->station !== 'all') {
+                switch ($request->station) {
+                    case 'kitchen':
+                        $query->where('available_in_kitchen', true)
+                              ->where('available_in_bar', false);
+                        break;
+                    case 'bar':
+                        $query->where('available_in_kitchen', false)
+                              ->where('available_in_bar', true);
+                        break;
+                    case 'both':
+                        $query->where('available_in_kitchen', true)
+                              ->where('available_in_bar', true);
+                        break;
+                }
             }
 
             // Handle pagination - support 'all' parameter to get all items

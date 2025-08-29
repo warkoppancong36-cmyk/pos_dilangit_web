@@ -31,6 +31,8 @@ export interface InventoryItem {
     description?: string
     unit: string
     cost_per_unit: string
+    available_in_kitchen?: boolean
+    available_in_bar?: boolean
   }
 }
 
@@ -66,9 +68,7 @@ export interface InventoryFilters {
   stock_status?: 'all' | 'in_stock' | 'low_stock' | 'out_of_stock' | 'overstock'
   category_id?: number
   supplier_id?: number
-  available_in_kitchen?: boolean
-  available_in_bar?: boolean
-  station_mode?: 'inclusive' | 'exclusive'
+  station?: string
   sort_by?: string
   sort_order?: 'asc' | 'desc'
   per_page?: number
@@ -148,9 +148,7 @@ export const useInventory = () => {
     stock_status: 'all',
     category_id: undefined,
     supplier_id: undefined,
-    available_in_kitchen: false,
-    available_in_bar: false,
-    station_mode: 'inclusive',
+    station: 'all',
     sort_by: 'current_stock',
     sort_order: 'asc'
   })
@@ -240,23 +238,9 @@ export const useInventory = () => {
         per_page: itemsPerPage.value
       }
 
-      // Remove empty filters but send station filters only when true
+      // Remove empty filters
       Object.keys(params).forEach(key => {
         const value = params[key as keyof typeof params]
-        // For station filters, only send if true, and include station_mode if any station filter is active
-        if (key === 'available_in_kitchen' || key === 'available_in_bar') {
-          if (value !== true) {
-            delete params[key as keyof typeof params]
-          }
-          return
-        }
-        if (key === 'station_mode') {
-          // Only send station_mode if at least one station filter is active
-          if (!params.available_in_kitchen && !params.available_in_bar) {
-            delete params[key as keyof typeof params]
-          }
-          return
-        }
         if (value === '' || value === undefined || value === null || value === 'all') {
           delete params[key as keyof typeof params]
         }

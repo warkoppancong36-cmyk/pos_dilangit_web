@@ -40,7 +40,6 @@ const headers = [
   { title: 'LOKASI', key: 'storage_location', align: 'center' as const },
   { title: 'STATUS', key: 'active', align: 'center' as const },
   { title: 'STATION', key: 'station_availability', align: 'center' as const },
-  { title: 'JENIS LAYANAN', key: 'service_type', align: 'center' as const },
   { title: 'AKSI', key: 'actions', align: 'center' as const, sortable: false }
 ]
 
@@ -219,32 +218,6 @@ const getStockProgressColor = (percentage: number) => {
             Bar
           </VChip>
           <span v-if="!item.available_in_kitchen && !item.available_in_bar" class="text-caption text-medium-emphasis">
-            Tidak tersedia
-          </span>
-        </div>
-      </template>
-
-      <template #item.service_type="{ item }">
-        <div class="d-flex flex-column gap-1">
-          <VChip
-            v-if="item.is_delivery"
-            color="primary"
-            variant="tonal"
-            size="x-small"
-            prepend-icon="tabler-truck-delivery"
-          >
-            Delivery
-          </VChip>
-          <VChip
-            v-if="item.is_takeaway"
-            color="secondary"
-            variant="tonal"
-            size="x-small"
-            prepend-icon="tabler-package"
-          >
-            Take Away
-          </VChip>
-          <span v-if="!item.is_delivery && !item.is_takeaway" class="text-caption text-medium-emphasis">
             Tidak tersedia
           </span>
         </div>

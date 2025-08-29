@@ -149,24 +149,19 @@ const currentLoading = computed(() => {
 
 // Helper function for station mode description
 const getStationModeDescription = () => {
-  const kitchen = filters.value.available_in_kitchen
-  const bar = filters.value.available_in_bar
-  const mode = filters.value.station_mode
+  const station = filters.value.station
   
-  if (kitchen && bar) {
-    return mode === 'exclusive' 
-      ? 'Menampilkan item yang tersedia di Kitchen DAN Bar'
-      : 'Menampilkan item yang tersedia di Kitchen ATAU Bar'
-  } else if (kitchen) {
-    return mode === 'exclusive'
-      ? 'Menampilkan item yang HANYA tersedia di Kitchen (tidak di Bar)'
-      : 'Menampilkan semua item yang tersedia di Kitchen (termasuk yang juga di Bar)'
-  } else if (bar) {
-    return mode === 'exclusive'
-      ? 'Menampilkan item yang HANYA tersedia di Bar (tidak di Kitchen)'
-      : 'Menampilkan semua item yang tersedia di Bar (termasuk yang juga di Kitchen)'
+  switch (station) {
+    case 'kitchen':
+      return 'Menampilkan item yang hanya tersedia di Kitchen'
+    case 'bar':
+      return 'Menampilkan item yang hanya tersedia di Bar'
+    case 'both':
+      return 'Menampilkan item yang tersedia di Kitchen & Bar'
+    case 'all':
+    default:
+      return 'Menampilkan item dari semua station'
   }
-  return ''
 }
 
 onMounted(() => {
@@ -274,19 +269,9 @@ const fetchAllInventoryForExport = async () => {
       page: '1',
       // Include current filters but with unlimited results
       search: filters.value.search || '',
-      stock_status: filters.value.stock_status || 'all'
+      stock_status: filters.value.stock_status || 'all',
+      station: filters.value.station || 'all'
     })
-
-    // Add station availability filters - only when checked (true)
-    if (filters.value.available_in_kitchen) {
-      params.append('available_in_kitchen', 'true')
-    }
-    if (filters.value.available_in_bar) {
-      params.append('available_in_bar', 'true')
-    }
-    if (filters.value.available_in_kitchen || filters.value.available_in_bar) {
-      params.append('station_mode', filters.value.station_mode || 'inclusive')
-    }
 
     console.log('📝 Request params:', params.toString())
 
@@ -444,11 +429,13 @@ const exportToExcel = async () => {
     if (filters.value.stock_status && filters.value.stock_status !== 'all') {
       filterInfo.push(`Status: ${filters.value.stock_status}`)
     }
-    if (filters.value.available_in_kitchen) {
-      filterInfo.push('Kitchen: Ya')
-    }
-    if (filters.value.available_in_bar) {
-      filterInfo.push('Bar: Ya')
+    if (filters.value.station && filters.value.station !== 'all') {
+      const stationLabels = {
+        kitchen: 'Kitchen Only',
+        bar: 'Bar Only',
+        both: 'Kitchen & Bar'
+      }
+      filterInfo.push(`Station: ${stationLabels[filters.value.station as keyof typeof stationLabels] || filters.value.station}`)
     }
     
     const titleData = [
@@ -1208,7 +1195,7 @@ watch(totalItems, (newValue, oldValue) => {
           <VCardText>
             <!-- Filter Mode Info -->
             <VAlert
-              v-if="filters.available_in_kitchen || filters.available_in_bar"
+              v-if="filters.station !== 'all'"
               type="info"
               variant="tonal"
               class="mb-4"
@@ -1218,7 +1205,6 @@ watch(totalItems, (newValue, oldValue) => {
                 <div class="d-flex align-center gap-2">
                   <VIcon icon="tabler-info-circle" size="16" />
                   <span class="text-caption">
-                    <strong>{{ filters.station_mode === 'exclusive' ? 'Mode Eksklusif' : 'Mode Inclusive' }}:</strong>
                     {{ getStationModeDescription() }}
                   </span>
                 </div>
@@ -1255,96 +1241,33 @@ watch(totalItems, (newValue, oldValue) => {
                 />
               </VCol>
 
-              <!-- Station Filters Row -->
-              <VCol cols="12">
-                <VDivider class="my-2" />
-                <div class="text-subtitle-2 text-medium-emphasis mb-3 d-flex align-center gap-2">
-                  <VIcon icon="tabler-home" size="16" />
-                  Filter Station Ketersediaan
-                </div>
-                <VRow>
-                  <VCol
-                    cols="12"
-                    md="2"
-                    class="d-flex align-center"
-                  >
-                    <VCheckbox
-                      v-model="filters.available_in_kitchen"
-                      label="Kitchen"
-                      color="warning"
-                      hide-details
-                      @update:model-value="handleFiltersUpdate({ available_in_kitchen: $event })"
-                    />
-                  </VCol>
-
-                  <VCol
-                    cols="12"
-                    md="2"
-                    class="d-flex align-center"
-                  >
-                    <VCheckbox
-                      v-model="filters.available_in_bar"
-                      label="Bar"
-                      color="info"
-                      hide-details
-                      @update:model-value="handleFiltersUpdate({ available_in_bar: $event })"
-                    />
-                  </VCol>
-
-                  <!-- Station Filter Mode -->
-                  <VCol
-                    cols="12"
-                    md="3"
-                    v-if="filters.available_in_kitchen || filters.available_in_bar"
-                  >
-                    <VSelect
-                      v-model="filters.station_mode"
-                      :items="[
-                        { title: 'Semua yang tersedia (Inclusive)', value: 'inclusive' },
-                        { title: 'Hanya eksklusif (Exclusive)', value: 'exclusive' }
-                      ]"
-                      label="Mode Filter"
-                      variant="outlined"
-                      density="compact"
-                      hide-details
-                      @update:model-value="handleFiltersUpdate({ station_mode: $event })"
-                    />
-                  </VCol>
-
-                  <VCol
-                    cols="12"
-                    md="5"
-                    class="d-flex align-center gap-2"
-                    v-if="filters.available_in_kitchen || filters.available_in_bar"
-                  >
-                    <VBtn
-                      variant="outlined"
-                      prepend-icon="tabler-refresh"
-                      size="small"
-                      @click="fetchInventoryList(); fetchStats(); fetchLowStockAlerts()"
-                    >
-                      Refresh
-                    </VBtn>
-                    
-                    <VBtn
-                      variant="outlined"
-                      color="warning"
-                      prepend-icon="tabler-filter-off"
-                      size="small"
-                      @click="handleFiltersUpdate({ search: '', stock_status: 'all', available_in_kitchen: false, available_in_bar: false, station_mode: 'inclusive' })"
-                    >
-                      Clear
-                    </VBtn>
-                  </VCol>
-                </VRow>
-              </VCol>
-
-              <!-- Action buttons when no station filters -->
+              <!-- Station Filter -->
               <VCol
                 cols="12"
-                md="6"
+                md="3"
+              >
+                <VSelect
+                  v-model="filters.station"
+                  :items="[
+                    { title: 'Semua station', value: 'all' },
+                    { title: 'Kitchen Only', value: 'kitchen' },
+                    { title: 'Bar Only', value: 'bar' },
+                    { title: 'Kitchen & Bar', value: 'both' }
+                  ]"
+                  label="Station"
+                  variant="outlined"
+                  density="compact"
+                  prepend-inner-icon="tabler-building-store"
+                  hide-details
+                  @update:model-value="handleFiltersUpdate({ station: $event })"
+                />
+              </VCol>
+
+              <!-- Action buttons -->
+              <VCol
+                cols="12"
+                md="3"
                 class="d-flex align-center gap-2"
-                v-if="!filters.available_in_kitchen && !filters.available_in_bar"
               >
                 <VBtn
                   variant="outlined"
@@ -1355,11 +1278,11 @@ watch(totalItems, (newValue, oldValue) => {
                 </VBtn>
                 
                 <VBtn
-                  v-if="filters.search || filters.stock_status !== 'all'"
+                  v-if="filters.search || filters.stock_status !== 'all' || filters.station !== 'all'"
                   variant="outlined"
                   color="warning"
                   prepend-icon="tabler-filter-off"
-                  @click="handleFiltersUpdate({ search: '', stock_status: 'all', available_in_kitchen: false, available_in_bar: false, station_mode: 'inclusive' })"
+                  @click="handleFiltersUpdate({ search: '', stock_status: 'all', station: 'all' })"
                 >
                   Clear
                 </VBtn>
@@ -2517,27 +2440,17 @@ watch(totalItems, (newValue, oldValue) => {
               </VChip>
               
               <VChip
-                v-if="filters.available_in_kitchen"
-                color="warning"
+                v-if="filters.station && filters.station !== 'all'"
+                color="primary"
                 variant="tonal"
                 size="small"
-                prepend-icon="tabler-chef-hat"
+                prepend-icon="tabler-building-store"
               >
-                Kitchen: Ya
+                Station: {{ filters.station === 'kitchen' ? 'Kitchen Only' : filters.station === 'bar' ? 'Bar Only' : 'Kitchen & Bar' }}
               </VChip>
               
               <VChip
-                v-if="filters.available_in_bar"
-                color="info"
-                variant="tonal"
-                size="small"
-                prepend-icon="tabler-glass-cocktail"
-              >
-                Bar: Ya
-              </VChip>
-              
-              <VChip
-                v-if="!filters.search && (!filters.stock_status || filters.stock_status === 'all') && !filters.available_in_kitchen && !filters.available_in_bar"
+                v-if="!filters.search && (!filters.stock_status || filters.stock_status === 'all') && (!filters.station || filters.station === 'all')"
                 color="success"
                 variant="tonal"
                 size="small"
@@ -2623,27 +2536,17 @@ watch(totalItems, (newValue, oldValue) => {
               </VChip>
               
               <VChip
-                v-if="filters.available_in_kitchen"
-                color="warning"
+                v-if="filters.station && filters.station !== 'all'"
+                color="primary"
                 variant="tonal"
                 size="small"
-                prepend-icon="tabler-chef-hat"
+                prepend-icon="tabler-building-store"
               >
-                Kitchen: Ya
+                Station: {{ filters.station === 'kitchen' ? 'Kitchen Only' : filters.station === 'bar' ? 'Bar Only' : 'Kitchen & Bar' }}
               </VChip>
               
               <VChip
-                v-if="filters.available_in_bar"
-                color="info"
-                variant="tonal"
-                size="small"
-                prepend-icon="tabler-glass-cocktail"
-              >
-                Bar: Ya
-              </VChip>
-              
-              <VChip
-                v-if="!filters.search && (!filters.stock_status || filters.stock_status === 'all') && !filters.available_in_kitchen && !filters.available_in_bar"
+                v-if="!filters.search && (!filters.stock_status || filters.stock_status === 'all') && (!filters.station || filters.station === 'all')"
                 color="success"
                 variant="tonal"
                 size="small"
