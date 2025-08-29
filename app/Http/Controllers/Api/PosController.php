@@ -1142,6 +1142,7 @@ class PosController extends Controller
             'tunai' => 'cash',  // Flutter app sends 'tunai' but we need 'cash'
             'ewallet' => 'gopay', // Flutter app sends 'ewallet' map to 'gopay' (default e-wallet)
             'card' => 'credit_card',
+            'kartu' => 'credit_card', // Indonesian word for card
             'digital_wallet' => 'gopay', // default digital wallet
             // Add other mappings as needed
         ];
