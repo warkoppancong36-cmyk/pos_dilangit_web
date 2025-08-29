@@ -28,10 +28,10 @@ const statusOptions = [
 
 // Stock status options  
 const stockOptions = [
-  { title: 'all', value: 'all' },
-  { title: 'in-stock', value: 'in-stock' },
-  { title: 'low-stock', value: 'low-stock' },
-  { title: 'out-of-stock', value: 'out-of-stock' }
+  { title: 'Semua Status', value: '' },
+  { title: 'Stok Tersedia', value: 'in_stock' },
+  { title: 'Stok Menipis', value: 'low_stock' },
+  { title: 'Stok Habis', value: 'out_of_stock' }
 ]
 
 // Station options
@@ -52,7 +52,7 @@ const resetFilters = () => {
     search: '',
     active: 'all',
     unit: '',
-    stock_status: 'all',
+    stock_status: '',
     station: 'all',
   }
   onFilterChange()
@@ -63,7 +63,7 @@ const hasActiveFilters = computed(() => {
     localFilters.value.search ||
     localFilters.value.active !== 'all' ||
     localFilters.value.unit ||
-    localFilters.value.stock_status !== 'all' ||
+    localFilters.value.stock_status ||
     localFilters.value.station !== 'all'
   )
 })

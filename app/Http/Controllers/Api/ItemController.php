@@ -33,7 +33,8 @@ class ItemController extends Controller
             }
 
             // Filter by stock status
-            if ($request->has('stock_status')) {
+            if ($request->has('stock_status') && !empty($request->stock_status) && $request->stock_status !== '') {
+                \Log::info('Applying stock_status filter:', ['stock_status' => $request->stock_status]);
                 switch ($request->stock_status) {
                     case 'low_stock':
                         $query->whereHas('inventory', function ($q) {
@@ -51,6 +52,8 @@ class ItemController extends Controller
                               ->whereRaw('current_stock > reorder_level');
                         });
                         break;
+                    default:
+                        \Log::info('Unknown stock_status value:', ['stock_status' => $request->stock_status]);
                 }
             }
 

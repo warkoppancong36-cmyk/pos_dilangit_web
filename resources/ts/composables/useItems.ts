@@ -177,9 +177,13 @@ const fetchItemsList = async () => {
       ...filters
     }
 
-    // Clean up undefined values properly
+    // Clean up undefined values and 'all' values
     Object.keys(params).forEach(key => {
-      if (params[key] === undefined || params[key] === '' || params[key] === 'all') {
+      if (params[key] === undefined || params[key] === 'all') {
+        delete params[key]
+      }
+      // Don't send empty strings for most filters, except search which can be empty
+      if (params[key] === '' && key !== 'search') {
         delete params[key]
       }
     })
