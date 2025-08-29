@@ -116,18 +116,6 @@
               clearable
             />
           </VCol>
-          <VCol cols="12" md="3">
-            <VSelect
-              v-model="filters.item_id"
-              label="Item/Produk"
-              :items="items"
-              item-title="name"
-              item-value="id_item"
-              variant="outlined"
-              density="compact"
-              clearable
-            />
-          </VCol>
         </VRow>
         <VRow>
           <VCol cols="12" md="3">
@@ -201,23 +189,21 @@
         item-value="id_purchase"
         @update:options="loadPurchases"
       >
-        <template #item.purchase_number="{ item }">
-          <div class="d-flex align-center">
+        <template #item.purchase_info="{ item }">
+          <div class="d-flex flex-column">
             <VBtn
               variant="text"
               color="primary"
               size="small"
+              class="justify-start pa-0"
               @click="viewPurchase(item)"
             >
               {{ item.purchase_number }}
             </VBtn>
-          </div>
-        </template>
-
-        <template #item.supplier.name="{ item }">
-          <div>
-            <p class="mb-0 font-weight-medium">{{ item.supplier?.name || '-' }}</p>
-            <p class="text-caption text-medium-emphasis mb-0">{{ item.supplier?.phone || '-' }}</p>
+            <div class="mt-1">
+              <p class="mb-0 font-weight-medium text-body-2">{{ item.supplier?.name || '-' }}</p>
+              <p class="text-caption text-medium-emphasis mb-0">{{ item.supplier?.phone || '-' }}</p>
+            </div>
           </div>
         </template>
 
@@ -466,7 +452,6 @@ import { onMounted, ref, watch } from 'vue'
 // Data
 const purchases = ref<any[]>([])
 const suppliers = ref<any[]>([])
-const items = ref<any[]>([])
 const statistics = ref<any>({})
 const loading = ref(false)
 const page = ref(1)
@@ -495,15 +480,13 @@ const filters = ref({
   search: '',
   status: '',
   supplier_id: '',
-  item_id: '',
   start_date: '',
   end_date: ''
 })
 
 // Table headers
 const headers = [
-  { title: 'Purchase Number', key: 'purchase_number', sortable: true },
-  { title: 'Supplier', key: 'supplier.name', sortable: false },
+  { title: 'Purchase & Supplier', key: 'purchase_info', sortable: false },
   { title: 'Items', key: 'items', sortable: false },
   { title: 'Tanggal', key: 'purchase_date', sortable: true },
   { title: 'Status', key: 'status', sortable: true },
@@ -590,28 +573,6 @@ const loadSuppliers = async () => {
   }
 }
 
-const loadItems = async () => {
-  try {
-    const token = getAuthToken()
-    const headers = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    }
-    
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
-
-    const response = await axios.get('/api/items', { 
-      headers,
-      params: { per_page: 'all' } // Get all items untuk dropdown
-    })
-    items.value = response.data.data || []
-  } catch (error) {
-    console.error('Error loading items:', error)
-  }
-}
-
 const loadStatistics = async () => {
   try {
     const token = getAuthToken()
@@ -636,7 +597,6 @@ const clearFilters = () => {
     search: '',
     status: '',
     supplier_id: '',
-    item_id: '',
     start_date: '',
     end_date: ''
   }
@@ -857,7 +817,6 @@ watch(filters, () => {
 onMounted(() => {
   loadPurchases()
   loadSuppliers()
-  loadItems()
   loadStatistics()
 })
 </script>
