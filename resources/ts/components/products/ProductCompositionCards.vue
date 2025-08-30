@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, defineEmits, ref } from 'vue'
+import { computed, defineEmits, ref, watch } from 'vue'
 import { formatRupiah } from '@/@core/utils/formatters'
 import ProductCompositionDialog from './ProductCompositionDialog.vue'
+import ProductSelectionList from './ProductSelectionList.vue'
 
 interface ProductItem {
   id_product_item: string
@@ -43,9 +44,14 @@ const emit = defineEmits<Emits>()
 // Dialog state
 const compositionDialog = ref(false)
 const detailDialog = ref(false)
+const createCompositionDialog = ref(false)
 const selectedProduct = ref(null)
 const selectedProductItems = ref([])
 const selectedProductForDetail = ref(null)
+
+// Pagination state
+const currentPage = ref(1)
+const itemsPerPage = ref(12)
 
 // Filter state
 const filters = ref({
@@ -80,15 +86,29 @@ const openCompositionDialog = (product: any) => {
   compositionDialog.value = true
 }
 
+// Open create composition dialog (select product first)
+const openCreateCompositionDialog = () => {
+  createCompositionDialog.value = true
+}
+
+// Handle product selection for new composition
+const handleProductSelect = (product: any) => {
+  selectedProduct.value = product
+  selectedProductItems.value = []
+  createCompositionDialog.value = false
+  compositionDialog.value = true
+}
+
+// Handle composition save and refresh
+const handleCompositionSave = () => {
+  emit('refresh')
+  resetPage() // Reset to first page after refresh
+}
+
 // Open detail dialog
 const openDetailDialog = (product: any) => {
   selectedProductForDetail.value = product
   detailDialog.value = true
-}
-
-// Handle composition save
-const handleCompositionSave = (data: any) => {
-  emit('refresh')
 }
 
 // Clear all filters
@@ -199,6 +219,14 @@ const compositionData = computed(() => {
   return filteredData
 })
 
+// Pagination computed properties
+const totalPages = computed(() => Math.ceil(compositionData.value.length / itemsPerPage.value))
+const paginatedData = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  const end = start + itemsPerPage.value
+  return compositionData.value.slice(start, end)
+})
+
 const getStockStatus = (product: any) => {
   // Cek stok dari semua item dalam komposisi
   let hasOutOfStock = false
@@ -263,6 +291,21 @@ const getItemStockClass = (item: any) => {
 const getItemsText = (totalItems: number) => {
   return `Item Komposisi (${totalItems})`
 }
+
+// Pagination functions
+const onPageChange = (page: number) => {
+  currentPage.value = page
+}
+
+// Reset page when filters change
+const resetPage = () => {
+  currentPage.value = 1
+}
+
+// Watch for filter changes to reset page
+watch(() => [filters.value.search, filters.value.stockStatus, filters.value.criticalOnly, filters.value.sortBy], () => {
+  resetPage()
+})
 </script>
 
 <template>
@@ -276,14 +319,23 @@ const getItemsText = (totalItems: number) => {
             Kelola komposisi bahan untuk setiap produk
           </p>
         </div>
-        <VBtn
-          variant="outlined"
-          prepend-icon="mdi-refresh"
-          @click="emit('refresh')"
-          :loading="loading"
-        >
-          Refresh
-        </VBtn>
+        <div class="d-flex gap-2">
+          <VBtn
+            color="primary"
+            prepend-icon="mdi-plus"
+            @click="openCreateCompositionDialog"
+          >
+            Tambah Komposisi
+          </VBtn>
+          <VBtn
+            variant="outlined"
+            prepend-icon="mdi-refresh"
+            @click="emit('refresh')"
+            :loading="loading"
+          >
+            Refresh
+          </VBtn>
+        </div>
       </VCardTitle>
     </VCard>
 
@@ -411,6 +463,7 @@ const getItemsText = (totalItems: number) => {
         color="primary"
         size="large"
         prepend-icon="mdi-plus"
+        @click="openCreateCompositionDialog"
       >
         Buat Komposisi Pertama
       </VBtn>
@@ -419,7 +472,7 @@ const getItemsText = (totalItems: number) => {
     <!-- Composition Cards Grid -->
     <VRow v-else>
       <VCol
-        v-for="product in compositionData"
+        v-for="product in paginatedData"
         :key="product.id_product"
         cols="12"
         md="6"
@@ -547,6 +600,25 @@ const getItemsText = (totalItems: number) => {
         </VCard>
       </VCol>
     </VRow>
+
+    <!-- Pagination -->
+    <div v-if="compositionData.length > itemsPerPage" class="d-flex justify-center mt-6">
+      <VPagination
+        v-model="currentPage"
+        :length="totalPages"
+        :total-visible="$vuetify.display.smAndDown ? 5 : 7"
+        size="small"
+        @update:model-value="onPageChange"
+      />
+    </div>
+
+    <!-- Results Info -->
+    <div v-if="compositionData.length > 0" class="text-center mt-4">
+      <VChip variant="tonal" color="primary" size="small">
+        Menampilkan {{ ((currentPage - 1) * itemsPerPage) + 1 }}-{{ Math.min(currentPage * itemsPerPage, compositionData.length) }} 
+        dari {{ compositionData.length }} produk
+      </VChip>
+    </div>
 
     <!-- Composition Management Dialog -->
     <ProductCompositionDialog
@@ -826,6 +898,29 @@ const getItemsText = (totalItems: number) => {
           </VBtn>
           
         </VCardActions>
+      </VCard>
+    </VDialog>
+
+    <!-- Product Selection Dialog for Create Composition -->
+    <VDialog 
+      v-model="createCompositionDialog" 
+      max-width="600px"
+      persistent
+    >
+      <VCard>
+        <VCardTitle class="d-flex align-center justify-between pa-4">
+          <span class="text-h6">Pilih Produk untuk Komposisi</span>
+          <VBtn 
+            variant="text" 
+            icon="mdi-close" 
+            size="small"
+            @click="createCompositionDialog = false"
+          />
+        </VCardTitle>
+        
+        <VCardText class="pa-4">
+          <ProductSelectionList @select="handleProductSelect" />
+        </VCardText>
       </VCard>
     </VDialog>
   </div>

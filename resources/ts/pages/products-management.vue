@@ -124,7 +124,7 @@ const handleOpenCompositionDialog = async (product: any) => {
   try {
     await fetchProductItemsForComposition({
       page: 1,
-      per_page: 50,
+      per_page: 100,
       critical_only: false
     })
   } catch (error) {
@@ -153,7 +153,7 @@ const handleCompositionRefresh = async () => {
   // Refresh product items for composition
   await fetchProductItemsForComposition({
     page: 1,
-    per_page: 50,
+    per_page: 100,
     critical_only: false
   })
   
@@ -194,7 +194,7 @@ watch(activeTab, async (newTab) => {
   if (newTab === 'compositions') {
     await fetchProductItemsForComposition({
       page: 1,
-      per_page: 15,
+      per_page: 100,
       critical_only: false
     })
   }
@@ -205,6 +205,12 @@ onMounted(() => {
   fetchCategories()
   fetchStats()
   fetchAvailableItems()
+  // Fetch product items for composition tab
+  fetchProductItemsForComposition({
+    page: 1,
+    per_page: 100,
+    critical_only: false
+  })
 })
 </script>
 
