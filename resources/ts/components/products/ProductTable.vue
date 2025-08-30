@@ -199,28 +199,68 @@
 
       <!-- Station Availability -->
       <template #item.station_availability="{ item }">
-        <div class="d-flex flex-column gap-1">
-          <VChip
-            v-if="item.available_in_kitchen"
-            color="orange"
-            size="x-small"
-            variant="tonal"
-          >
-            <VIcon icon="tabler-tools-kitchen-2" size="12" class="me-1" />
-            Kitchen
-          </VChip>
-          <VChip
-            v-if="item.available_in_bar"
-            color="purple"
-            size="x-small"
-            variant="tonal"
-          >
-            <VIcon icon="tabler-glass-cocktail" size="12" class="me-1" />
-            Bar
-          </VChip>
-          <div v-if="!item.available_in_kitchen && !item.available_in_bar" class="text-caption text-medium-emphasis">
-            Tidak Tersedia
-          </div>
+        <div class="d-flex gap-2 align-center">
+          <!-- Kitchen Toggle -->
+          <VTooltip location="top">
+            <template #activator="{ props: tooltipProps }">
+              <VChip
+                v-bind="tooltipProps"
+                :color="item.available_in_kitchen ? 'success' : 'error'"
+                variant="flat"
+                size="small"
+                :class="[
+                  'station-chip cursor-pointer',
+                  { 'station-chip-loading': toggleLoading?.[item.id_product] }
+                ]"
+                @click="toggleKitchenAvailability(item)"
+                :loading="toggleLoading?.[item.id_product] || false"
+                :disabled="toggleLoading?.[item.id_product] || false"
+              >
+                <template #prepend>
+                  <VIcon 
+                    :icon="item.available_in_kitchen ? 'tabler-check' : 'tabler-x'" 
+                    size="14"
+                    color="white"
+                  />
+                </template>
+                <span style="color: white !important; font-weight: 600 !important;">
+                  Kitchen
+                </span>
+              </VChip>
+            </template>
+            <span>{{ item.available_in_kitchen ? 'Tersedia di Kitchen' : 'Tidak tersedia di Kitchen' }}</span>
+          </VTooltip>
+          
+          <!-- Bar Toggle -->
+          <VTooltip location="top">
+            <template #activator="{ props: tooltipProps }">
+              <VChip
+                v-bind="tooltipProps"
+                :color="item.available_in_bar ? 'success' : 'error'"
+                variant="flat"
+                size="small"
+                :class="[
+                  'station-chip cursor-pointer',
+                  { 'station-chip-loading': toggleLoading?.[item.id_product] }
+                ]"
+                @click="toggleBarAvailability(item)"
+                :loading="toggleLoading?.[item.id_product] || false"
+                :disabled="toggleLoading?.[item.id_product] || false"
+              >
+                <template #prepend>
+                  <VIcon 
+                    :icon="item.available_in_bar ? 'tabler-check' : 'tabler-x'" 
+                    size="14"
+                    color="white"
+                  />
+                </template>
+                <span style="color: white !important; font-weight: 600 !important;">
+                  Bar
+                </span>
+              </VChip>
+            </template>
+            <span>{{ item.available_in_bar ? 'Tersedia di Bar' : 'Tidak tersedia di Bar' }}</span>
+          </VTooltip>
         </div>
       </template>
 
@@ -358,7 +398,7 @@ const props = defineProps<{
 }>()
 
 // Emits
-defineEmits<{
+const emit = defineEmits<{
   'add-product': []
   'view-product': [product: Product]
   'edit-product': [product: Product]
@@ -369,6 +409,8 @@ defineEmits<{
   'delete-product': [product: Product]
   'toggle-active': [product: Product]
   'toggle-featured': [product: Product]
+  'toggle-kitchen': [product: Product]
+  'toggle-bar': [product: Product]
   'bulk-delete': []
   'update:options': [options: any]
   'update:selected-products': [selectedProducts: number[]]
@@ -667,6 +709,14 @@ const getMarginColor = (margin: number): string => {
   if (margin < 50) return 'success'    // Green for good margin
   return 'info'                        // Blue for excellent margin
 }
+
+const toggleKitchenAvailability = (item: any) => {
+  emit('toggle-kitchen', item)
+}
+
+const toggleBarAvailability = (item: any) => {
+  emit('toggle-bar', item)
+}
 </script>
 
 <style scoped>
@@ -715,5 +765,166 @@ const getMarginColor = (margin: number): string => {
 .products-table :deep(.v-data-table__td) {
   padding-block: 12px !important;
   padding-inline: 16px !important;
+}
+
+/* Station Toggle Chips */
+.station-chip {
+  transition: all 0.3s ease;
+  border-radius: 20px !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  min-width: 70px;
+  position: relative;
+  overflow: hidden;
+}
+
+.station-chip:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.station-chip:active {
+  transform: translateY(0px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.station-chip.v-chip--variant-flat {
+  background: linear-gradient(135deg, var(--v-theme-surface) 0%, rgba(255, 255, 255, 0.1) 100%);
+}
+
+.station-chip.v-chip--variant-outlined {
+  border: 1.5px solid rgba(158, 158, 158, 0.4) !important;
+  background: rgba(250, 250, 250, 0.8);
+}
+
+.station-chip .v-chip__prepend {
+  margin-inline-end: 4px !important;
+}
+
+/* Kitchen specific styling */
+.station-chip[style*="orange"] {
+  background: linear-gradient(135deg, #ff8a50 0%, #ff7043 100%) !important;
+  color: white !important;
+  --station-text-color: white;
+}
+
+.station-chip[style*="orange"] span {
+  color: white !important;
+}
+
+.station-chip[style*="orange"]:hover {
+  background: linear-gradient(135deg, #ff7043 0%, #ff5722 100%) !important;
+}
+
+/* Bar specific styling */
+.station-chip[style*="purple"] {
+  background: linear-gradient(135deg, #ab47bc 0%, #9c27b0 100%) !important;
+  color: white !important;
+  --station-text-color: white;
+}
+
+.station-chip[style*="purple"] span {
+  color: white !important;
+}
+
+.station-chip[style*="purple"]:hover {
+  background: linear-gradient(135deg, #9c27b0 0%, #8e24aa 100%) !important;
+}
+
+/* Inactive/Grey state styling */
+.station-chip[style*="grey"] {
+  --station-text-color: #444;
+}
+
+.station-chip[style*="grey"] span {
+  color: #444 !important;
+}
+
+.station-chip.v-chip--variant-outlined {
+  --station-text-color: #444;
+}
+
+.station-chip.v-chip--variant-outlined span {
+  color: #444 !important;
+}
+
+/* Station text styling - Super specific selectors */
+.station-text {
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.5px !important;
+}
+
+.station-text-active {
+  color: white !important;
+}
+
+.station-text-inactive {
+  color: #444 !important;
+}
+
+/* Ultra-specific CSS overrides for Vuetify */
+.v-chip.station-chip .station-text-active {
+  color: white !important;
+}
+
+.v-chip.station-chip .station-text-inactive {
+  color: #444 !important;
+}
+
+/* Kitchen Active - Force white text */
+.v-chip.station-chip[style*="orange"] .station-text,
+.v-chip.station-chip[style*="orange"] .station-text-active,
+.v-chip.station-chip[style*="orange"] span {
+  color: white !important;
+}
+
+/* Bar Active - Force white text */
+.v-chip.station-chip[style*="purple"] .station-text,
+.v-chip.station-chip[style*="purple"] .station-text-active,
+.v-chip.station-chip[style*="purple"] span {
+  color: white !important;
+}
+
+/* Inactive chips - Force dark text */
+.v-chip.station-chip[style*="grey"] .station-text,
+.v-chip.station-chip[style*="grey"] .station-text-inactive,
+.v-chip.station-chip[style*="grey"] span,
+.v-chip.station-chip.v-chip--variant-outlined .station-text,
+.v-chip.station-chip.v-chip--variant-outlined .station-text-inactive,
+.v-chip.station-chip.v-chip--variant-outlined span {
+  color: #444 !important;
+}
+
+/* Loading state */
+.station-chip[disabled] {
+  opacity: 0.7 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+.station-chip-loading {
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.cursor-pointer {
+  cursor: pointer;
 }
 </style>

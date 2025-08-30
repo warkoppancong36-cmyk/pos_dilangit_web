@@ -542,6 +542,68 @@ export const useProducts = () => {
     fetchProductsList()
   }
 
+  const toggleKitchenAvailability = async (product: Product) => {
+    const productId = product.id_product
+    toggleLoading.value[productId] = true
+
+    try {
+      // Send minimal required fields + the field to update (without price)
+      const updatedProduct = await ProductsApi.update(productId, {
+        name: product.name,
+        category_id: product.category_id,
+        status: product.status,
+        active: product.active,
+        featured: product.featured,
+        available_in_kitchen: !product.available_in_kitchen,
+        available_in_bar: product.available_in_bar
+      } as ProductFormData)
+
+      // Update product in the list
+      const index = productsList.value.findIndex(p => p.id_product === productId)
+      if (index !== -1) {
+        productsList.value[index] = { ...productsList.value[index], ...updatedProduct.data }
+      }
+
+      successMessage.value = `Kitchen availability ${updatedProduct.data.available_in_kitchen ? 'enabled' : 'disabled'} for ${product.name}`
+    } catch (error: any) {
+      console.error('Error toggling kitchen availability:', error)
+      errorMessage.value = error.message || 'Failed to update kitchen availability'
+    } finally {
+      toggleLoading.value[productId] = false
+    }
+  }
+
+  const toggleBarAvailability = async (product: Product) => {
+    const productId = product.id_product
+    toggleLoading.value[productId] = true
+
+    try {
+      // Send minimal required fields + the field to update (without price)
+      const updatedProduct = await ProductsApi.update(productId, {
+        name: product.name,
+        category_id: product.category_id,
+        status: product.status,
+        active: product.active,
+        featured: product.featured,
+        available_in_kitchen: product.available_in_kitchen,
+        available_in_bar: !product.available_in_bar
+      } as ProductFormData)
+
+      // Update product in the list
+      const index = productsList.value.findIndex(p => p.id_product === productId)
+      if (index !== -1) {
+        productsList.value[index] = { ...productsList.value[index], ...updatedProduct.data }
+      }
+
+      successMessage.value = `Bar availability ${updatedProduct.data.available_in_bar ? 'enabled' : 'disabled'} for ${product.name}`
+    } catch (error: any) {
+      console.error('Error toggling bar availability:', error)
+      errorMessage.value = error.message || 'Failed to update bar availability'
+    } finally {
+      toggleLoading.value[productId] = false
+    }
+  }
+
   const onSearch = () => {
     currentPage.value = 1
     fetchProductsList()
@@ -648,6 +710,8 @@ export const useProducts = () => {
     clearModalError,
     onPageChange,
     updateOptions,
+    toggleKitchenAvailability,
+    toggleBarAvailability,
     onSearch,
     onFilterChange,
     handleFiltersUpdate,
