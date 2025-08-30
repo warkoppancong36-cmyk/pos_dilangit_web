@@ -535,6 +535,13 @@ export const useProducts = () => {
     fetchProductsList()
   }
 
+  const updateOptions = (options: any) => {
+    console.log('updateOptions called with:', options)
+    currentPage.value = options.page
+    itemsPerPage.value = options.itemsPerPage
+    fetchProductsList()
+  }
+
   const onSearch = () => {
     currentPage.value = 1
     fetchProductsList()
@@ -640,6 +647,7 @@ export const useProducts = () => {
     generateSKU,
     clearModalError,
     onPageChange,
+    updateOptions,
     onSearch,
     onFilterChange,
     handleFiltersUpdate,

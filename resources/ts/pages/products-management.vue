@@ -57,7 +57,8 @@ const {
   closeDialog,
   handleImageUpload,
   clearModalError,
-  onPageChange
+  onPageChange,
+  updateOptions
 } = useProducts()
 
 // Product Recipes composable
@@ -305,7 +306,7 @@ onMounted(() => {
           :items-per-page="itemsPerPage"
           :selected-products="selectedProducts"
           :toggle-loading="toggleLoading"
-          @update:page="onPageChange"
+          @update:options="updateOptions"
           @add-product="openCreateDialog"
           @edit-product="openEditDialog"
           @open-recipe-dialog="handleOpenRecipeDialog"

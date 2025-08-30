@@ -55,9 +55,7 @@
       show-select
       item-value="id"
       class="products-table"
-      @update:page="$emit('update:page', $event)"
-      @update:items-per-page="$emit('update:items-per-page', $event)"
-      @update:sort-by="$emit('update:sort-by', $event)"
+      @update:options="$emit('update:options', $event)"
     >
       <!-- Loading -->
       <template #loading>
@@ -372,9 +370,7 @@ defineEmits<{
   'toggle-active': [product: Product]
   'toggle-featured': [product: Product]
   'bulk-delete': []
-  'update:page': [page: number]
-  'update:items-per-page': [itemsPerPage: number]
-  'update:sort-by': [sortBy: any]
+  'update:options': [options: any]
   'update:selected-products': [selectedProducts: number[]]
 }>()
 
