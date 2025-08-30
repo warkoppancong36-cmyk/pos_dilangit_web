@@ -177,7 +177,7 @@ class ProductController extends Controller
 
              $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
-                'price' => 'required|numeric|min:0',
+                'price' => 'nullable|numeric|min:0', // Changed from required to nullable
                 'cost' => 'nullable|numeric|min:0',
                 'min_stock' => 'nullable|integer|min:0',
                 'category_id' => 'required|exists:categories,id_category',
@@ -195,6 +195,11 @@ class ProductController extends Controller
             $productData['featured'] = $request->boolean('featured', $product->featured);
             $productData['available_in_kitchen'] = $request->boolean('available_in_kitchen', $product->available_in_kitchen);
             $productData['available_in_bar'] = $request->boolean('available_in_bar', $product->available_in_bar);
+
+            // Preserve existing price if not provided in request
+            if (!$request->has('price')) {
+                $productData['price'] = $product->price;
+            }
 
             if ($request->hasFile('image')) {
                 if ($product->image && Storage::disk('public')->exists('products/' . $product->image)) {

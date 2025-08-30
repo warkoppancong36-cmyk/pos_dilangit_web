@@ -51,6 +51,8 @@ const {
   bulkDeleteProducts,
   toggleActiveStatus,
   toggleFeaturedStatus,
+  toggleKitchenAvailability,
+  toggleBarAvailability,
   openCreateDialog,
   openEditDialog,
   openDeleteDialog,
@@ -315,6 +317,8 @@ onMounted(() => {
           @delete-product="openDeleteDialog"
           @toggle-active="toggleActiveStatus"
           @toggle-featured="toggleFeaturedStatus"
+          @toggle-kitchen="toggleKitchenAvailability"
+          @toggle-bar="toggleBarAvailability"
           @update:selected-products="(products: number[]) => selectedProducts = products"
         />
       </VWindowItem>
