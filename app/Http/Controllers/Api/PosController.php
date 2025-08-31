@@ -253,6 +253,19 @@ class PosController extends Controller
             // Recalculate order totals
             // $order->calculateTotals(); // DISABLED - tax system not used yet
 
+            // Manually recalculate order totals since calculateTotals() is disabled
+            $orderItems = $order->orderItems;
+            $subtotal = $orderItems->sum('total_price');
+            $totalDiscount = $orderItems->sum('discount_amount');
+            $totalAmount = $subtotal - $totalDiscount;
+
+            // Update order table with new totals
+            $order->update([
+                'subtotal' => $subtotal,
+                'discount_amount' => $totalDiscount,
+                'total_amount' => $totalAmount
+            ]);
+
             DB::commit();
 
             $order->load(['orderItems.product']);
@@ -329,6 +342,19 @@ class PosController extends Controller
             $orderItem->discount_percentage = $request->discount_percentage ?? $orderItem->discount_percentage;
             $orderItem->save();
 
+            // Manually recalculate order totals since calculateTotals() is disabled
+            $orderItems = $order->orderItems;
+            $subtotal = $orderItems->sum('total_price');
+            $totalDiscount = $orderItems->sum('discount_amount');
+            $totalAmount = $subtotal - $totalDiscount;
+
+            // Update order table with new totals
+            $order->update([
+                'subtotal' => $subtotal,
+                'discount_amount' => $totalDiscount,
+                'total_amount' => $totalAmount
+            ]);
+
             DB::commit();
 
             $order->load(['orderItems.product']);
@@ -372,6 +398,19 @@ class PosController extends Controller
                 $orderItem->save();
                 // $orderItem->order->calculateTotals(); // DISABLED - tax system not used yet
             }
+
+            // Manually recalculate order totals since calculateTotals() is disabled
+            $orderItems = $order->orderItems;
+            $subtotal = $orderItems->sum('total_price');
+            $totalDiscount = $orderItems->sum('discount_amount');
+            $totalAmount = $subtotal - $totalDiscount;
+
+            // Update order table with new totals
+            $order->update([
+                'subtotal' => $subtotal,
+                'discount_amount' => $totalDiscount,
+                'total_amount' => $totalAmount
+            ]);
 
             DB::commit();
 
@@ -424,6 +463,19 @@ class PosController extends Controller
             // Recalculate order totals
             // $order->calculateTotals(); // DISABLED - tax system not used yet
 
+            // Manually recalculate order totals since calculateTotals() is disabled
+            $orderItems = $order->orderItems;
+            $subtotal = $orderItems->sum('total_price');
+            $totalDiscount = $orderItems->sum('discount_amount');
+            $totalAmount = $subtotal - $totalDiscount;
+
+            // Update order table with new totals
+            $order->update([
+                'subtotal' => $subtotal,
+                'discount_amount' => $totalDiscount,
+                'total_amount' => $totalAmount
+            ]);
+
             DB::commit();
 
             return $this->deletedResponse('Item removed successfully');
@@ -466,6 +518,12 @@ class PosController extends Controller
             ]);
 
             // $order->calculateTotals(); // DISABLED - tax system not used yet
+
+            // Manually recalculate total_amount since calculateTotals() is disabled
+            $totalAmount = $order->subtotal - $discountAmount;
+            $order->update([
+                'total_amount' => $totalAmount
+            ]);
 
             return $this->successResponse($order, 'Discount applied successfully');
         } catch (\Exception $e) {
