@@ -88,7 +88,7 @@ class OrderItem extends Model
         $this->save();
         
         // Recalculate order totals
-        $this->order->calculateTotals();
+        // $this->order->calculateTotals(); // DISABLED - tax system not used yet
     }
 
     public function applyDiscount($amount, $type = 'fixed')
@@ -108,7 +108,7 @@ class OrderItem extends Model
         $this->save();
         
         // Recalculate order totals
-        $this->order->calculateTotals();
+        // $this->order->calculateTotals(); // DISABLED - tax system not used yet
     }
 
     public function calculateTotalPrice()
@@ -152,14 +152,14 @@ class OrderItem extends Model
         static::saved(function ($orderItem) {
             // Recalculate order totals
             if ($orderItem->order) {
-                $orderItem->order->calculateTotals();
+                // $orderItem->order->calculateTotals(); // DISABLED - tax system not used yet
             }
         });
 
         static::deleted(function ($orderItem) {
             // Recalculate order totals when item is deleted
             if ($orderItem->order) {
-                $orderItem->order->calculateTotals();
+                // $orderItem->order->calculateTotals(); // DISABLED - tax system not used yet
             }
         });
     }
