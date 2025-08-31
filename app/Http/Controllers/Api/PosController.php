@@ -576,7 +576,7 @@ class PosController extends Controller
     public function processPayment(Request $request, Order $order): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'payment_method' => 'required|in:cash,card,digital_wallet,bank_transfer,qris,other',
+            'payment_method' => 'required|in:cash,card,kartu,credit_card,debit_card,digital_wallet,bank_transfer,qris,gopay,ovo,dana,shopeepay,other',
             'amount' => 'required|numeric|min:0',
             'reference_number' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:255',
@@ -589,6 +589,18 @@ class PosController extends Controller
         try {
             DB::beginTransaction();
 
+            // Map frontend payment method to database enum values
+            $paymentMethodMap = [
+                'tunai' => 'cash',  // Flutter app sends 'tunai' but we need 'cash'
+                'ewallet' => 'gopay', // Flutter app sends 'ewallet' map to 'gopay' (default e-wallet)
+                'card' => 'credit_card',
+                // 'kartu' stays as 'kartu' - now supported in database enum
+                'digital_wallet' => 'gopay', // default digital wallet
+                // Add other mappings as needed
+            ];
+            
+            $dbPaymentMethod = $paymentMethodMap[$request->payment_method] ?? $request->payment_method;
+
             // Check if payment amount doesn't exceed remaining amount
             $remainingAmount = $order->remaining_amount;
             if ($request->amount > $remainingAmount) {
@@ -600,7 +612,7 @@ class PosController extends Controller
             $payment = Payment::create([
                 'id_order' => $order->id_order,
                 'payment_number' => $paymentNumber,
-                'payment_method' => $request->payment_method,
+                'payment_method' => $dbPaymentMethod,
                 'amount' => $request->amount,
                 'reference_number' => $request->reference_number,
                 'status' => 'paid',
@@ -834,7 +846,7 @@ class PosController extends Controller
             'status' => 'required|in:pending,preparing,ready,completed,cancelled,paid',
             'discount_amount' => 'nullable|numeric|min:0',
             'tax_amount' => 'nullable|numeric|min:0',
-            'payment_method' => 'nullable|string|in:cash,card,qris,digital_wallet,bank_transfer',
+            'payment_method' => 'nullable|string|in:cash,card,credit_card,debit_card,kartu,qris,digital_wallet,ewallet,gopay,ovo,dana,shopeepay,bank_transfer',
             'paid_amount' => 'nullable|numeric|min:0',
         ]);
 
@@ -1272,7 +1284,7 @@ class PosController extends Controller
             'tunai' => 'cash',  // Flutter app sends 'tunai' but we need 'cash'
             'ewallet' => 'gopay', // Flutter app sends 'ewallet' map to 'gopay' (default e-wallet)
             'card' => 'credit_card',
-            'kartu' => 'credit_card', // Indonesian word for card
+            // 'kartu' stays as 'kartu' - now supported in database enum
             'digital_wallet' => 'gopay', // default digital wallet
             // Add other mappings as needed
         ];
