@@ -593,7 +593,7 @@ class PosController extends Controller
             $paymentMethodMap = [
                 'tunai' => 'cash',  // Flutter app sends 'tunai' but we need 'cash'
                 'ewallet' => 'gopay', // Flutter app sends 'ewallet' map to 'gopay' (default e-wallet)
-                'card' => 'credit_card',
+                'card' => 'kartu',
                 // 'kartu' stays as 'kartu' - now supported in database enum
                 'digital_wallet' => 'gopay', // default digital wallet
                 // Add other mappings as needed
