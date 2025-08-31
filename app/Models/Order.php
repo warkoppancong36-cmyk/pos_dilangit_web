@@ -240,7 +240,7 @@ class Order extends Model
         
         // Calculate tax (using PPN if exists)
         $ppn = \App\Models\Ppn::first();
-        $taxRate = $ppn ? $ppn->rate / 100 : 0;
+        $taxRate = $ppn ? $ppn->rate : 0; // FIXED: Remove /100 since rate is already decimal
         $this->tax_amount = $this->subtotal * $taxRate;
 
         // Calculate total
@@ -288,7 +288,7 @@ class Order extends Model
         $item = $this->orderItems()->find($orderItemId);
         if ($item) {
             $item->delete();
-            $this->calculateTotals();
+            // $this->calculateTotals(); // DISABLED - tax system not used yet
             return true;
         }
         return false;

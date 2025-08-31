@@ -251,7 +251,7 @@ class PosController extends Controller
             // ]);
 
             // Recalculate order totals
-            $order->calculateTotals();
+            // $order->calculateTotals(); // DISABLED - tax system not used yet
 
             DB::commit();
 
@@ -370,7 +370,7 @@ class PosController extends Controller
                 $orderItem->discount_percentage = 0;
                 $orderItem->calculateTotalPrice();
                 $orderItem->save();
-                $orderItem->order->calculateTotals();
+                // $orderItem->order->calculateTotals(); // DISABLED - tax system not used yet
             }
 
             DB::commit();
@@ -422,7 +422,7 @@ class PosController extends Controller
             $orderItem->delete();
 
             // Recalculate order totals
-            $order->calculateTotals();
+            // $order->calculateTotals(); // DISABLED - tax system not used yet
 
             DB::commit();
 
@@ -465,7 +465,7 @@ class PosController extends Controller
                 'discount_amount' => $discountAmount,
             ]);
 
-            $order->calculateTotals();
+            // $order->calculateTotals(); // DISABLED - tax system not used yet
 
             return $this->successResponse($order, 'Discount applied successfully');
         } catch (\Exception $e) {
@@ -504,7 +504,7 @@ class PosController extends Controller
                 'tax_amount' => $taxAmount,
             ]);
 
-            $order->calculateTotals();
+            // $order->calculateTotals(); // DISABLED - tax system not used yet
 
             return $this->successResponse($order, 'Tax applied successfully');
         } catch (\Exception $e) {
@@ -538,14 +538,17 @@ class PosController extends Controller
             }
 
             // Create payment record
+            $paymentNumber = $this->generatePaymentNumber();
             $payment = Payment::create([
                 'id_order' => $order->id_order,
+                'payment_number' => $paymentNumber,
                 'payment_method' => $request->payment_method,
                 'amount' => $request->amount,
                 'reference_number' => $request->reference_number,
-                'status' => 'completed',
+                'status' => 'paid',
                 'notes' => $request->notes,
                 'processed_by' => Auth::id(),
+                'payment_date' => now(),
             ]);
 
             // Update order status if fully paid
@@ -770,7 +773,11 @@ class PosController extends Controller
     public function updateOrderStatus(Request $request, Order $order): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'status' => 'required|in:pending,preparing,ready,completed,cancelled',
+            'status' => 'required|in:pending,preparing,ready,completed,cancelled,paid',
+            'discount_amount' => 'nullable|numeric|min:0',
+            'tax_amount' => 'nullable|numeric|min:0',
+            'payment_method' => 'nullable|string|in:cash,card,qris,digital_wallet,bank_transfer',
+            'paid_amount' => 'nullable|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -778,9 +785,74 @@ class PosController extends Controller
         }
 
         try {
-            $order->updateStatus($request->status, Auth::id());
+            // Log the update request
+            \Log::info('Updating order status', [
+                'order_id' => $order->id_order,
+                'old_status' => $order->status,
+                'new_status' => $request->status,
+                'discount_amount' => $request->discount_amount,
+                'tax_amount' => $request->tax_amount,
+                'payment_method' => $request->payment_method,
+                'paid_amount' => $request->paid_amount
+            ]);
+            
+            // Map mobile app status "paid" to database order status "completed"
+            $orderStatus = $request->status;
+            if ($request->status === 'paid') {
+                $orderStatus = 'completed';
+                \Log::info('Status mapped from "paid" to "completed" for order table');
+            }
+            
+            // Update order status
+            $order->updateStatus($orderStatus, Auth::id());
+            
+            // Log after status update
+            \Log::info('Status updated', [
+                'order_id' => $order->id_order,
+                'current_status' => $order->status,
+                'mapped_status' => $orderStatus
+            ]);
+            
+            // Update additional fields if provided
+            $updateData = [];
+            if ($request->has('discount_amount')) {
+                $updateData['discount_amount'] = $request->discount_amount;
+            }
+            if ($request->has('tax_amount')) {
+                $updateData['tax_amount'] = $request->tax_amount;
+            }
+            
+            // Update order with additional data
+            if (!empty($updateData)) {
+                $order->update($updateData);
+                
+                // Manually recalculate total_amount without using calculateTotals()
+                $subtotal = $order->subtotal;
+                $discountAmount = $order->discount_amount;
+                $taxAmount = $order->tax_amount ?? 0;
+                $serviceCharge = $order->service_charge ?? 0;
+                
+                $newTotalAmount = $subtotal + $taxAmount + $serviceCharge - $discountAmount;
+                $order->update(['total_amount' => $newTotalAmount]);
+                
+                \Log::info('Additional fields updated', [
+                    'order_id' => $order->id_order,
+                    'update_data' => $updateData,
+                    'new_total' => $newTotalAmount
+                ]);
+            }
 
-            return $this->successResponse($order, 'Order status updated successfully');
+            // Reload order data to ensure response has latest values
+            $order = $order->fresh(['user', 'customer', 'orderItems.product', 'payments']);
+            
+            \Log::info('Final order data', [
+                'order_id' => $order->id_order,
+                'final_status' => $order->status,
+                'final_discount' => $order->discount_amount,
+                'final_total' => $order->total_amount
+            ]);
+
+            return $this->successResponse($order, 'Order updated successfully');
         } catch (\Exception $e) {
             return $this->serverErrorResponse('Failed to update order status: ' . $e->getMessage());
         }
@@ -906,7 +978,7 @@ class PosController extends Controller
             }
 
             // Recalculate order totals
-            $order->calculateTotals();
+            // $order->calculateTotals(); // DISABLED - tax system not used yet
 
             DB::commit();
 
