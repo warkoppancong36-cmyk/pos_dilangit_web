@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\TransactionLogController;
 use App\Http\Controllers\Api\PpnController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\SupplierController;
@@ -69,6 +70,19 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
         Route::put('/{id}', [UserController::class, 'update']);
         Route::delete('/{id}', [UserController::class, 'destroy']);
         Route::post('/{id}/toggle-active', [UserController::class, 'toggleActive']);
+    });
+
+    Route::prefix('roles')->group(function () {
+        Route::get('/', [RoleController::class, 'index']);
+        Route::post('/', [RoleController::class, 'store']);
+        Route::get('/stats', [RoleController::class, 'stats']);
+        Route::get('/{id}', [RoleController::class, 'show']);
+        Route::put('/{id}', [RoleController::class, 'update']);
+        Route::delete('/{id}', [RoleController::class, 'destroy']);
+        Route::post('/{id}/toggle-active', [RoleController::class, 'toggleActive']);
+        Route::get('/{id}/permissions', [RoleController::class, 'getPermissions']);
+        Route::post('/{id}/permissions/sync', [RoleController::class, 'syncPermissions']);
+        Route::get('/{id}/users', [RoleController::class, 'getUsers']);
     });
 
     Route::prefix('categories')->group(function () {

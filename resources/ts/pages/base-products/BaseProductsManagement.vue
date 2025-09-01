@@ -31,6 +31,28 @@
       </div>
     </div>
 
+    <!-- Error Alert -->
+    <VAlert
+      v-if="errorMessage"
+      type="error"
+      variant="outlined"
+      class="mb-4"
+      :text="errorMessage"
+      closable
+      @click:close="errorMessage = ''"
+    />
+
+    <!-- Success Alert -->
+    <VAlert
+      v-if="successMessage"
+      type="success"
+      variant="outlined"
+      class="mb-4"
+      :text="successMessage"
+      closable
+      @click:close="successMessage = ''"
+    />
+
     <!-- Tabs -->
     <VTabs v-model="activeTab" class="mb-6">
       <VTab value="base-products">
@@ -404,7 +426,7 @@
       :base-products-loading="loading"
       :edit-mode="compositionEditMode"
       @close="closeCompositionDialog"
-      @save="saveComposition"
+      @saved="handleCompositionSaved"
     />
   </div>
 </template>
@@ -428,6 +450,10 @@ export default {
   setup() {
     const baseProductStore = useBaseProductStore()
     const { showSuccess, showError } = useNotification()
+    
+    // State for success/error messages
+    const successMessage = ref('')
+    const errorMessage = ref('')
     
     // Reactive data
     const loading = computed(() => baseProductStore?.loading ?? false)
@@ -720,28 +746,14 @@ export default {
       compositionEditMode.value = false
     }
 
-    const saveComposition = async (compositionData) => {
-      try {
-        if (compositionEditMode.value && selectedComposition.value) {
-          // Update existing composition
-          const response = await axios.put(`/api/base-product-compositions/${selectedComposition.value.id}`, compositionData)
-          if (response.data.success) {
-            showSuccess('Composition updated successfully')
-            await loadCompositions()
-            closeCompositionDialog()
-          }
-        } else {
-          // Create new composition
-          const response = await axios.post('/api/base-product-compositions', compositionData)
-          if (response.data.success) {
-            showSuccess('Composition created successfully')
-            await loadCompositions()
-            closeCompositionDialog()
-          }
-        }
-      } catch (error) {
-        console.error('Error saving composition:', error)
-        showError(error.response?.data?.message || 'Failed to save composition')
+    const handleCompositionSaved = async (result) => {
+      if (result.success) {
+        successMessage.value = result.message || 'Komposisi berhasil disimpan'
+        // Refresh the compositions data
+        await loadCompositions()
+        closeCompositionDialog()
+      } else {
+        errorMessage.value = result.message || 'Gagal menyimpan komposisi'
       }
     }
 
@@ -804,6 +816,10 @@ export default {
       getStockStatusColor,
       formatNumber,
       
+      // Messages
+      successMessage,
+      errorMessage,
+      
       // Tabs
       activeTab,
       
@@ -822,7 +838,7 @@ export default {
       openCompositionCreateDialogForProduct,
       openCompositionEditDialog,
       closeCompositionDialog,
-      saveComposition,
+      handleCompositionSaved,
       deleteComposition,
       formatCurrency
     }

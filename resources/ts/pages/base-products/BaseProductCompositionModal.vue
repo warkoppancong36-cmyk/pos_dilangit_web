@@ -403,8 +403,8 @@
         <VBtn 
           color="primary" 
           @click="saveAllCompositions"
-          :loading="loading"
-          :disabled="existingCompositions.length === 0"
+          :loading="saving"
+          :disabled="saving || existingCompositions.length === 0"
         >
           <VIcon icon="mdi-content-save" class="me-1" />
           Simpan Komposisi ({{ existingCompositions.filter(c => c.is_temporary).length }})
@@ -475,7 +475,7 @@ interface Props {
 
 interface Emits {
   (e: 'close'): void
-  (e: 'save', composition: any): void
+  (e: 'saved', result: { success: boolean; message?: string }): void
   (e: 'notification', message: string, type: 'success' | 'error' | 'warning' | 'info'): void
 }
 
@@ -499,6 +499,8 @@ const form = reactive({
 
 // Component state
 const loading = ref(false)
+const saving = ref(false) // Dedicated flag for save operations
+const lastSaveAttempt = ref(0) // Timestamp of last save attempt
 const errors = ref<Record<string, string>>({})
 const selectedBaseProduct = ref<BaseProduct | null>(null)
 const selectedIngredient = ref<any>(null)
@@ -930,8 +932,8 @@ const handleSubmit = async () => {
     }
 
 
-    // Add to local list
-    existingCompositions.value.push(newComposition)
+    // Add to local list (at the top)
+    existingCompositions.value.unshift(newComposition)
     
 
     // Reset form for next item
@@ -1046,12 +1048,30 @@ const removeComposition = async (composition: Composition) => {
 }
 
 const saveAllCompositions = async () => {
-  if (existingCompositions.value.length === 0) return
+  const now = Date.now()
+  
+  // DEBOUNCE: Ignore rapid clicks (within 1 second)
+  if (now - lastSaveAttempt.value < 1000) {
+    return
+  }
+  lastSaveAttempt.value = now
+  
+  // STRONG protection against multiple concurrent saves
+  if (saving.value) {
+    return
+  }
+  
+  if (existingCompositions.value.length === 0) {
+    return
+  }
 
-  loading.value = true
+  // Set saving flag IMMEDIATELY to block any other calls
+  saving.value = true
   errors.value = {}
   let successCount = 0
   let errorMessages: string[] = []
+
+  const requestId = Math.random().toString(36).substr(2, 9)
 
   try {
     // Process new compositions to save
@@ -1064,9 +1084,6 @@ const saveAllCompositions = async () => {
       comp.is_modified && !comp.is_temporary && comp.id_base_product_composition
     )
     
-    console.log('Compositions to save (new):', compositionsToSave.length)
-    console.log('Compositions to update:', compositionsToUpdate.length)
-    
     if (compositionsToSave.length === 0 && compositionsToUpdate.length === 0) {
       return
     }
@@ -1074,6 +1091,17 @@ const saveAllCompositions = async () => {
     // First, handle updates for existing compositions
     for (const composition of compositionsToUpdate) {
       try {
+        // Validate essential fields before proceeding
+        if (!composition.base_product_id || composition.base_product_id <= 0) {
+          errorMessages.push(`${getIngredientName(composition)}: Missing base product ID`)
+          continue
+        }
+        
+        if (!composition.quantity || composition.quantity <= 0) {
+          errorMessages.push(`${getIngredientName(composition)}: Invalid quantity`)
+          continue
+        }
+        
         const updatePayload: any = {
           base_product_id: Number(composition.base_product_id),
           quantity: Number(composition.quantity),
@@ -1085,21 +1113,36 @@ const saveAllCompositions = async () => {
         // Handle ingredient fields
         if (composition.ingredient_item_id && Number(composition.ingredient_item_id) > 0) {
           updatePayload.ingredient_item_id = Number(composition.ingredient_item_id)
+          updatePayload.ingredient_base_product_id = null // Explicitly set to null
         }
         if (composition.ingredient_base_product_id && Number(composition.ingredient_base_product_id) > 0) {
           updatePayload.ingredient_base_product_id = Number(composition.ingredient_base_product_id)
+          updatePayload.ingredient_item_id = null // Explicitly set to null
         }
 
-        console.log('Updating composition ID:', composition.id_base_product_composition)
+        // Validate that at least one ingredient is provided
+        if (!updatePayload.ingredient_item_id && !updatePayload.ingredient_base_product_id) {
+          console.error('No ingredient provided for update:', composition)
+          errorMessages.push(`${getIngredientName(composition)}: No ingredient selected`)
+          continue
+        }
+
+        const compositionId = composition.id_base_product_composition || composition.id
         
-        const response = await axios.put(`/api/base-product-compositions/${composition.id_base_product_composition}`, updatePayload, {
+        const response = await axios.put(`/api/base-product-compositions/${compositionId}`, updatePayload, {
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           }
         })
         
-        console.log('Update response:', response.data)
+        // Backend response format: { success: true, message: "...", data: {...}, timestamp: "..." }
+        // The actual composition data is in response.data.data
+        if (response.data && response.data.success && response.data.data) {
+          // Update the local composition with the returned data
+          Object.assign(composition, response.data.data)
+        }
+        
         successCount++
         
         // Clear the modification flag
@@ -1118,8 +1161,13 @@ const saveAllCompositions = async () => {
       
       // Validate composition data before sending
       if (!currentComposition.base_product_id || currentComposition.quantity <= 0) {
-        console.error('Invalid composition data:', currentComposition)
         errorMessages.push(`Invalid composition data for ${getIngredientName(currentComposition)}`)
+        continue
+      }
+      
+      // Validate ingredients
+      if (!currentComposition.ingredient_item_id && !currentComposition.ingredient_base_product_id) {
+        errorMessages.push(`No ingredient selected for ${getIngredientName(currentComposition)}`)
         continue
       }
       
@@ -1127,26 +1175,21 @@ const saveAllCompositions = async () => {
         // Create a completely new payload object
         const savePayload: any = {}
         
-        // Populate required fields
+        // Populate required fields with explicit type conversion
         savePayload.base_product_id = Number(currentComposition.base_product_id)
         savePayload.quantity = Number(currentComposition.quantity)
         savePayload.is_active = Boolean(currentComposition.is_active)
         savePayload.is_critical = Boolean(currentComposition.is_critical)
         savePayload.notes = currentComposition.notes || null
 
-        // Handle ingredient fields carefully
+        // Handle ingredient fields carefully - only set the selected one
         if (currentComposition.ingredient_item_id && Number(currentComposition.ingredient_item_id) > 0) {
           savePayload.ingredient_item_id = Number(currentComposition.ingredient_item_id)
+          savePayload.ingredient_base_product_id = null // Explicitly set to null
         }
         if (currentComposition.ingredient_base_product_id && Number(currentComposition.ingredient_base_product_id) > 0) {
           savePayload.ingredient_base_product_id = Number(currentComposition.ingredient_base_product_id)
-        }
-
-        // Validate that at least one ingredient is provided
-        if (!savePayload.ingredient_item_id && !savePayload.ingredient_base_product_id) {
-          console.error('No ingredient provided for composition:', currentComposition)
-          errorMessages.push(`${getIngredientName(currentComposition)}: No ingredient selected`)
-          continue
+          savePayload.ingredient_item_id = null // Explicitly set to null
         }
 
         const response = await axios.post('/api/base-product-compositions', savePayload, {
@@ -1155,6 +1198,13 @@ const saveAllCompositions = async () => {
             'Accept': 'application/json'
           }
         })
+        
+        // Backend response format: { success: true, message: "...", data: {...}, timestamp: "..." }
+        // The actual composition data is in response.data.data
+        if (response.data && response.data.success && response.data.data) {
+          // Update the existing composition with returned data (especially ID)
+          Object.assign(currentComposition, response.data.data)
+        }
         
         successCount++
         
@@ -1169,8 +1219,17 @@ const saveAllCompositions = async () => {
         const ingredientName = getIngredientName(currentComposition)
         
         if (itemError.response?.status === 422) {
-          const errorMessage = itemError.response?.data?.message || ''
-          if (errorMessage.includes('already exists') || errorMessage.includes('Composition already exists')) {
+          const errorResponse = itemError.response?.data
+          const errorMessage = errorResponse?.message || ''
+          
+          // Check for validation errors
+          if (errorResponse?.errors) {
+            // Create detailed error message from validation errors
+            const validationErrors = Object.entries(errorResponse.errors)
+              .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
+              .join('; ')
+            errorMessages.push(`${ingredientName}: ${validationErrors}`)
+          } else if (errorMessage.includes('already exists') || errorMessage.includes('Composition already exists')) {
             errorMessages.push(`${ingredientName}: Item sudah ada dalam komposisi database`)
             // Remove duplicate item from local list
             const originalIndex = existingCompositions.value.findIndex(c => c.id === currentComposition.id)
@@ -1189,7 +1248,7 @@ const saveAllCompositions = async () => {
     // Show results
     if (successCount > 0 && errorMessages.length === 0) {
       // All successful
-      emit('save', { success: true })
+      emit('saved', { success: true, message: 'Semua komposisi berhasil disimpan' })
       emit('close')
     } else if (successCount > 0 && errorMessages.length > 0) {
       // Partial success
@@ -1198,21 +1257,23 @@ const saveAllCompositions = async () => {
       }
       // Reload to refresh the list
       await loadExistingCompositions()
+      emit('saved', { success: true, message: `${successCount} komposisi berhasil disimpan dengan beberapa error` })
     } else if (successCount === 0 && errorMessages.length === 0) {
       // No changes to save
-      emit('save', { success: true })
+      emit('saved', { success: true, message: 'Tidak ada perubahan untuk disimpan' })
       emit('close')
     } else {
       // All failed
       errors.value = { 
         general: `Gagal menyimpan komposisi: ${errorMessages.join(', ')}` 
       }
+      emit('saved', { success: false, message: 'Gagal menyimpan komposisi' })
     }
   } catch (error: any) {
-    console.error('Error saving compositions:', error)
+    console.error('Critical error in save process:', error)
     errors.value = { general: 'Failed to save compositions: ' + (error.message || 'Unknown error') }
   } finally {
-    loading.value = false
+    saving.value = false
   }
 }
 

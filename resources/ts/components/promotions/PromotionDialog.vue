@@ -21,6 +21,24 @@
 
       <VForm ref="formRef" v-model="isValid" @submit.prevent="save">
         <VCardText class="pa-6">
+          <!-- Error Alert -->
+          <VAlert
+            v-if="errorMessage"
+            type="error"
+            class="mb-4"
+            closable
+            @click:close="clearErrors"
+          >
+            <div class="font-weight-medium">{{ errorMessage }}</div>
+            <div v-if="Object.keys(fieldErrors).length > 0" class="mt-2">
+              <ul class="mb-0">
+                <li v-for="(errors, field) in fieldErrors" :key="field">
+                  <strong>{{ getFieldLabel(field) }}:</strong> {{ errors.join(', ') }}
+                </li>
+              </ul>
+            </div>
+          </VAlert>
+
           <VRow>
             <!-- Basic Information -->
             <VCol cols="12">
@@ -135,13 +153,12 @@
               </VCol>
               <VCol cols="12" md="6">
                 <VTextField
-                  v-model.number="formData.combo_price"
+                  v-model="comboPriceDisplay"
                   label="Harga Combo"
-                  type="number"
-                  min="0"
                   prefix="Rp"
                   variant="outlined"
                   required
+                  @input="onComboPriceInput($event.target.value)"
                 />
               </VCol>
             </template>
@@ -185,13 +202,12 @@
 
             <VCol v-if="formData.discount_type === 'percentage'" cols="12" md="4">
               <VTextField
-                v-model.number="formData.max_discount_amount"
+                v-model="maxDiscountDisplay"
                 label="Maksimum Diskon"
                 variant="outlined"
-                type="number"
-                min="0"
                 prefix="Rp"
                 hint="Opsional"
+                @input="onMaxDiscountInput($event.target.value)"
               />
             </VCol>
 
@@ -218,13 +234,12 @@
 
             <VCol cols="12" md="6">
               <VTextField
-                v-model.number="formData.minimum_amount"
+                v-model="minimumAmountDisplay"
                 label="Minimum Pembelian"
                 variant="outlined"
-                type="number"
                 prefix="Rp"
-                min="0"
                 hint="Kosongkan jika tidak ada minimum"
+                @input="onMinimumAmountInput($event.target.value)"
               />
             </VCol>
 
@@ -240,7 +255,8 @@
                 label="Berlaku Dari"
                 variant="outlined"
                 type="datetime-local"
-                hint="Opsional untuk promosi berkelanjutan"
+                :rules="validFromRules"
+                required
               />
             </VCol>
 
@@ -250,7 +266,8 @@
                 label="Berlaku Sampai"
                 variant="outlined"
                 type="datetime-local"
-                hint="Opsional untuk promosi berkelanjutan"
+                :rules="validUntilRules"
+                required
               />
             </VCol>
 
@@ -318,6 +335,8 @@ const emit = defineEmits<Emits>()
 const formRef = ref()
 const isValid = ref(false)
 const saving = ref(false)
+const errorMessage = ref('')
+const fieldErrors = ref<Record<string, string[]>>({})
 
 // Form data
 const formData = ref<CreatePromotionRequest>({
@@ -337,8 +356,12 @@ const formData = ref<CreatePromotionRequest>({
   combo_quantity: null,
   combo_price: null,
   min_quantity: null,
-  valid_from: null,
-  valid_until: null,
+  valid_from: new Date().toISOString().slice(0, 16),
+  valid_until: (() => {
+    const date = new Date()
+    date.setMonth(date.getMonth() + 1)
+    return date.toISOString().slice(0, 16)
+  })(),
   active: true,
   promotion_rules: []
 })
@@ -390,6 +413,100 @@ const discountRules = computed(() => [
   ] : [])
 ])
 
+const validFromRules = [
+  (v: string) => !!v || 'Tanggal mulai berlaku wajib diisi'
+]
+
+const validUntilRules = [
+  (v: string) => !!v || 'Tanggal berakhir wajib diisi',
+  (v: string) => {
+    if (!v || !formData.value.valid_from) return true
+    return new Date(v) > new Date(formData.value.valid_from) || 'Tanggal berakhir harus setelah tanggal mulai'
+  }
+]
+
+// Error handling methods
+const clearErrors = () => {
+  errorMessage.value = ''
+  fieldErrors.value = {}
+}
+
+// Currency formatting methods
+const formatRupiah = (value: number | null): string => {
+  if (!value || value === 0) return ''
+  return new Intl.NumberFormat('id-ID').format(value)
+}
+
+const parseRupiah = (value: string): number | null => {
+  if (!value || value.trim() === '') return null
+  // Remove all non-digit characters
+  const cleanValue = value.replace(/[^\d]/g, '')
+  if (cleanValue === '') return null
+  const parsed = parseInt(cleanValue)
+  return isNaN(parsed) ? null : parsed
+}
+
+// Reactive currency display values
+const maxDiscountDisplay = ref('')
+const minimumAmountDisplay = ref('')
+const comboPriceDisplay = ref('')
+
+// Update display when formData changes
+watch(() => formData.value.max_discount_amount, (newValue) => {
+  maxDiscountDisplay.value = formatRupiah(newValue)
+})
+
+watch(() => formData.value.minimum_amount, (newValue) => {
+  minimumAmountDisplay.value = formatRupiah(newValue)
+})
+
+watch(() => formData.value.combo_price, (newValue) => {
+  comboPriceDisplay.value = formatRupiah(newValue)
+})
+
+// Handle input changes
+const onMaxDiscountInput = (value: string) => {
+  const parsed = parseRupiah(value)
+  formData.value.max_discount_amount = parsed
+  maxDiscountDisplay.value = formatRupiah(parsed)
+}
+
+const onMinimumAmountInput = (value: string) => {
+  const parsed = parseRupiah(value)
+  formData.value.minimum_amount = parsed
+  minimumAmountDisplay.value = formatRupiah(parsed)
+}
+
+const onComboPriceInput = (value: string) => {
+  const parsed = parseRupiah(value)
+  formData.value.combo_price = parsed
+  comboPriceDisplay.value = formatRupiah(parsed)
+}
+
+const getFieldLabel = (fieldName: string): string => {
+  const fieldLabels: Record<string, string> = {
+    name: 'Nama Promosi',
+    description: 'Deskripsi',
+    type: 'Tipe Promosi',
+    discount_type: 'Tipe Diskon',
+    discount_value: 'Nilai Diskon',
+    valid_from: 'Berlaku Dari',
+    valid_until: 'Berlaku Sampai',
+    start_time: 'Jam Mulai',
+    end_time: 'Jam Berakhir',
+    valid_days: 'Hari Berlaku',
+    buy_quantity: 'Jumlah Beli',
+    get_quantity: 'Jumlah Dapat',
+    combo_quantity: 'Jumlah Paket',
+    combo_price: 'Harga Paket',
+    min_quantity: 'Minimal Quantity',
+    minimum_amount: 'Minimal Pembelian',
+    max_discount_amount: 'Maksimal Diskon',
+    priority: 'Prioritas'
+  }
+  return fieldLabels[fieldName] || fieldName
+}
+
 // Methods
 const getDiscountLabel = () => {
   return formData.value.discount_type === 'percentage' 
@@ -410,6 +527,14 @@ const onTypeChange = () => {
 }
 
 const resetForm = () => {
+  // Clear errors
+  clearErrors()
+  
+  // Set default dates: now and 1 month later
+  const now = new Date()
+  const oneMonthLater = new Date()
+  oneMonthLater.setMonth(oneMonthLater.getMonth() + 1)
+  
   formData.value = {
     name: '',
     description: '',
@@ -427,11 +552,16 @@ const resetForm = () => {
     combo_quantity: null,
     combo_price: null,
     min_quantity: null,
-    valid_from: null,
-    valid_until: null,
+    valid_from: now.toISOString().slice(0, 16),
+    valid_until: oneMonthLater.toISOString().slice(0, 16),
     active: true,
     promotion_rules: []
   }
+  
+  // Reset display values
+  maxDiscountDisplay.value = ''
+  minimumAmountDisplay.value = ''
+  comboPriceDisplay.value = ''
   
   nextTick(() => {
     formRef.value?.resetValidation()
@@ -464,6 +594,11 @@ const loadPromotionData = () => {
       active: promotion.active,
       promotion_rules: promotion.promotion_rules || []
     }
+    
+    // Update display values
+    maxDiscountDisplay.value = formatRupiah(promotion.max_discount_amount)
+    minimumAmountDisplay.value = formatRupiah(promotion.minimum_amount)
+    comboPriceDisplay.value = formatRupiah(promotion.combo_price)
   }
 }
 
@@ -472,6 +607,7 @@ const save = async () => {
 
   try {
     saving.value = true
+    clearErrors() // Clear previous errors
 
     // Generate promotion_rules based on type
     formData.value.promotion_rules = generatePromotionRules()
@@ -483,8 +619,26 @@ const save = async () => {
     }
 
     emit('saved')
-  } catch (error) {
+  } catch (error: any) {
     console.error('Save error:', error)
+    
+    // Handle different types of errors
+    if (error?.response?.data) {
+      const errorData = error.response.data
+      
+      // Check if it's a validation error
+      if (errorData.errors && typeof errorData.errors === 'object') {
+        fieldErrors.value = errorData.errors
+        errorMessage.value = errorData.message || 'Terjadi kesalahan validasi'
+      } else {
+        // General error message
+        errorMessage.value = errorData.message || 'Terjadi kesalahan saat menyimpan promosi'
+      }
+    } else if (error?.message) {
+      errorMessage.value = error.message
+    } else {
+      errorMessage.value = 'Terjadi kesalahan yang tidak diketahui'
+    }
   } finally {
     saving.value = false
   }
@@ -547,6 +701,7 @@ const generatePromotionRules = () => {
 }
 
 const cancel = () => {
+  clearErrors()
   localValue.value = false
 }
 

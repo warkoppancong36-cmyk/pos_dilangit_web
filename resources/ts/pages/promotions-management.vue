@@ -322,7 +322,7 @@ const sortOptions = [
 const headers = [
   { title: 'Nama', key: 'name', sortable: true },
   { title: 'Tipe', key: 'type', sortable: true },
-  { title: 'Diskon', key: 'discount_value', sortable: true },
+  { title: 'Diskon', key: 'discount', sortable: true },
   { title: 'Periode', key: 'valid_period', sortable: false },
   { title: 'Jam', key: 'time_range', sortable: false },
   { title: 'Prioritas', key: 'priority', sortable: true },

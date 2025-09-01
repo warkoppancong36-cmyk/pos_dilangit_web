@@ -78,7 +78,7 @@ class Permission extends Model
     /**
      * Create permission with format: module_action
      */
-    public static function createPermission(string $module, string $action, string $displayName = null): self
+    public static function createPermission(string $module, string $action, ?string $displayName = null): self
     {
         $name = strtolower($module . '_' . $action);
         $displayName = $displayName ?? ucfirst($action) . ' ' . ucfirst($module);
