@@ -112,10 +112,17 @@
         <!-- Transactions Table -->
         <VDataTable
           :headers="headers"
-          :items="filteredTransactions"
+          :items="transactions"
           :loading="loading"
-          :items-per-page="10"
+          :items-per-page="pagination.per_page === -1 ? transactions.length : pagination.per_page"
+          :page="pagination.current_page"
+          :items-length="pagination.total"
+          :server-items-length="pagination.total"
+          :items-per-page-options="itemsPerPageOptions"
+          :show-select="false"
           class="elevation-1"
+          @update:page="onPageChange"
+          @update:items-per-page="onItemsPerPageChange"
         >
           <!-- Order Number Column -->
           <template #item.order_number="{ item }">
@@ -204,6 +211,14 @@
             />
           </template>
         </VDataTable>
+        
+        <!-- Custom "All" Mode Indicator -->
+        <div v-if="pagination.per_page === -1" class="pa-4 text-center border-t">
+          <VChip color="success" variant="tonal" size="large">
+            <VIcon start icon="tabler-check-circle" />
+            Menampilkan semua {{ transactions.length }} transaksi
+          </VChip>
+        </div>
       </VCardText>
     </VCard>
     
@@ -251,6 +266,12 @@ const dateTo = ref('')
 const detailDialog = ref(false)
 const editDialog = ref(false)
 const selectedOrder = ref<any>(null)
+const pagination = ref({
+  current_page: 1,
+  per_page: 15,
+  total: 0,
+  last_page: 1
+})
 const summary = ref({
   total_orders: 0,
   total_revenue: 0,
@@ -277,96 +298,145 @@ const statusOptions = [
   { title: 'Dibatalkan', value: 'cancelled' }
 ]
 
+// Items per page options
+const itemsPerPageOptions = [
+  { value: 10, title: '10' },
+  { value: 25, title: '25' },
+  { value: 50, title: '50' },
+  { value: 100, title: '100' },
+  { value: -1, title: 'All' }
+]
+
 // Computed
 const localDialog = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value)
 })
 
-const filteredTransactions = computed(() => {
-  let filtered = transactions.value
-
-  // Filter by search query
-  if (searchQuery.value) {
-    const search = searchQuery.value.toLowerCase()
-    filtered = filtered.filter(transaction => {
-      // Safe check for order_number
-      const orderMatch = transaction.order_number?.toLowerCase()?.includes(search) || false
-      
-      // Safe check for customer name
-      const customerNameMatch = transaction.customer?.name?.toLowerCase()?.includes(search) || false
-      
-      // Safe check for customer phone
-      const customerPhoneMatch = transaction.customer?.phone?.toLowerCase()?.includes(search) || false
-      
-      return orderMatch || customerNameMatch || customerPhoneMatch
-    })
-  }
-
-  // Filter by status
-  if (statusFilter.value) {
-    filtered = filtered.filter(transaction => transaction.status === statusFilter.value)
-  }
-
-  // Filter by date range
-  if (dateFrom.value) {
-    filtered = filtered.filter(transaction => 
-      new Date(transaction.created_at) >= new Date(dateFrom.value)
-    )
-  }
-
-  if (dateTo.value) {
-    filtered = filtered.filter(transaction => 
-      new Date(transaction.created_at) <= new Date(dateTo.value + ' 23:59:59')
-    )
-  }
-
-  return filtered
-})
-
 // Methods
-const loadTransactions = async () => {
+const loadTransactions = async (page: number = 1, perPage: number = 15) => {
   try {
     loading.value = true
-    const response = await PosApi.getOrders()
     
-    
-    // Data dari paginatedResponse berada di response.data (bukan response.data.data)
-    if (response.success && Array.isArray(response.data)) {
-      transactions.value = response.data
-    } else {
-      console.warn('Unexpected response structure:', response)
-      transactions.value = []
+    // Build query parameters
+    const params: any = {
+      page,
+      per_page: perPage >= 999999 ? 'all' : perPage // Send 'all' for very large numbers
     }
     
+    // Add search filters
+    if (searchQuery.value) {
+      params.search = searchQuery.value
+    }
+    if (statusFilter.value) {
+      params.status = statusFilter.value
+    }
+    if (dateFrom.value) {
+      params.date_from = dateFrom.value
+    }
+    if (dateTo.value) {
+      params.date_to = dateTo.value
+    }
+    
+    const response = await PosApi.getOrders(params)
+    
+    if (response.success) {
+      // Check if response has pagination structure
+      if (response.data.data && Array.isArray(response.data.data)) {
+        // Paginated response
+        transactions.value = response.data.data
+        pagination.value = {
+          current_page: response.data.current_page || 1,
+          per_page: perPage >= 999999 ? -1 : (response.data.per_page || 15), // Set -1 for "All"
+          total: response.data.total || 0,
+          last_page: response.data.last_page || 1
+        }
+      } else if (Array.isArray(response.data)) {
+        // Direct array response (fallback)
+        transactions.value = response.data
+        pagination.value = {
+          current_page: 1,
+          per_page: perPage >= 999999 ? -1 : response.data.length,
+          total: response.data.length,
+          last_page: 1
+        }
+      } else {
+        console.warn('Unexpected response structure:', response)
+        transactions.value = []
+        pagination.value = {
+          current_page: 1,
+          per_page: 15,
+          total: 0,
+          last_page: 1
+        }
+      }
+    } else {
+      transactions.value = []
+      pagination.value = {
+        current_page: 1,
+        per_page: 15,
+        total: 0,
+        last_page: 1
+      }
+    }
     
     // Calculate summary
     calculateSummary()
   } catch (error) {
     console.error('Error loading transactions:', error)
     transactions.value = []
+    pagination.value = {
+      current_page: 1,
+      per_page: 15,
+      total: 0,
+      last_page: 1
+    }
   } finally {
     loading.value = false
   }
 }
 
+const onPageChange = (page: number) => {
+  loadTransactions(page, pagination.value.per_page)
+}
+
+const onItemsPerPageChange = async (perPage: number) => {
+  // Handle "All" option (value -1)
+  if (perPage === -1) {
+    // Show confirmation for loading all data
+    const totalItems = pagination.value.total
+    if (totalItems > 1000) {
+      const confirm = window.confirm(
+        `Anda akan memuat semua ${totalItems} transaksi. Ini mungkin memakan waktu lama. Lanjutkan?`
+      )
+      if (!confirm) {
+        return // Cancel loading
+      }
+    }
+    // Load all items by using a very large number or special parameter
+    await loadTransactions(1, 999999) // Use a large number to get all items
+  } else {
+    await loadTransactions(1, perPage)
+  }
+}
+
 const calculateSummary = () => {
-  const filtered = filteredTransactions.value
+  const currentTransactions = transactions.value
   
   // Safe calculation with NaN handling
-  const totalRevenue = filtered.reduce((sum, t) => {
+  const totalRevenue = currentTransactions.reduce((sum, t) => {
     const amount = typeof t.total_amount === 'string' ? parseFloat(t.total_amount) : t.total_amount
     return sum + (isNaN(amount) || !isFinite(amount) ? 0 : amount)
   }, 0)
   
-  const averageOrder = filtered.length > 0 && totalRevenue > 0 ? 
-    totalRevenue / filtered.length : 0
+  const averageOrder = currentTransactions.length > 0 && totalRevenue > 0 ? 
+    totalRevenue / currentTransactions.length : 0
   
   summary.value = {
-    total_orders: filtered.length,
+    total_orders: pagination.value.total, // Use total from pagination (all pages)
     total_revenue: totalRevenue,
     average_order: averageOrder,
-    pending_orders: filtered.filter(t => t.status === 'pending').length
+    pending_orders: currentTransactions.filter(t => t.status === 'pending').length
   }
 }
 
@@ -483,9 +553,17 @@ watch(localDialog, (newValue) => {
   }
 })
 
-// Watch for filter changes
+// Watch for filter changes - reload data from backend
+let filterTimeout: number | null = null
 watch([searchQuery, statusFilter, dateFrom, dateTo], () => {
-  calculateSummary()
+  // Debounce filter changes
+  if (filterTimeout) {
+    clearTimeout(filterTimeout)
+  }
+  
+  filterTimeout = setTimeout(() => {
+    loadTransactions(1, pagination.value.per_page) // Reset to page 1 when filtering
+  }, 500) // 500ms debounce
 })
 </script>
 

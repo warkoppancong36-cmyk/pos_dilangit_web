@@ -16,7 +16,7 @@
           <VBtn
             color="primary"
             prepend-icon="tabler-plus"
-            @click="showCreateModal = true"
+            @click="openCreateDialog"
           >
             Tambah Asset
           </VBtn>
@@ -32,6 +32,28 @@
         </div>
       </VCardTitle>
     </VCard>
+
+    <!-- Error Alert -->
+    <VAlert
+      v-if="errorMessage"
+      type="error"
+      variant="outlined"
+      class="mb-4"
+      :text="errorMessage"
+      closable
+      @click:close="errorMessage = ''"
+    />
+
+    <!-- Success Alert -->
+    <VAlert
+      v-if="successMessage"
+      type="success"
+      variant="outlined"
+      class="mb-4"
+      :text="successMessage"
+      closable
+      @click:close="successMessage = ''"
+    />
 
     <!-- Statistics Cards -->
     <VRow class="mb-6">
@@ -75,7 +97,7 @@
         <VCard>
           <VCardText class="text-center pa-6">
             <VAvatar size="56" color="info" class="mb-4">
-              <VIcon icon="tabler-currency-dollar" size="28" />
+              <VIcon icon="tabler-currency" size="28" />
             </VAvatar>
             <div class="text-h4 font-weight-bold">{{ formatRupiah(totalValue) }}</div>
             <div class="text-subtitle-2 text-medium-emphasis">Total Value</div>
@@ -443,52 +465,49 @@
       @delete="deleteAsset"
     />
 
+    <!-- Single Asset Delete Confirmation Dialog -->
+    <DeleteConfirmationDialog
+      v-model="showDeleteDialog"
+      title="Konfirmasi Hapus Asset"
+      :item-name="selectedAsset?.name"
+      :loading="deleteLoading"
+      confirm-text="Hapus Asset"
+      @confirm="confirmDeleteAsset"
+      @cancel="showDeleteDialog = false"
+    />
+
     <!-- Bulk Delete Confirmation Dialog -->
-    <VDialog v-model="showBulkDeleteModal" max-width="500">
-      <VCard>
-        <VCardTitle class="text-h5">
-          <VIcon icon="tabler-alert-triangle" class="me-2 text-warning" />
-          Konfirmasi Hapus Massal
-        </VCardTitle>
-        <VCardText>
-          <p class="mb-4">
-            Apakah Anda yakin ingin menghapus <strong>{{ selectedAssets.length }}</strong> 
-            asset{{ selectedAssets.length !== 1 ? 's' : '' }} yang dipilih?
-          </p>
-          <VAlert type="warning" variant="tonal" class="mb-0">
-            Tindakan ini tidak dapat dibatalkan!
-          </VAlert>
-        </VCardText>
-        <VCardActions>
-          <VSpacer />
-          <VBtn
-            variant="text"
-            @click="showBulkDeleteModal = false"
-          >
-            Batal
-          </VBtn>
-          <VBtn
-            color="error"
-            :loading="loading"
-            @click="confirmBulkDelete"
-          >
-            Hapus
-          </VBtn>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+    <DeleteConfirmationDialog
+      v-model="showBulkDeleteModal"
+      title="Konfirmasi Hapus Massal"
+      :loading="loading"
+      confirm-text="Hapus Semua"
+      @confirm="confirmBulkDelete"
+      @cancel="showBulkDeleteModal = false"
+    >
+      <template #additional-message>
+        <p class="mb-4">
+          Apakah Anda yakin ingin menghapus <strong>{{ selectedAssets.length }}</strong> 
+          asset{{ selectedAssets.length !== 1 ? 's' : '' }} yang dipilih?
+        </p>
+        <VAlert type="warning" variant="tonal" class="mb-0">
+          Tindakan ini tidak dapat dibatalkan!
+        </VAlert>
+      </template>
+    </DeleteConfirmationDialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useAssetsTest } from '@/composables/useAssetsTest'
-import type { Asset } from '@/composables/useAssetsTest'
+import { useAssets } from '@/composables/useAssets'
+import type { Asset } from '@/composables/useAssets'
 import { formatRupiah } from '@/@core/utils/formatters'
 
 // Component imports
 import AssetFormDialog from '@/components/assets/AssetFormDialog.vue'
 import AssetDetailsDialog from '@/components/assets/AssetDetailsDialog.vue'
+import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog.vue'
 
 // Composables
 const {
@@ -509,7 +528,7 @@ const {
   resetFilters,
   getCategories,
   getLocations
-} = useAssetsTest()
+} = useAssets()
 
 // Reactive state
 const searchQuery = ref('')
@@ -518,8 +537,12 @@ const selectedAssets = ref<number[]>([])
 const showCreateModal = ref(false)
 const showDetailsModal = ref(false)
 const showBulkDeleteModal = ref(false)
+const showDeleteDialog = ref(false)
 const selectedAsset = ref<Asset | null>(null)
 const editingAsset = ref<Asset | null>(null)
+const deleteLoading = ref(false)
+const errorMessage = ref('')
+const successMessage = ref('')
 
 // Available filter options
 const availableCategories = ref<string[]>([])
@@ -585,6 +608,12 @@ const clearFilters = () => {
   resetFilters()
 }
 
+// Message management
+const clearMessages = () => {
+  errorMessage.value = ''
+  successMessage.value = ''
+}
+
 // Asset selection
 const toggleAssetSelection = (assetId: number) => {
   const index = selectedAssets.value.indexOf(assetId)
@@ -600,34 +629,67 @@ const clearSelection = () => {
 }
 
 // Asset actions
+const openCreateDialog = () => {
+  clearMessages()
+  editingAsset.value = null
+  showCreateModal.value = true
+}
+
 const viewAsset = (asset: Asset) => {
+  clearMessages()
   selectedAsset.value = asset
   showDetailsModal.value = true
 }
 
 const editAsset = (asset: Asset) => {
+  clearMessages()
   editingAsset.value = asset
   showCreateModal.value = true
 }
 
-const deleteAsset = async (asset: Asset) => {
-  if (confirm(`Apakah Anda yakin ingin menghapus ${asset.name}?`)) {
-    try {
-      await deleteAssetAPI(asset.id)
-      selectedAssets.value = selectedAssets.value.filter(id => id !== asset.id)
-    } catch (err) {
-      console.error('Error deleting asset:', err)
-    }
+const deleteAsset = (asset: Asset) => {
+  clearMessages()
+  selectedAsset.value = asset
+  showDeleteDialog.value = true
+}
+
+const confirmDeleteAsset = async () => {
+  if (!selectedAsset.value) return
+  
+  deleteLoading.value = true
+  try {
+    await deleteAssetAPI(selectedAsset.value.id)
+    selectedAssets.value = selectedAssets.value.filter(id => id !== selectedAsset.value!.id)
+    showDeleteDialog.value = false
+    
+    // Show success message
+    successMessage.value = `Asset "${selectedAsset.value.name}" berhasil dihapus`
+    errorMessage.value = ''
+    
+    selectedAsset.value = null
+  } catch (err) {
+    console.error('Error deleting asset:', err)
+    errorMessage.value = 'Gagal menghapus asset. Terjadi kesalahan saat menghapus asset'
+    successMessage.value = ''
+  } finally {
+    deleteLoading.value = false
   }
 }
 
 const confirmBulkDelete = async () => {
   try {
+    const assetCount = selectedAssets.value.length
     await bulkDeleteAssets(selectedAssets.value)
     selectedAssets.value = []
     showBulkDeleteModal.value = false
+    
+    // Show success message
+    successMessage.value = `${assetCount} asset berhasil dihapus`
+    errorMessage.value = ''
   } catch (err) {
     console.error('Error bulk deleting assets:', err)
+    errorMessage.value = 'Gagal menghapus assets. Terjadi kesalahan saat menghapus beberapa asset'
+    successMessage.value = ''
   }
 }
 
@@ -636,13 +698,24 @@ const bulkUpdateStatus = () => {
 }
 
 const refreshAssets = () => {
+  clearMessages()
   fetchAssets()
 }
 
-const handleAssetSaved = () => {
-  showCreateModal.value = false
-  editingAsset.value = null
-  fetchAssets()
+const handleAssetSaved = async () => {
+  try {
+    // Show success message
+    successMessage.value = editingAsset.value ? 'Asset berhasil diperbarui' : 'Asset berhasil ditambahkan'
+    errorMessage.value = ''
+    
+    showCreateModal.value = false
+    editingAsset.value = null
+    await fetchAssets()
+  } catch (error) {
+    console.error('Error handling asset save:', error)
+    errorMessage.value = 'Gagal memuat ulang data asset'
+    successMessage.value = ''
+  }
 }
 
 // Initialize data

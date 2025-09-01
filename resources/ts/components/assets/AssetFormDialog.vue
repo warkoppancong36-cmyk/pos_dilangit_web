@@ -12,6 +12,17 @@
 
       <VDivider />
 
+      <!-- Error Alert -->
+      <VAlert
+        v-if="errorMessage"
+        type="error"
+        variant="outlined"
+        class="ma-6 mb-0"
+        :text="errorMessage"
+        closable
+        @click:close="errorMessage = ''"
+      />
+
       <VCardText class="pa-6">
         <VForm ref="formRef" v-model="valid" @submit.prevent="saveAsset">
           <VRow>
@@ -20,10 +31,13 @@
               <VTextField
                 v-model="assetForm.asset_code"
                 label="Kode Asset"
-                :rules="requiredRules"
+                :placeholder="isEdit ? 'Kode asset yang sudah ada' : 'Otomatis dibuat oleh sistem'"
                 variant="outlined"
                 prepend-inner-icon="tabler-barcode"
-                required
+                :readonly="!isEdit"
+                :disabled="!isEdit"
+                :hint="isEdit ? 'Kode asset dapat diubah saat edit' : 'Kode asset akan dibuat otomatis berdasarkan kategori'"
+                persistent-hint
               />
             </VCol>
 
@@ -102,8 +116,8 @@
                 label="Harga Pembelian"
                 type="number"
                 variant="outlined"
-                prepend-inner-icon="tabler-currency-dollar"
-                prefix="$"
+                prepend-inner-icon="tabler-currency"
+                prefix="Rp"
               />
             </VCol>
 
@@ -224,6 +238,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useAssets } from '@/composables/useAssets'
+import type { CreateAssetData } from '@/composables/useAssets'
 
 interface AssetForm {
   id?: number
@@ -264,6 +280,7 @@ const emit = defineEmits<Emits>()
 const valid = ref(false)
 const loading = ref(false)
 const formRef = ref()
+const errorMessage = ref('')
 
 // Form data
 const assetForm = ref<AssetForm>({
@@ -272,7 +289,17 @@ const assetForm = ref<AssetForm>({
   category: '',
   location: '',
   condition: 'good',
-  status: 'active'
+  status: 'active',
+  brand: '',
+  model: '',
+  serial_number: '',
+  purchase_date: '',
+  purchase_price: undefined,
+  warranty_until: '',
+  supplier: '',
+  assigned_to: '',
+  department: '',
+  description: ''
 })
 
 // Computed
@@ -329,6 +356,9 @@ const departmentOptions = [
   'Storage'
 ]
 
+// Composables
+const { createAsset, updateAsset } = useAssets()
+
 // Validation rules
 const requiredRules = [
   (v: string) => !!v || 'Field ini wajib diisi'
@@ -342,8 +372,19 @@ const resetForm = () => {
     category: '',
     location: '',
     condition: 'good',
-    status: 'active'
+    status: 'active',
+    brand: '',
+    model: '',
+    serial_number: '',
+    purchase_date: '',
+    purchase_price: undefined,
+    warranty_until: '',
+    supplier: '',
+    assigned_to: '',
+    department: '',
+    description: ''
   }
+  errorMessage.value = ''
   if (formRef.value) {
     formRef.value.resetValidation()
   }
@@ -363,16 +404,57 @@ const saveAsset = async () => {
   loading.value = true
   
   try {
-    // TODO: Implement actual save logic
-    console.log('Saving asset:', assetForm.value)
+    const assetData: CreateAssetData = {
+      name: assetForm.value.name,
+      category: assetForm.value.category,
+      location: assetForm.value.location,
+      condition: assetForm.value.condition as 'excellent' | 'good' | 'fair' | 'poor' | 'damaged',
+      status: assetForm.value.status as 'active' | 'inactive' | 'maintenance' | 'disposed',
+      brand: assetForm.value.brand,
+      model: assetForm.value.model,
+      serial_number: assetForm.value.serial_number,
+      purchase_date: assetForm.value.purchase_date,
+      purchase_price: assetForm.value.purchase_price ? parseFloat(assetForm.value.purchase_price.toString()) : undefined,
+      warranty_until: assetForm.value.warranty_until,
+      supplier: assetForm.value.supplier,
+      assigned_to: assetForm.value.assigned_to,
+      department: assetForm.value.department,
+      description: assetForm.value.description
+    }
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // Only include asset_code for edit mode, for create mode let backend generate it
+    if (isEdit.value && assetForm.value.asset_code) {
+      (assetData as any).asset_code = assetForm.value.asset_code
+    }
+
+    if (isEdit.value && assetForm.value.id) {
+      // Update existing asset
+      await updateAsset(assetForm.value.id, assetData)
+    } else {
+      // Create new asset
+      await createAsset(assetData)
+    }
     
+    // Clear error and emit success
+    errorMessage.value = ''
     emit('saved')
     closeDialog()
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error saving asset:', error)
+    
+    // Handle validation errors
+    if (error.response && error.response.status === 422) {
+      const errors = error.response.data.errors
+      if (errors.asset_code) {
+        errorMessage.value = 'Kode asset sudah digunakan. Silakan coba lagi atau hubungi administrator.'
+      } else if (errors.serial_number) {
+        errorMessage.value = 'Serial number sudah digunakan. Silakan gunakan serial number yang berbeda.'
+      } else {
+        errorMessage.value = error.response.data.message || 'Terjadi kesalahan validasi'
+      }
+    } else {
+      errorMessage.value = 'Gagal menyimpan asset. Silakan coba lagi.'
+    }
   } finally {
     loading.value = false
   }

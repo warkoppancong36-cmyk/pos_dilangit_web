@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\TransactionLogController;
 use App\Http\Controllers\Api\PpnController;
+use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\SupplierController;
@@ -25,122 +26,6 @@ use App\Http\Controllers\Api\HPPController;
 use App\Http\Controllers\VariantHPPController;
 use App\Http\Controllers\Api\BaseProductCompositionController;
 
-
-// Test route to create sample inventory movement
-Route::get('/debug-variants/{productId}', function($productId) {
-    try {
-        $variants = DB::table('variants')
-            ->where('id_product', $productId)
-            ->get(['id_variant', 'name', 'variant_values']);
-            
-        $result = [];
-        foreach ($variants as $variant) {
-            $decoded = json_decode($variant->variant_values, true);
-            $result[] = [
-                'id_variant' => $variant->id_variant,
-                'name' => $variant->name,
-                'variant_values_raw' => $variant->variant_values,
-                'variant_values_decoded' => $decoded,
-                'json_error' => json_last_error_msg()
-            ];
-        }
-        
-        return response()->json([
-            'success' => true,
-            'data' => $result
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'error' => $e->getMessage()
-        ]);
-    }
-});
-
-Route::post('/test-create-movement', function(Request $request) {
-    try {
-        $inventory = \App\Models\Inventory::find($request->inventory_id ?? 24);
-        if (!$inventory) {
-            return response()->json(['error' => 'Inventory not found'], 404);
-        }
-        
-        $movement = \App\Models\InventoryMovement::create([
-            'id_inventory' => $inventory->id_inventory,
-            'movement_type' => 'in',
-            'quantity' => 10,
-            'stock_before' => $inventory->current_stock,
-            'stock_after' => $inventory->current_stock + 10,
-            'unit_cost' => 1000,
-            'total_cost' => 10000,
-            'reference_type' => 'test',
-            'reference_id' => null,
-            'notes' => 'Test movement for debugging',
-            'created_by' => 1,
-            'movement_date' => now()
-        ]);
-        
-        return response()->json([
-            'success' => true,
-            'movement' => $movement,
-            'message' => 'Test movement created successfully'
-        ]);
-    } catch (\Exception $e) {
-        return response()->json(['error' => $e->getMessage()], 500);
-    }
-});
-
-// Debug route to test stock update logic
-Route::post('/debug-stock-update/{id}', function(Request $request, $id) {
-    try {
-        \DB::beginTransaction();
-        
-        $inventory = \App\Models\Inventory::find($id);
-        if (!$inventory) {
-            return response()->json(['error' => 'Inventory not found'], 404);
-        }
-        
-        $stockBefore = $inventory->current_stock;
-        $quantity = (int) $request->input('quantity', 5);
-        $newStock = $stockBefore + $quantity;
-        
-        // Step 1: Create movement
-        $movement = \App\Models\InventoryMovement::create([
-            'id_inventory' => $inventory->id_inventory,
-            'movement_type' => 'in',
-            'quantity' => $quantity,
-            'stock_before' => $stockBefore,
-            'stock_after' => $newStock,
-            'unit_cost' => 2000,
-            'total_cost' => 2000 * $quantity,
-            'reference_type' => 'debug',
-            'reference_id' => null,
-            'notes' => 'Debug test update',
-            'created_by' => 1,
-            'movement_date' => now()
-        ]);
-        
-        // Step 2: Update inventory
-        $updateResult = $inventory->update([
-            'current_stock' => $newStock,
-            'last_restocked' => now()
-        ]);
-        
-        \DB::commit();
-        
-        return response()->json([
-            'success' => true,
-            'stock_before' => $stockBefore,
-            'quantity_added' => $quantity,
-            'expected_new_stock' => $newStock,
-            'actual_current_stock' => $inventory->fresh()->current_stock,
-            'update_result' => $updateResult,
-            'movement_id' => $movement->id_movement
-        ]);
-    } catch (\Exception $e) {
-        \DB::rollback();
-        return response()->json(['error' => $e->getMessage()], 500);
-    }
-});
 
 Route::prefix('auth')->group(function () {
     Route::post('register', [AuthController::class, 'register']);
@@ -173,6 +58,17 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
         Route::delete('/{id}', [PpnController::class, 'destroy']);
         Route::post('/{id}/restore', [PpnController::class, 'restore']);
         Route::post('/{id}/toggle-active', [PpnController::class, 'toggleActive']);
+    });
+
+    Route::prefix('users')->group(function () {
+        Route::get('/', [UserController::class, 'index']);
+        Route::post('/', [UserController::class, 'store']);
+        Route::get('/roles', [UserController::class, 'getRoles']);
+        Route::post('/bulk-delete', [UserController::class, 'bulkDelete']);
+        Route::get('/{id}', [UserController::class, 'show']);
+        Route::put('/{id}', [UserController::class, 'update']);
+        Route::delete('/{id}', [UserController::class, 'destroy']);
+        Route::post('/{id}/toggle-active', [UserController::class, 'toggleActive']);
     });
 
     Route::prefix('categories')->group(function () {
@@ -464,44 +360,6 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
             Route::post('/update-price', [HPPController::class, 'updatePriceFromHPP']);
         });
     });
-});
-
-Route::get('/test', function () {
-    return response()->json([
-        'message' => 'API is working!',
-        'timestamp' => now(),
-    ]);
-});
-
-// Test asset routes without authentication
-Route::prefix('test-assets')->group(function () {
-    Route::get('/', [App\Http\Controllers\Api\AssetController::class, 'index']);
-    Route::post('/', [App\Http\Controllers\Api\AssetController::class, 'store']);
-    Route::get('/types', [App\Http\Controllers\Api\AssetController::class, 'getTypes']);
-    Route::get('/stats', [App\Http\Controllers\Api\AssetController::class, 'getStats']);
-});
-
-// Temporary test endpoint for development
-Route::get('/test-token', function () {
-    $user = App\Models\User::first();
-    $token = $user->createToken('test-token')->plainTextToken;
-    return response()->json([
-        'message' => 'Test token generated',
-        'token' => $token,
-        'user' => $user->name
-    ]);
-});
-
-Route::prefix('master-slave-test')->group(function () {
-    Route::get('/test-connections', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'testConnections']);
-    Route::post('/create-log', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'createTestLog']);
-    Route::post('/bulk-create-logs', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'bulkCreateTestLogs']);
-    Route::get('/logs', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'getLogs']);
-    Route::get('/analytics', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'getAnalytics']);
-    Route::get('/error-logs', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'getErrorLogs']);
-    Route::get('/consistent-logs', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'getConsistentLogs']);
-    Route::get('/database-stats', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'getDatabaseStats']);
-});
 
     // Base Product Composition Routes
     Route::prefix('base-product-compositions')->group(function () {
@@ -517,17 +375,20 @@ Route::prefix('master-slave-test')->group(function () {
     Route::prefix('assets')->group(function () {
         Route::get('/', [App\Http\Controllers\Api\AssetController::class, 'index']);
         Route::post('/', [App\Http\Controllers\Api\AssetController::class, 'store']);
-        Route::get('/types', [App\Http\Controllers\Api\AssetController::class, 'getTypes']);
-        Route::get('/stats', [App\Http\Controllers\Api\AssetController::class, 'getStats']);
-        Route::get('/search', [App\Http\Controllers\Api\AssetController::class, 'search']);
+        Route::post('/bulk-delete', [App\Http\Controllers\Api\AssetController::class, 'bulkDelete']);
+        Route::get('/statistics', [App\Http\Controllers\Api\AssetController::class, 'statistics']);
+        Route::get('/maintenance-schedule', [App\Http\Controllers\Api\AssetController::class, 'maintenanceSchedule']);
+        Route::get('/category/{category}', [App\Http\Controllers\Api\AssetController::class, 'byCategory']);
         Route::get('/{asset}', [App\Http\Controllers\Api\AssetController::class, 'show']);
         Route::put('/{asset}', [App\Http\Controllers\Api\AssetController::class, 'update']);
         Route::delete('/{asset}', [App\Http\Controllers\Api\AssetController::class, 'destroy']);
-        Route::post('/{asset}/toggle-access', [App\Http\Controllers\Api\AssetController::class, 'toggleAccess']);
-        Route::get('/{asset}/download', [App\Http\Controllers\Api\AssetController::class, 'download']);
-        Route::post('/bulk-upload', [App\Http\Controllers\Api\AssetController::class, 'bulkUpload']);
-        Route::post('/bulk-delete', [App\Http\Controllers\Api\AssetController::class, 'bulkDelete']);
+        Route::post('/{asset}/change-status', [App\Http\Controllers\Api\AssetController::class, 'changeStatus']);
+        Route::post('/{asset}/assign', [App\Http\Controllers\Api\AssetController::class, 'assign']);
     });
+
+    // Asset helper routes (categories, locations)
+    Route::get('assets-categories', [App\Http\Controllers\Api\AssetController::class, 'getCategories']);
+    Route::get('assets-locations', [App\Http\Controllers\Api\AssetController::class, 'getLocations']);
 
     // Permission Management Routes
     Route::prefix('permissions')->group(function () {
@@ -552,3 +413,44 @@ Route::prefix('master-slave-test')->group(function () {
         Route::post('/check-user-permission', [App\Http\Controllers\Api\PermissionController::class, 'checkUserPermission']);
         Route::get('/user/{userId}/effective', [App\Http\Controllers\Api\PermissionController::class, 'getEffectivePermissions']);
     });
+
+    // Bluetooth Device Management Routes
+    Route::prefix('bluetooth-devices')->group(function () {
+        Route::get('/', [App\Http\Controllers\Api\BluetoothDeviceController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\Api\BluetoothDeviceController::class, 'store']);
+        Route::get('/defaults', [App\Http\Controllers\Api\BluetoothDeviceController::class, 'getDefaults']);
+        Route::get('/{id}', [App\Http\Controllers\Api\BluetoothDeviceController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\Api\BluetoothDeviceController::class, 'update']);
+        Route::delete('/{id}', [App\Http\Controllers\Api\BluetoothDeviceController::class, 'destroy']);
+        Route::post('/{id}/set-default', [App\Http\Controllers\Api\BluetoothDeviceController::class, 'setDefault']);
+        Route::post('/{id}/update-connection', [App\Http\Controllers\Api\BluetoothDeviceController::class, 'updateConnection']);
+        Route::post('/{id}/test-connection', [App\Http\Controllers\Api\BluetoothDeviceController::class, 'testConnection']);
+    });
+
+
+});
+
+
+// Temporary test endpoint for development
+Route::get('/test-token', function () {
+    $user = App\Models\User::first();
+    $token = $user->createToken('test-token')->plainTextToken;
+    return response()->json([
+        'message' => 'Test token generated',
+        'token' => $token,
+        'user' => $user->name
+    ]);
+});
+
+Route::prefix('master-slave-test')->group(function () {
+    Route::get('/test-connections', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'testConnections']);
+    Route::post('/create-log', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'createTestLog']);
+    Route::post('/bulk-create-logs', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'bulkCreateTestLogs']);
+    Route::get('/logs', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'getLogs']);
+    Route::get('/analytics', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'getAnalytics']);
+    Route::get('/error-logs', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'getErrorLogs']);
+    Route::get('/consistent-logs', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'getConsistentLogs']);
+    Route::get('/database-stats', [App\Http\Controllers\Api\MasterSlaveTestController::class, 'getDatabaseStats']);
+});
+
+    

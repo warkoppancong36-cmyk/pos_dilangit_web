@@ -102,8 +102,8 @@
                 label="Harga Pembelian"
                 type="number"
                 variant="outlined"
-                prepend-inner-icon="tabler-currency-dollar"
-                prefix="$"
+                prepend-inner-icon="tabler-currency"
+                prefix="Rp"
               />
             </VCol>
 

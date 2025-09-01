@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { $api } from '@/utils/api'
+import axios from 'axios'
 
 export interface Asset {
   id: number
@@ -125,19 +125,36 @@ export const useAssets = () => {
         page: page.toString(),
         per_page: state.value.pagination.per_page.toString(),
         ...Object.fromEntries(
-          Object.entries(state.value.filters).filter(([_, value]) => 
+          Object.entries(state.value.filters).filter(([_, value]) =>
             value !== undefined && value !== '' && value !== null
           )
         )
       })
 
-      const response = await $api(`/api/test-assets?${params}`)
-      
-      state.value.assets = response.data || response
-      
-      // Update pagination if provided
-      if (response.meta) {
-        Object.assign(state.value.pagination, response.meta)
+      const response = await axios.get(`/api/assets?${params}`)
+
+      // Handle Laravel API response format
+      if (response.data.success && response.data.data) {
+        if (Array.isArray(response.data.data.data)) {
+          // Paginated response
+          state.value.assets = response.data.data.data
+          state.value.pagination = {
+            current_page: response.data.data.current_page || 1,
+            last_page: response.data.data.last_page || 1,
+            per_page: response.data.data.per_page || 20,
+            total: response.data.data.total || 0,
+            from: response.data.data.from || 0,
+            to: response.data.data.to || 0
+          }
+        } else if (Array.isArray(response.data.data)) {
+          state.value.assets = response.data.data
+        } else {
+          state.value.assets = []
+        }
+      } else if (Array.isArray(response.data)) {
+        state.value.assets = response.data
+      } else {
+        state.value.assets = []
       }
     } catch (err) {
       state.value.error = err instanceof Error ? err.message : 'An error occurred'
@@ -152,9 +169,9 @@ export const useAssets = () => {
     state.value.error = null
 
     try {
-      const response = await $api(`/api/assets/${id}`)
+      const response = await axios.get(`/api/assets/${id}`)
       state.value.asset = response.data || response
-      
+
       return state.value.asset
     } catch (err) {
       state.value.error = err instanceof Error ? err.message : 'An error occurred'
@@ -171,7 +188,7 @@ export const useAssets = () => {
 
     try {
       const formData = new FormData()
-      
+
       // Add all asset data to FormData
       Object.entries(assetData).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
@@ -183,9 +200,10 @@ export const useAssets = () => {
         }
       })
 
-      const response = await $api('/api/assets', {
-        method: 'POST',
-        body: formData
+      const response = await axios.post('/api/assets', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
       })
 
       const newAsset = response.data || response
@@ -210,7 +228,7 @@ export const useAssets = () => {
     try {
       const formData = new FormData()
       formData.append('_method', 'PUT')
-      
+
       // Add all asset data to FormData
       Object.entries(assetData).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
@@ -222,9 +240,13 @@ export const useAssets = () => {
         }
       })
 
-      const response = await $api(`/api/assets/${id}`, {
-        method: 'POST', // Using POST with _method=PUT for FormData
-        body: formData
+      // Add _method field for Laravel
+      formData.append('_method', 'PUT')
+
+      const response = await axios.post(`/api/assets/${id}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
       })
 
       const updatedAsset = response.data || response
@@ -250,9 +272,7 @@ export const useAssets = () => {
     state.value.error = null
 
     try {
-      await $api(`/api/assets/${id}`, {
-        method: 'DELETE'
-      })
+      await axios.delete(`/api/assets/${id}`)
 
       // Remove from local state
       state.value.assets = state.value.assets.filter(a => a.id !== id)
@@ -272,10 +292,7 @@ export const useAssets = () => {
     state.value.error = null
 
     try {
-      await $api('/api/assets/bulk-delete', {
-        method: 'POST',
-        body: { asset_ids: assetIds }
-      })
+      await axios.post('/api/assets/bulk-delete', { asset_ids: assetIds })
 
       // Remove from local state
       state.value.assets = state.value.assets.filter(a => !assetIds.includes(a.id))
@@ -337,7 +354,7 @@ export const useAssets = () => {
 
   const getAssetStats = async () => {
     try {
-      const response = await $api('/api/assets-stats')
+      const response = await axios.get('/api/assets-stats')
       return response.data || response
     } catch (err) {
       console.error('Error fetching asset stats:', err)
@@ -347,7 +364,7 @@ export const useAssets = () => {
 
   const getCategories = async () => {
     try {
-      const response = await $api('/api/assets-categories')
+      const response = await axios.get('/api/assets-categories')
       return response.data || response
     } catch (err) {
       console.error('Error fetching categories:', err)
@@ -357,7 +374,7 @@ export const useAssets = () => {
 
   const getLocations = async () => {
     try {
-      const response = await $api('/api/assets-locations')
+      const response = await axios.get('/api/assets-locations')
       return response.data || response
     } catch (err) {
       console.error('Error fetching locations:', err)
@@ -420,15 +437,9 @@ export const useAssets = () => {
     updateAsset,
     deleteAsset,
     bulkDeleteAssets,
-    updateAssetStatus,
-    assignAsset,
     searchAssets,
     filterAssets,
     resetFilters,
-    getAssetsByCategory,
-    getAssetsByLocation,
-    getAssetsByDepartment,
-    getAssetStats,
     getCategories,
     getLocations,
 

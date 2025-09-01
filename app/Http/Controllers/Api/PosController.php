@@ -46,7 +46,21 @@ class PosController extends Controller
                 $query->where('table_number', $request->table_number);
             }
 
-            $orders = $query->paginate($request->get('per_page', 20));
+            // Handle pagination - support 'all' to get all records
+            $perPage = $request->get('per_page', 20);
+            if ($perPage === 'all') {
+                $orders = $query->get();
+                // Convert to paginator-like structure for consistency
+                $orders = new \Illuminate\Pagination\LengthAwarePaginator(
+                    $orders,
+                    $orders->count(),
+                    $orders->count(),
+                    1,
+                    ['path' => request()->url(), 'pageName' => 'page']
+                );
+            } else {
+                $orders = $query->paginate($perPage);
+            }
 
             // Add daily order sequence to each order
             $orders->getCollection()->transform(function ($order) {
@@ -104,7 +118,21 @@ class PosController extends Controller
                 $query->whereDate('created_at', '>=', now()->subDays(30));
             }
 
-            $orders = $query->paginate($request->get('per_page', 50));
+            // Handle pagination - support 'all' to get all records
+            $perPage = $request->get('per_page', 50);
+            if ($perPage === 'all') {
+                $orders = $query->get();
+                // Convert to paginator-like structure for consistency
+                $orders = new \Illuminate\Pagination\LengthAwarePaginator(
+                    $orders,
+                    $orders->count(),
+                    $orders->count(),
+                    1,
+                    ['path' => request()->url(), 'pageName' => 'page']
+                );
+            } else {
+                $orders = $query->paginate($perPage);
+            }
 
             // Add daily order sequence to each order
             $orders->getCollection()->transform(function ($order) {
