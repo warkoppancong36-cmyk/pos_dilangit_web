@@ -1,56 +1,57 @@
-import { ref, computed, reactive } from 'vue'
-import type { Ref } from 'vue'
-import { $api } from '@/utils/api'
+import { ref, computed } from 'vue'
+import axios from 'axios'
 
 export interface User {
   id: number
   name: string
+  username: string
   email: string
-  email_verified_at?: string
-  is_active: boolean
-  avatar?: string
   phone?: string
-  address?: string
-  last_login_at?: string
+  role_id: number
+  role?: {
+    id: number
+    name: string
+  }
+  is_active: boolean
   created_at: string
   updated_at: string
-  roles?: Role[]
-  permissions?: Permission[]
+  last_login_at?: string
 }
 
 export interface Role {
   id: number
   name: string
-  display_name?: string
   description?: string
-  is_active: boolean
-}
-
-export interface Permission {
-  id_permission: number
-  name: string
-  display_name: string
-  module: string
-  action: string
 }
 
 export interface UserFilters {
   search?: string
-  is_active?: boolean
+  status?: 'all' | 'active' | 'inactive'
   role_id?: number
   sort_by?: string
   sort_order?: 'asc' | 'desc'
+  page?: number
+  per_page?: number
+}
+
+export interface UserFormData {
+  name: string
+  username: string
+  email: string
+  phone: string
+  password: string
+  role_id: number | null
+  is_active: boolean
 }
 
 export interface CreateUserData {
   name: string
+  username: string
   email: string
+  phone: string
   password: string
-  password_confirmation: string
-  is_active?: boolean
-  phone?: string
-  address?: string
-  role_ids?: number[]
+  role_id: number | null
+  is_active: boolean
 }
 
 export interface UpdateUserData {
@@ -70,7 +71,7 @@ export function useUsers() {
   const user = ref<User | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
-  
+
   const pagination = ref({
     current_page: 1,
     last_page: 1,
@@ -82,7 +83,7 @@ export function useUsers() {
 
   const filters = reactive<UserFilters>({
     search: '',
-    is_active: undefined,
+    status: 'all',
     role_id: undefined,
     sort_by: 'name',
     sort_order: 'asc'
@@ -104,7 +105,7 @@ export function useUsers() {
         page: page.toString(),
         per_page: pagination.value.per_page.toString(),
         ...Object.fromEntries(
-          Object.entries(filters).filter(([_, value]) => 
+          Object.entries(filters).filter(([_, value]) =>
             value !== undefined && value !== '' && value !== null
           )
         ),
@@ -115,7 +116,7 @@ export function useUsers() {
 
       if (response.data) {
         users.value = response.data.data || response.data
-        
+
         if (response.meta) {
           pagination.value = {
             current_page: response.meta.current_page,
@@ -187,16 +188,16 @@ export function useUsers() {
           'Content-Type': 'application/json'
         }
       })
-      
+
       const index = users.value.findIndex(u => u.id === id)
       if (index !== -1) {
         users.value[index] = response.data
       }
-      
+
       if (user.value?.id === id) {
         user.value = response.data
       }
-      
+
       return response.data
     } catch (err: any) {
       error.value = err.response?.data?.message || 'Failed to update user'
@@ -215,12 +216,12 @@ export function useUsers() {
       await $api(`/api/users/${id}`, {
         method: 'DELETE'
       })
-      
+
       const index = users.value.findIndex(u => u.id === id)
       if (index !== -1) {
         users.value.splice(index, 1)
       }
-      
+
       if (user.value?.id === id) {
         user.value = null
       }
@@ -249,12 +250,12 @@ export function useUsers() {
           'Content-Type': 'application/json'
         }
       })
-      
+
       const index = users.value.findIndex(u => u.id === userId)
       if (index !== -1) {
         users.value[index] = response.data
       }
-      
+
       return response.data
     } catch (err: any) {
       error.value = err.response?.data?.message || 'Failed to assign roles'
@@ -293,13 +294,13 @@ export function useUsers() {
     error,
     pagination,
     filters,
-    
+
     // Computed
     hasUsers,
     isEmpty,
     activeUsers,
     inactiveUsers,
-    
+
     // Actions
     fetchUsers,
     fetchUser,

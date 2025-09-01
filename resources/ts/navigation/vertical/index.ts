@@ -127,7 +127,7 @@ export default [
       },
       {
         title: 'User Management',
-        to: { name: 'users' },
+        to: { name: 'user-management' },
         icon: { icon: 'tabler-user-cog' },
         role: ['admin'],
       },

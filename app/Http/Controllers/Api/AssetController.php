@@ -6,240 +6,122 @@ use App\Http\Controllers\Controller;
 use App\Models\Asset;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
-use Intervention\Image\ImageManager;
-use Intervention\Image\Drivers\Gd\Driver;
 
 class AssetController extends Controller
 {
     /**
-     * Get all assets
+     * Get all assets with filtering and pagination
      */
     public function index(Request $request): JsonResponse
     {
         try {
-            // For testing, return some sample data if no assets in database
-            $assets = Asset::all();
-            
-            if ($assets->isEmpty()) {
-                // Return restaurant-specific sample data for testing
-                $sampleAssets = [
-                    [
-                        'id' => 1,
-                        'asset_code' => 'KIT-001',
-                        'name' => 'Commercial Oven',
-                        'category' => 'Kitchen Equipment',
-                        'brand' => 'Rational',
-                        'model' => 'SelfCookingCenter',
-                        'serial_number' => 'RAT123456',
-                        'purchase_date' => '2024-01-15',
-                        'purchase_price' => 15999.99,
-                        'location' => 'Main Kitchen',
-                        'condition' => 'excellent',
-                        'status' => 'active',
-                        'description' => 'Commercial combi oven for restaurant kitchen',
-                        'supplier' => 'Restaurant Supply Co',
-                        'warranty_until' => '2027-01-15',
-                        'assigned_to' => 'Head Chef',
-                        'department' => 'Kitchen',
-                        'image_url' => null,
-                        'created_at' => '2024-01-15T10:00:00Z',
-                        'updated_at' => '2024-01-15T10:00:00Z'
-                    ],
-                    [
-                        'id' => 2,
-                        'asset_code' => 'POS-001',
-                        'name' => 'Point of Sale Terminal',
-                        'category' => 'Electronics',
-                        'brand' => 'Square',
-                        'model' => 'Terminal',
-                        'serial_number' => 'SQ789012',
-                        'purchase_date' => '2024-02-01',
-                        'purchase_price' => 299.99,
-                        'location' => 'Front Counter',
-                        'condition' => 'excellent',
-                        'status' => 'active',
-                        'description' => 'POS system for order processing',
-                        'supplier' => 'Square Inc',
-                        'warranty_until' => '2026-02-01',
-                        'assigned_to' => 'Cashier Team',
-                        'department' => 'Front of House',
-                        'image_url' => null,
-                        'created_at' => '2024-02-01T14:30:00Z',
-                        'updated_at' => '2024-02-01T14:30:00Z'
-                    ],
-                    [
-                        'id' => 3,
-                        'asset_code' => 'FRIDGE-001',
-                        'name' => 'Commercial Refrigerator',
-                        'category' => 'Kitchen Equipment',
-                        'brand' => 'True Manufacturing',
-                        'model' => 'T-49-HC',
-                        'serial_number' => 'TRUE345678',
-                        'purchase_date' => '2024-01-20',
-                        'purchase_price' => 2899.99,
-                        'location' => 'Cold Storage',
-                        'condition' => 'good',
-                        'status' => 'active',
-                        'description' => 'Two-door reach-in refrigerator',
-                        'supplier' => 'Restaurant Supply Co',
-                        'warranty_until' => '2026-01-20',
-                        'assigned_to' => 'Kitchen Staff',
-                        'department' => 'Kitchen',
-                        'image_url' => null,
-                        'created_at' => '2024-01-20T11:00:00Z',
-                        'updated_at' => '2024-01-20T11:00:00Z'
-                    ],
-                    [
-                        'id' => 4,
-                        'asset_code' => 'TABLE-001',
-                        'name' => 'Dining Table Set',
-                        'category' => 'Furniture',
-                        'brand' => 'Restaurant Furniture Plus',
-                        'model' => 'Classic Wood',
-                        'serial_number' => 'RF901234',
-                        'purchase_date' => '2024-01-10',
-                        'purchase_price' => 459.99,
-                        'location' => 'Dining Area',
-                        'condition' => 'good',
-                        'status' => 'active',
-                        'description' => '4-seat dining table with chairs',
-                        'supplier' => 'Restaurant Furniture Plus',
-                        'warranty_until' => '2025-01-10',
-                        'assigned_to' => 'Front of House',
-                        'department' => 'Dining',
-                        'image_url' => null,
-                        'created_at' => '2024-01-10T09:00:00Z',
-                        'updated_at' => '2024-01-10T09:00:00Z'
-                    ],
-                    [
-                        'id' => 5,
-                        'asset_code' => 'COFFEE-001',
-                        'name' => 'Espresso Machine',
-                        'category' => 'Kitchen Equipment',
-                        'brand' => 'La Marzocco',
-                        'model' => 'Linea PB',
-                        'serial_number' => 'LM567890',
-                        'purchase_date' => '2024-02-15',
-                        'purchase_price' => 4999.99,
-                        'location' => 'Beverage Station',
-                        'condition' => 'excellent',
-                        'status' => 'active',
-                        'description' => 'Professional espresso machine',
-                        'supplier' => 'Coffee Equipment Co',
-                        'warranty_until' => '2027-02-15',
-                        'assigned_to' => 'Barista',
-                        'department' => 'Beverage',
-                        'image_url' => null,
-                        'created_at' => '2024-02-15T16:00:00Z',
-                        'updated_at' => '2024-02-15T16:00:00Z'
-                    ],
-                    [
-                        'id' => 6,
-                        'asset_code' => 'WASH-001',
-                        'name' => 'Commercial Dishwasher',
-                        'category' => 'Kitchen Equipment',
-                        'brand' => 'Hobart',
-                        'model' => 'AM15',
-                        'serial_number' => 'HOB123789',
-                        'purchase_date' => '2024-01-25',
-                        'purchase_price' => 3499.99,
-                        'location' => 'Dish Pit',
-                        'condition' => 'good',
-                        'status' => 'active',
-                        'description' => 'High-temperature dishwasher',
-                        'supplier' => 'Restaurant Supply Co',
-                        'warranty_until' => '2026-01-25',
-                        'assigned_to' => 'Dish Crew',
-                        'department' => 'Kitchen',
-                        'image_url' => null,
-                        'created_at' => '2024-01-25T12:00:00Z',
-                        'updated_at' => '2024-01-25T12:00:00Z'
-                    ]
-                ];
-                
-                return response()->json([
-                    'success' => true,
-                    'data' => $sampleAssets,
-                    'message' => 'Restaurant asset samples returned (no database assets found)',
-                    'meta' => [
-                        'current_page' => 1,
-                        'last_page' => 1,
-                        'per_page' => 20,
-                        'total' => 6,
-                        'from' => 1,
-                        'to' => 6
-                    ]
-                ]);
-            }
-
             $query = Asset::query();
 
-            // Filter by category
-            if ($request->has('category')) {
-                $query->where('category', $request->category);
+            // Apply filters
+            if ($request->has('category') && $request->category) {
+                $query->byCategory($request->category);
             }
 
-            // Search
-            if ($request->has('search')) {
+            if ($request->has('location') && $request->location) {
+                $query->byLocation($request->location);
+            }
+
+            if ($request->has('status') && $request->status) {
+                $query->where('status', $request->status);
+            }
+
+            if ($request->has('condition') && $request->condition) {
+                $query->byCondition($request->condition);
+            }
+
+            if ($request->has('department') && $request->department) {
+                $query->where('department', $request->department);
+            }
+
+            if ($request->has('assigned_only') && $request->boolean('assigned_only')) {
+                $query->assigned();
+            }
+
+            if ($request->has('unassigned_only') && $request->boolean('unassigned_only')) {
+                $query->unassigned();
+            }
+
+            // Search functionality
+            if ($request->has('search') && $request->search) {
                 $search = $request->search;
-                $query->where(function ($q) use ($search) {
+                $query->where(function($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
-                      ->orWhere('original_name', 'like', "%{$search}%")
+                      ->orWhere('asset_code', 'like', "%{$search}%")
+                      ->orWhere('brand', 'like', "%{$search}%")
+                      ->orWhere('model', 'like', "%{$search}%")
+                      ->orWhere('serial_number', 'like', "%{$search}%")
                       ->orWhere('description', 'like', "%{$search}%");
                 });
             }
 
-            // Only active assets
-            $query->where('status', 'active');
-
             // Sorting
             $sortBy = $request->get('sort_by', 'created_at');
-            $sortDirection = $request->get('sort_direction', 'desc');
-            $query->orderBy($sortBy, $sortDirection);
+            $sortOrder = $request->get('sort_order', 'desc');
+            $query->orderBy($sortBy, $sortOrder);
 
             // Pagination
-            $perPage = min($request->get('per_page', 15), 100);
+            $perPage = $request->get('per_page', 15);
             $assets = $query->paginate($perPage);
 
             return response()->json([
                 'success' => true,
-                'data' => $assets,
+                'data' => $assets->items(),
+                'pagination' => [
+                    'current_page' => $assets->currentPage(),
+                    'last_page' => $assets->lastPage(),
+                    'per_page' => $assets->perPage(),
+                    'total' => $assets->total(),
+                    'from' => $assets->firstItem(),
+                    'to' => $assets->lastItem(),
+                ],
+                'filters' => [
+                    'categories' => Asset::getCategories(),
+                    'locations' => Asset::getLocations(),
+                    'departments' => Asset::getDepartments(),
+                    'conditions' => Asset::CONDITIONS,
+                    'statuses' => Asset::STATUSES,
+                ]
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error loading assets: ' . $e->getMessage()
+                'message' => 'Failed to fetch assets',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
 
     /**
-     * Create new asset
+     * Store a new asset
      */
     public function store(Request $request): JsonResponse
     {
         try {
             $validator = Validator::make($request->all(), [
-                'asset_code' => 'required|string|max:255|unique:assets,asset_code',
+                'asset_code' => 'nullable|string|max:20|unique:assets,asset_code',
                 'name' => 'required|string|max:255',
-                'category' => 'required|string|max:255',
-                'brand' => 'nullable|string|max:255',
-                'model' => 'nullable|string|max:255',
-                'serial_number' => 'nullable|string|max:255',
+                'category' => 'required|string|max:100',
+                'brand' => 'nullable|string|max:100',
+                'model' => 'nullable|string|max:100',
+                'serial_number' => 'nullable|string|max:100|unique:assets,serial_number',
                 'purchase_date' => 'nullable|date',
                 'purchase_price' => 'nullable|numeric|min:0',
-                'location' => 'required|string|max:255',
-                'condition' => 'required|in:excellent,good,fair,poor,damaged',
-                'status' => 'required|in:active,inactive,maintenance,disposed',
-                'description' => 'nullable|string',
+                'location' => 'nullable|string|max:255',
+                'condition' => 'required|in:' . implode(',', Asset::CONDITIONS),
+                'status' => 'required|in:' . implode(',', Asset::STATUSES),
+                'description' => 'nullable|string|max:1000',
                 'supplier' => 'nullable|string|max:255',
-                'warranty_until' => 'nullable|date',
+                'warranty_until' => 'nullable|date|after:today',
                 'assigned_to' => 'nullable|string|max:255',
-                'department' => 'nullable|string|max:255',
+                'department' => 'nullable|string|max:100',
             ]);
 
             if ($validator->fails()) {
@@ -250,24 +132,26 @@ class AssetController extends Controller
                 ], 422);
             }
 
-            // Create asset record
-            $asset = Asset::create($request->only([
-                'asset_code', 'name', 'category', 'brand', 'model', 'serial_number',
-                'purchase_date', 'purchase_price', 'location', 'condition',
-                'status', 'description', 'supplier', 'warranty_until',
-                'assigned_to', 'department'
-            ]));
+            $data = $validator->validated();
+            
+            // Generate asset code if not provided
+            if (!isset($data['asset_code']) || empty($data['asset_code'])) {
+                $data['asset_code'] = $this->generateUniqueAssetCode($data['category']);
+            }
+
+            $asset = Asset::create($data);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Asset created successfully',
+                'message' => 'Asset berhasil dibuat',
                 'data' => $asset
             ], 201);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error creating asset: ' . $e->getMessage()
+                'message' => 'Failed to create asset',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -275,7 +159,7 @@ class AssetController extends Controller
     /**
      * Get specific asset
      */
-    public function show(int $id): JsonResponse
+    public function show($id): JsonResponse
     {
         try {
             $asset = Asset::findOrFail($id);
@@ -288,7 +172,8 @@ class AssetController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Asset not found'
+                'message' => 'Asset not found',
+                'error' => $e->getMessage()
             ], 404);
         }
     }
@@ -296,27 +181,28 @@ class AssetController extends Controller
     /**
      * Update asset
      */
-    public function update(Request $request, int $id): JsonResponse
+    public function update(Request $request, $id): JsonResponse
     {
         try {
             $asset = Asset::findOrFail($id);
 
             $validator = Validator::make($request->all(), [
-                'name' => 'nullable|string|max:255',
-                'category' => 'nullable|string|max:255',
-                'brand' => 'nullable|string|max:255',
-                'model' => 'nullable|string|max:255',
-                'serial_number' => 'nullable|string|max:255',
+                'asset_code' => 'nullable|string|max:20|unique:assets,asset_code,' . $id,
+                'name' => 'sometimes|required|string|max:255',
+                'category' => 'sometimes|required|string|max:100',
+                'brand' => 'nullable|string|max:100',
+                'model' => 'nullable|string|max:100',
+                'serial_number' => 'nullable|string|max:100|unique:assets,serial_number,' . $id,
                 'purchase_date' => 'nullable|date',
                 'purchase_price' => 'nullable|numeric|min:0',
                 'location' => 'nullable|string|max:255',
-                'condition' => 'nullable|in:excellent,good,fair,poor,damaged',
-                'status' => 'nullable|in:active,inactive,maintenance,disposed',
-                'description' => 'nullable|string',
+                'condition' => 'sometimes|required|in:' . implode(',', Asset::CONDITIONS),
+                'status' => 'sometimes|required|in:' . implode(',', Asset::STATUSES),
+                'description' => 'nullable|string|max:1000',
                 'supplier' => 'nullable|string|max:255',
                 'warranty_until' => 'nullable|date',
                 'assigned_to' => 'nullable|string|max:255',
-                'department' => 'nullable|string|max:255',
+                'department' => 'nullable|string|max:100',
             ]);
 
             if ($validator->fails()) {
@@ -327,23 +213,19 @@ class AssetController extends Controller
                 ], 422);
             }
 
-            $asset->update($request->only([
-                'name', 'category', 'brand', 'model', 'serial_number', 
-                'purchase_date', 'purchase_price', 'location', 'condition',
-                'status', 'description', 'supplier', 'warranty_until',
-                'assigned_to', 'department'
-            ]));
+            $asset->update($validator->validated());
 
             return response()->json([
                 'success' => true,
-                'message' => 'Asset updated successfully',
-                'data' => $asset
+                'message' => 'Asset berhasil diupdate',
+                'data' => $asset->fresh()
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error updating asset: ' . $e->getMessage()
+                'message' => 'Failed to update asset',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -351,68 +233,244 @@ class AssetController extends Controller
     /**
      * Delete asset
      */
-    public function destroy(int $id): JsonResponse
+    public function destroy($id): JsonResponse
     {
         try {
             $asset = Asset::findOrFail($id);
-            
-            // Soft delete
             $asset->delete();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Asset deleted successfully'
+                'message' => 'Asset berhasil dihapus'
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error deleting asset: ' . $e->getMessage()
+                'message' => 'Failed to delete asset',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
 
     /**
-     * Download asset (Not applicable for restaurant assets)
+     * Bulk delete assets
      */
-    public function download(int $id)
-    {
-        return response()->json([
-            'success' => false,
-            'message' => 'Download not available for restaurant assets'
-        ], 404);
-    }
-
-    /**
-     * Get asset categories
-     */
-    public function categories(): JsonResponse
+    public function bulkDelete(Request $request): JsonResponse
     {
         try {
-            $categories = Asset::where('status', 'active')
-                              ->distinct()
-                              ->pluck('category')
-                              ->filter()
-                              ->sort()
-                              ->values();
+            $validator = Validator::make($request->all(), [
+                'asset_ids' => 'required|array',
+                'asset_ids.*' => 'integer|exists:assets,id'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation error',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $deletedCount = Asset::whereIn('id', $request->asset_ids)->delete();
 
             return response()->json([
                 'success' => true,
-                'data' => $categories
+                'message' => "Successfully deleted {$deletedCount} assets",
+                'deleted_count' => $deletedCount
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error loading categories: ' . $e->getMessage()
+                'message' => 'Failed to delete assets',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
 
     /**
-     * Get asset types/categories
+     * Get asset statistics
      */
-    public function getTypes(): JsonResponse
+    public function statistics(): JsonResponse
+    {
+        try {
+            $stats = Asset::getStatistics();
+
+            return response()->json([
+                'success' => true,
+                'data' => $stats
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get statistics',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get assets by category
+     */
+    public function byCategory($category): JsonResponse
+    {
+        try {
+            $assets = Asset::byCategory($category)->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $assets
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get assets by category',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Change asset status
+     */
+    public function changeStatus(Request $request, $id): JsonResponse
+    {
+        try {
+            $asset = Asset::findOrFail($id);
+
+            $validator = Validator::make($request->all(), [
+                'status' => 'required|in:' . implode(',', Asset::STATUSES),
+                'notes' => 'nullable|string|max:500'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $old_status = $asset->status;
+            $asset->status = $request->status;
+            
+            if ($request->notes) {
+                $asset->description = $asset->description . "\n[" . now()->format('Y-m-d H:i:s') . "] Status changed from {$old_status} to {$request->status}: " . $request->notes;
+            }
+            
+            $asset->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Status asset berhasil diubah',
+                'data' => $asset
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to change asset status',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Assign asset to someone
+     */
+    public function assign(Request $request, $id): JsonResponse
+    {
+        try {
+            $asset = Asset::findOrFail($id);
+
+            $validator = Validator::make($request->all(), [
+                'assigned_to' => 'required|string|max:255',
+                'department' => 'nullable|string|max:100',
+                'notes' => 'nullable|string|max:500'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $old_assigned = $asset->assigned_to;
+            $asset->assigned_to = $request->assigned_to;
+            
+            if ($request->department) {
+                $asset->department = $request->department;
+            }
+
+            if ($request->notes) {
+                $asset->description = $asset->description . "\n[" . now()->format('Y-m-d H:i:s') . "] Assigned from '{$old_assigned}' to '{$request->assigned_to}': " . $request->notes;
+            }
+            
+            $asset->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Asset berhasil di-assign',
+                'data' => $asset
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to assign asset',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get maintenance schedule (assets with warranty expiring soon)
+     */
+    public function maintenanceSchedule(): JsonResponse
+    {
+        try {
+            $next_month = now()->addMonth();
+            
+            $expiring_warranties = Asset::where('warranty_until', '<=', $next_month)
+                ->where('warranty_until', '>=', now())
+                ->where('status', 'active')
+                ->orderBy('warranty_until')
+                ->get();
+
+            $maintenance_needed = Asset::where('status', 'maintenance')
+                ->orderBy('updated_at', 'desc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'expiring_warranties' => $expiring_warranties,
+                    'maintenance_needed' => $maintenance_needed,
+                    'summary' => [
+                        'expiring_count' => $expiring_warranties->count(),
+                        'maintenance_count' => $maintenance_needed->count()
+                    ]
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get maintenance schedule',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get all available asset categories
+     */
+    public function getCategories(): JsonResponse
     {
         try {
             $categories = Asset::getCategories();
@@ -421,65 +479,99 @@ class AssetController extends Controller
                 'success' => true,
                 'data' => $categories
             ]);
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error loading types: ' . $e->getMessage()
+                'message' => 'Failed to fetch categories',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
 
     /**
-     * Get asset statistics
+     * Get all available asset locations
      */
-    public function getStats(): JsonResponse
+    public function getLocations(): JsonResponse
     {
         try {
-            $stats = Asset::getStatistics();
+            $locations = Asset::getLocations();
             
             return response()->json([
                 'success' => true,
-                'data' => $stats
+                'data' => $locations
             ]);
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error loading statistics: ' . $e->getMessage()
+                'message' => 'Failed to fetch locations',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
 
     /**
-     * Determine asset type from MIME type
+     * Generate unique asset code based on category
      */
-    private function determineAssetType(string $mimeType): string
+    private function generateUniqueAssetCode(string $category): string
     {
-        if (str_starts_with($mimeType, 'image/')) {
-            return 'image';
-        }
-        
-        if (str_starts_with($mimeType, 'video/')) {
-            return 'video';
-        }
-        
-        if (str_starts_with($mimeType, 'audio/')) {
-            return 'audio';
-        }
-
-        $documentMimes = [
-            'application/pdf',
-            'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/vnd.ms-excel',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'text/plain',
-            'text/csv',
+        // Category code mapping for better codes
+        $categoryMappings = [
+            'Kitchen Equipment' => 'KIT',
+            'Electronics' => 'ELC',
+            'Furniture' => 'FUR',
+            'Beverage Equipment' => 'BEV',
+            'Office Equipment' => 'OFF',
+            'Cleaning Equipment' => 'CLN',
+            'Security Equipment' => 'SEC',
+            'Maintenance Equipment' => 'MNT',
+            'Computer Equipment' => 'CMP',
+            'Vehicle' => 'VEH',
+            'Tools' => 'TOL',
+            'Other' => 'OTH',
         ];
-
-        if (in_array($mimeType, $documentMimes)) {
-            return 'document';
+        
+        // Get category code from mapping or generate from category name
+        $categoryCode = $categoryMappings[$category] ?? strtoupper(substr(str_replace(' ', '', $category), 0, 3));
+        
+        // If category is shorter than 3 chars, pad with 'X'
+        if (strlen($categoryCode) < 3) {
+            $categoryCode = str_pad($categoryCode, 3, 'X', STR_PAD_RIGHT);
         }
-
-        return 'file';
+        
+        // Find the highest existing number for this category (including soft deleted)
+        $lastAsset = Asset::withTrashed()
+            ->where('asset_code', 'like', $categoryCode . '-%')
+            ->orderByRaw('CAST(SUBSTRING(asset_code, ' . (strlen($categoryCode) + 2) . ') AS UNSIGNED) DESC')
+            ->first();
+        
+        $nextNumber = 1;
+        if ($lastAsset) {
+            $lastNumber = (int) substr($lastAsset->asset_code, strlen($categoryCode) + 1);
+            $nextNumber = $lastNumber + 1;
+        }
+        
+        // Generate code and check for uniqueness with retry mechanism (including soft deleted)
+        $maxRetries = 1000; // Prevent infinite loop
+        $attempts = 0;
+        
+        do {
+            $assetCode = $categoryCode . '-' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
+            $exists = Asset::withTrashed()->where('asset_code', $assetCode)->exists();
+            
+            if ($exists) {
+                $nextNumber++;
+                $attempts++;
+            }
+            
+            if ($attempts > $maxRetries) {
+                // Fallback to timestamp-based code
+                $assetCode = $categoryCode . '-' . time();
+                break;
+            }
+        } while ($exists);
+        
+        return $assetCode;
     }
 }

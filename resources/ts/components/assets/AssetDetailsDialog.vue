@@ -37,7 +37,7 @@
                   </VChip>
                 </div>
                 <div class="text-h4 font-weight-bold text-primary">
-                  ${{ asset.purchase_price?.toLocaleString() || '0' }}
+                  {{ formatRupiah(asset.purchase_price || 0) }}
                 </div>
               </div>
             </VCol>
@@ -123,10 +123,10 @@
                     
                     <VListItem>
                       <template #prepend>
-                        <VIcon icon="tabler-currency-dollar" class="me-3" />
+                        <VIcon icon="tabler-currency" class="me-3" />
                       </template>
                       <VListItemTitle class="text-body-2 text-medium-emphasis">Harga Pembelian</VListItemTitle>
-                      <VListItemSubtitle class="font-weight-bold">${{ asset.purchase_price?.toLocaleString() || '0' }}</VListItemSubtitle>
+                      <VListItemSubtitle class="font-weight-bold">{{ formatRupiah(asset.purchase_price || 0) }}</VListItemSubtitle>
                     </VListItem>
                     
                     <VListItem v-if="asset.supplier">
@@ -243,6 +243,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { formatRupiah } from '@/@core/utils/formatters'
 
 // Props
 interface Props {

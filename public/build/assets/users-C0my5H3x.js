@@ -1,0 +1,1 @@
+import r from"./users-main-X_FTa2Dt.js";import{d as t,g as e,o as p}from"./main-6xlu64eg.js";import{b as o}from"./route-block-B_A1xBdJ.js";import"./api-DG7LpcP_.js";import"./index-D-EbNoF1.js";import"./SimpleConfirmDialog.vue_vue_type_script_setup_true_lang-9HyCk4EZ.js";const s=t({__name:"users",setup(m){return(n,a)=>(p(),e(r))}});typeof o=="function"&&o(s);export{s as default};
