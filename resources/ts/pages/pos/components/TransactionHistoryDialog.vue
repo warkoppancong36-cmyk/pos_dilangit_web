@@ -340,14 +340,28 @@ const loadTransactions = async (page: number = 1, perPage: number = 15) => {
     
     const response = await PosApi.getOrders(params)
     
+    // Debug: Log response structure
+    console.log('API Response:', response)
+    console.log('Response data:', response.data)
+    console.log('Response pagination:', response.pagination)
+    
     if (response.success) {
-      // Check if response has pagination structure
-      if (response.data.data && Array.isArray(response.data.data)) {
-        // Paginated response
+      // Check if response has pagination structure from ApiResponseTrait
+      if (response.data && response.pagination) {
+        // Response from ApiResponseTrait with separate pagination object
+        transactions.value = response.data
+        pagination.value = {
+          current_page: response.pagination.current_page || 1,
+          per_page: perPage >= 999999 ? -1 : (response.pagination.per_page || 15),
+          total: response.pagination.total || 0,
+          last_page: response.pagination.last_page || 1
+        }
+      } else if (response.data?.data && Array.isArray(response.data.data)) {
+        // Standard Laravel pagination response (fallback)
         transactions.value = response.data.data
         pagination.value = {
           current_page: response.data.current_page || 1,
-          per_page: perPage >= 999999 ? -1 : (response.data.per_page || 15), // Set -1 for "All"
+          per_page: perPage >= 999999 ? -1 : (response.data.per_page || 15),
           total: response.data.total || 0,
           last_page: response.data.last_page || 1
         }
