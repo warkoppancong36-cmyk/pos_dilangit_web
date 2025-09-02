@@ -113,10 +113,11 @@ class PosController extends Controller
                 $query->whereDate('created_at', '<=', $request->date_to);
             }
 
-            // Default to last 30 days if no date filter
-            if (!$request->has('date_from') && !$request->has('date_to')) {
-                $query->whereDate('created_at', '>=', now()->subDays(30));
-            }
+            // Only apply date filter if explicitly provided
+            // Remove automatic date limitation to show all transaction history by default
+            // if (!$request->has('date_from') && !$request->has('date_to')) {
+            //     $query->whereDate('created_at', '>=', now()->subDays(90));
+            // }
 
             // Handle pagination - support 'all' to get all records
             $perPage = $request->get('per_page', 50);

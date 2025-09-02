@@ -12,6 +12,25 @@ export default [
     role: ['admin', 'manager', 'kasir'], // Cashier, manager, and admin can access
   },
   {
+    title: 'Reports',
+    icon: { icon: 'tabler-chart-pie' },
+    role: ['admin', 'manager'], // Only admin and manager can access reports
+    children: [
+      {
+        title: 'Laporan Penjualan',
+        to: { name: 'reports-sales' },
+        icon: { icon: 'tabler-chart-line' },
+        role: ['admin', 'manager'],
+      },
+      {
+        title: 'Laporan Pembelian',
+        to: { name: 'reports-purchases' },
+        icon: { icon: 'tabler-shopping-cart' },
+        role: ['admin', 'manager'],
+      },
+    ],
+  },
+  {
     title: 'Management',
     icon: { icon: 'tabler-settings' },
     children: [

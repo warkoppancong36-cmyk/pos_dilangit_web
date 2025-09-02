@@ -8,14 +8,41 @@ meta:
 <template>
   <div class="dashboard-page">
     <!-- Header -->
-    <div class="d-flex justify-space-between align-center mb-6">
+    <div class="d-flex flex-column flex-md-row justify-space-between align-start align-md-center mb-6 ga-4">
       <div>
         <h1 class="text-h4 font-weight-bold coffee-title">Dashboard Analytics</h1>
         <p class="text-body-1 text-medium-emphasis coffee-subtitle">
           Pantau penjualan, pembelian, dan inventory coffee shop Anda
         </p>
       </div>
-      <div class="d-flex gap-3 align-center">
+      
+      <!-- Filter Controls - Responsive -->
+      <div class="d-flex flex-column flex-sm-row gap-3 align-stretch align-sm-center w-100 w-md-auto">
+        <!-- Date Range Filter -->
+        <div class="d-flex flex-column flex-sm-row gap-2 align-stretch">
+          <VTextField
+            v-model="customStartDate"
+            type="date"
+            label="Tanggal Mulai"
+            density="comfortable"
+            variant="outlined"
+            hide-details
+            class="flex-grow-1"
+            @change="onCustomDateChange"
+          />
+          <VTextField
+            v-model="customEndDate"
+            type="date"
+            label="Tanggal Akhir"
+            density="comfortable"
+            variant="outlined"
+            hide-details
+            class="flex-grow-1"
+            @change="onCustomDateChange"
+          />
+        </div>
+        
+        <!-- Period Quick Select -->
         <VSelect
           v-model="selectedPeriod"
           :items="periodOptions"
@@ -24,19 +51,25 @@ meta:
           density="comfortable"
           variant="outlined"
           hide-details
-          @update:model-value="loadDashboard"
+          class="flex-shrink-0"
+          style="min-width: 180px"
+          @update:model-value="onPeriodChange"
         >
           <template #prepend-inner>
             <VIcon icon="mdi-calendar-range" />
           </template>
         </VSelect>
+        
+        <!-- Refresh Button -->
         <VBtn
           color="primary"
           prepend-icon="mdi-refresh"
           @click="loadDashboard"
           :loading="loading"
+          class="flex-shrink-0"
         >
-          Refresh
+          <span class="d-none d-sm-inline">Refresh</span>
+          <VIcon v-show="$vuetify.display.xs" icon="mdi-refresh" />
         </VBtn>
       </div>
     </div>
@@ -115,7 +148,7 @@ meta:
           <VCard class="chart-card">
             <VCardTitle class="d-flex align-center">
               <VIcon icon="mdi-chart-line" class="me-2" />
-              Tren Penjualan ({{ selectedPeriod }} Hari)
+              Tren Penjualan {{ getDateRangeDisplay() }}
             </VCardTitle>
             <VCardText>
               <div style="height: 300px;">
@@ -145,7 +178,7 @@ meta:
           <VCard class="chart-card">
             <VCardTitle class="d-flex align-center">
               <VIcon icon="mdi-cart" class="me-2" />
-              Tren Pembelian ({{ selectedPeriod }} Hari)
+              Tren Pembelian {{ getDateRangeDisplay() }}
             </VCardTitle>
             <VCardText>
               <div style="height: 300px;">
@@ -304,6 +337,8 @@ interface DashboardData {
 // State
 const loading = ref(false)
 const selectedPeriod = ref('30')
+const customStartDate = ref('')
+const customEndDate = ref('')
 const dashboardData = ref<DashboardData | null>(null)
 
 // Chart refs
@@ -325,7 +360,8 @@ const periodOptions = [
   { label: '7 Hari Terakhir', value: '7' },
   { label: '30 Hari Terakhir', value: '30' },
   { label: '90 Hari Terakhir', value: '90' },
-  { label: '1 Tahun Terakhir', value: '365' }
+  { label: '1 Tahun Terakhir', value: '365' },
+  { label: 'Custom Range', value: 'custom' }
 ]
 
 // Table headers
@@ -357,9 +393,26 @@ const inventoryData = computed(() => dashboardData.value?.inventory || {} as Das
 const loadDashboard = async () => {
   loading.value = true
   try {
-    const response = await axios.get('/api/dashboard/analytics', {
-      params: { period: selectedPeriod.value }
-    })
+    const params: any = {}
+    
+    // Check if using custom date range
+    if (selectedPeriod.value === 'custom') {
+      if (customStartDate.value && customEndDate.value) {
+        // Ensure proper date format (YYYY-MM-DD)
+        const startDate = new Date(customStartDate.value)
+        const endDate = new Date(customEndDate.value)
+        
+        params.start_date = startDate.toISOString().split('T')[0]
+        params.end_date = endDate.toISOString().split('T')[0]
+      } else {
+        // Fallback to 30 days if custom dates not set
+        params.period = '30'
+      }
+    } else {
+      params.period = selectedPeriod.value
+    }
+    
+    const response = await axios.get('/api/dashboard/analytics', { params })
     
     if (response.data.success) {
       dashboardData.value = response.data.data
@@ -370,6 +423,45 @@ const loadDashboard = async () => {
     console.error('Error loading dashboard:', error)
   } finally {
     loading.value = false
+  }
+}
+
+// Helper functions for date range
+const onPeriodChange = (value: string) => {
+  if (value !== 'custom') {
+    // Clear custom dates when using preset periods
+    customStartDate.value = ''
+    customEndDate.value = ''
+  }
+  loadDashboard()
+}
+
+const onCustomDateChange = () => {
+  if (customStartDate.value && customEndDate.value) {
+    selectedPeriod.value = 'custom'
+    loadDashboard()
+  }
+}
+
+// Initialize custom dates with default 30 days range
+const initializeDates = () => {
+  const endDate = new Date()
+  const startDate = new Date()
+  startDate.setDate(endDate.getDate() - 30)
+  
+  customEndDate.value = endDate.toISOString().split('T')[0]
+  customStartDate.value = startDate.toISOString().split('T')[0]
+}
+
+// Get display text for date range
+const getDateRangeDisplay = () => {
+  if (selectedPeriod.value === 'custom' && customStartDate.value && customEndDate.value) {
+    const startDate = new Date(customStartDate.value).toLocaleDateString('id-ID')
+    const endDate = new Date(customEndDate.value).toLocaleDateString('id-ID')
+    return `(${startDate} - ${endDate})`
+  } else {
+    const periodLabel = periodOptions.find(p => p.value === selectedPeriod.value)?.label || '30 Hari Terakhir'
+    return `(${periodLabel})`
   }
 }
 
@@ -418,7 +510,7 @@ const createSalesChart = () => {
   if (!ctx) {
     return
   }
-  
+
   if (!salesData.value?.daily_trend || !Array.isArray(salesData.value.daily_trend)) {
     return
   }
@@ -650,7 +742,7 @@ watch(dashboardData, () => {
 
 // Lifecycle
 onMounted(() => {
-
+  initializeDates()
   loadDashboard()
 })
 </script>
@@ -694,6 +786,25 @@ onMounted(() => {
     .v-card-text {
       padding: 24px;
     }
+  }
+}
+
+// Responsive adjustments
+@media (max-width: 600px) {
+  .dashboard-page {
+    .text-h4 {
+      font-size: 1.5rem !important;
+    }
+    
+    .coffee-subtitle {
+      font-size: 0.875rem;
+    }
+  }
+}
+
+@media (max-width: 960px) {
+  .chart-card canvas {
+    height: 250px !important;
   }
 }
 </style>

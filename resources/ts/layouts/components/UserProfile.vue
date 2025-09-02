@@ -8,13 +8,10 @@ const authStore = useAuthStore()
 
 const logout = async () => {
   try {
-    
-    // Use auth store logout method
     await authStore.logout()
-  
     await router.push('/login')
   } catch (error) {
-    // Fallback: clear auth and redirect anyway
+    console.error('Logout error:', error)
     authStore.clearToken()
     authStore.clearUser()
     await router.push('/login')

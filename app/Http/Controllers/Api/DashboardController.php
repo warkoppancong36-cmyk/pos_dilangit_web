@@ -25,9 +25,17 @@ class DashboardController extends Controller
     public function analytics(Request $request): JsonResponse
     {
         try {
-            $period = $request->get('period', '30'); // Default 30 days
-            $startDate = Carbon::now()->subDays($period);
-            $endDate = Carbon::now();
+            // Handle custom date range or period
+            $period = null;
+            if ($request->has('start_date') && $request->has('end_date')) {
+                $startDate = Carbon::parse($request->get('start_date'))->startOfDay();
+                $endDate = Carbon::parse($request->get('end_date'))->endOfDay();
+                $period = $startDate->diffInDays($endDate) + 1; // Calculate days difference
+            } else {
+                $period = $request->get('period', '30'); // Default 30 days
+                $startDate = Carbon::now()->subDays($period)->startOfDay();
+                $endDate = Carbon::now()->endOfDay();
+            }
 
             // Sales Analytics
             $salesData = $this->getSalesAnalytics($startDate, $endDate);
