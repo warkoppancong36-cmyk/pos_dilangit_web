@@ -27,6 +27,7 @@ use App\Http\Controllers\Api\HPPController;
 use App\Http\Controllers\VariantHPPController;
 use App\Http\Controllers\Api\BaseProductCompositionController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\ReportController;
 
 
 Route::prefix('auth')->group(function () {
@@ -46,6 +47,13 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
     // Dashboard routes
     Route::prefix('dashboard')->group(function () {
         Route::get('analytics', [DashboardController::class, 'analytics']);
+    });
+
+    // Reports routes
+    Route::prefix('reports')->group(function () {
+        Route::get('sales', [ReportController::class, 'salesReport']);
+        Route::get('purchases', [ReportController::class, 'purchaseReport']);
+        Route::get('test-data', [ReportController::class, 'testData']); // Debug endpoint
     });
 
     Route::prefix('logs')->group(function () {
