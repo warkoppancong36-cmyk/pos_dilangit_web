@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\ProductRecipeController;
 use App\Http\Controllers\Api\HPPController;
 use App\Http\Controllers\VariantHPPController;
 use App\Http\Controllers\Api\BaseProductCompositionController;
+use App\Http\Controllers\Api\DashboardController;
 
 
 Route::prefix('auth')->group(function () {
@@ -40,6 +41,11 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
         Route::post('logout-all', [AuthController::class, 'logoutAll']);
         Route::post('refresh', [AuthController::class, 'refresh']);
         Route::post('change-password', [AuthController::class, 'changePassword']);
+    });
+
+    // Dashboard routes
+    Route::prefix('dashboard')->group(function () {
+        Route::get('analytics', [DashboardController::class, 'analytics']);
     });
 
     Route::prefix('logs')->group(function () {

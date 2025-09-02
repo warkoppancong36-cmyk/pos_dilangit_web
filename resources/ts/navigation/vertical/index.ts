@@ -1,8 +1,9 @@
 export default [
   {
     title: 'Dashboard',
-    to: { name: 'root' },
-    icon: { icon: 'tabler-smart-home' },
+    to: { name: 'dashboard' },
+    icon: { icon: 'tabler-chart-line' },
+    role: ['admin', 'manager'], // Only admin and manager can access analytics
   },
   {
     title: 'Point of Sale',
