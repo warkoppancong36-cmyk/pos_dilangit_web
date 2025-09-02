@@ -169,11 +169,24 @@ class BaseProductCompositionController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'base_product_id' => 'required|exists:base_products,id_base_product',
-            'ingredient_base_product_id' => 'required|exists:base_products,id_base_product|different:base_product_id',
+            'ingredient_base_product_id' => 'nullable|exists:base_products,id_base_product|different:base_product_id',
+            'ingredient_item_id' => 'nullable|exists:items,id_item',
             'quantity' => 'required|numeric|min:0.001',
             'notes' => 'nullable|string|max:500',
-            'is_active' => 'boolean'
+            'is_active' => 'boolean',
+            'is_critical' => 'boolean'
         ]);
+
+        // Custom validation to ensure at least one ingredient is provided
+        $validator->after(function ($validator) use ($request) {
+            if (!$request->ingredient_base_product_id && !$request->ingredient_item_id) {
+                $validator->errors()->add('ingredient', 'Either ingredient_base_product_id or ingredient_item_id is required');
+            }
+            
+            if ($request->ingredient_base_product_id && $request->ingredient_item_id) {
+                $validator->errors()->add('ingredient', 'Only one ingredient type can be specified');
+            }
+        });
 
         if ($validator->fails()) {
             return $this->validationErrorResponse($validator->errors());
@@ -189,24 +202,43 @@ class BaseProductCompositionController extends Controller
             }
 
             // Check if composition already exists (excluding current one)
-            $existingComposition = BaseProductComposition::where([
-                'base_product_id' => $request->base_product_id,
-                'ingredient_base_product_id' => $request->ingredient_base_product_id
-            ])->where('id', '!=', $id)->first();
+            $existingQuery = BaseProductComposition::where('base_product_id', $request->base_product_id)
+                                                 ->where('id', '!=', $id);
+            
+            if ($request->ingredient_base_product_id) {
+                $existingQuery->where('ingredient_base_product_id', $request->ingredient_base_product_id)
+                             ->whereNull('ingredient_item_id');
+            } elseif ($request->ingredient_item_id) {
+                $existingQuery->where('ingredient_item_id', $request->ingredient_item_id)
+                             ->whereNull('ingredient_base_product_id');
+            }
+            
+            $existingComposition = $existingQuery->first();
 
             if ($existingComposition) {
                 return $this->errorResponse('Composition already exists for this base product and ingredient combination', 422);
             }
 
-            $composition->update([
+            $updateData = [
                 'base_product_id' => $request->base_product_id,
-                'ingredient_base_product_id' => $request->ingredient_base_product_id,
                 'quantity' => $request->quantity,
                 'notes' => $request->notes,
-                'is_active' => $request->get('is_active', $composition->is_active)
-            ]);
+                'is_active' => $request->get('is_active', $composition->is_active),
+                'is_critical' => $request->get('is_critical', $composition->is_critical),
+            ];
+            
+            // Set ingredient fields
+            if ($request->ingredient_base_product_id) {
+                $updateData['ingredient_base_product_id'] = $request->ingredient_base_product_id;
+                $updateData['ingredient_item_id'] = null;
+            } elseif ($request->ingredient_item_id) {
+                $updateData['ingredient_item_id'] = $request->ingredient_item_id;
+                $updateData['ingredient_base_product_id'] = null;
+            }
 
-            $composition->load(['baseProduct', 'ingredientBaseProduct']);
+            $composition->update($updateData);
+
+            $composition->load(['baseProduct', 'ingredientBaseProduct', 'ingredientItem']);
 
             DB::commit();
 

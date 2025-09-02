@@ -134,26 +134,24 @@
             <!-- Minimum Amount -->
             <VCol cols="12" md="6">
               <VTextField
-                v-model.number="formData.minimum_amount"
+                v-model="minimumAmountDisplay"
                 label="Minimum Pembelian"
                 variant="outlined"
-                type="number"
                 prefix="Rp"
-                min="0"
                 hint="Kosongkan jika tidak ada minimum"
+                @input="onMinimumAmountInput($event.target.value)"
               />
             </VCol>
 
             <VCol cols="12" md="6">
               <VTextField
-                v-model.number="formData.maximum_discount"
+                v-model="maximumDiscountDisplay"
                 label="Maksimum Diskon"
                 variant="outlined"
-                type="number"
                 prefix="Rp"
-                min="0"
                 hint="Hanya untuk diskon persentase"
                 :disabled="formData.type !== 'percentage'"
+                @input="onMaximumDiscountInput($event.target.value)"
               />
             </VCol>
 
@@ -307,6 +305,47 @@ const formData = ref<CreateDiscountRequest>({
   active: true
 })
 
+// Currency formatting methods
+const formatRupiah = (value: number | undefined): string => {
+  if (!value || value === 0) return ''
+  return new Intl.NumberFormat('id-ID').format(value)
+}
+
+const parseRupiah = (value: string): number | undefined => {
+  if (!value || value.trim() === '') return undefined
+  // Remove all non-digit characters
+  const cleanValue = value.replace(/[^\d]/g, '')
+  if (cleanValue === '') return undefined
+  const parsed = parseInt(cleanValue)
+  return isNaN(parsed) ? undefined : parsed
+}
+
+// Reactive currency display values
+const minimumAmountDisplay = ref('')
+const maximumDiscountDisplay = ref('')
+
+// Update display when formData changes
+watch(() => formData.value.minimum_amount, (newValue) => {
+  minimumAmountDisplay.value = formatRupiah(newValue)
+})
+
+watch(() => formData.value.maximum_discount, (newValue) => {
+  maximumDiscountDisplay.value = formatRupiah(newValue)
+})
+
+// Handle input changes
+const onMinimumAmountInput = (value: string) => {
+  const parsed = parseRupiah(value)
+  formData.value.minimum_amount = parsed
+  minimumAmountDisplay.value = formatRupiah(parsed)
+}
+
+const onMaximumDiscountInput = (value: string) => {
+  const parsed = parseRupiah(value)
+  formData.value.maximum_discount = parsed
+  maximumDiscountDisplay.value = formatRupiah(parsed)
+}
+
 // Constants
 const discountTypes = [
   { title: 'Persentase (%)', value: 'percentage' },
@@ -430,6 +469,10 @@ const resetForm = () => {
     active: true
   }
   
+  // Reset display values
+  minimumAmountDisplay.value = ''
+  maximumDiscountDisplay.value = ''
+  
   codeValidation.value = { loading: false, available: null }
   serverErrors.value = {}
   showErrorAlert.value = false
@@ -454,6 +497,10 @@ const loadDiscountData = () => {
       valid_until: discount.valid_until ? new Date(discount.valid_until).toISOString().slice(0, 16) : '',
       active: discount.active
     }
+    
+    // Update display values
+    minimumAmountDisplay.value = formatRupiah(discount.minimum_amount)
+    maximumDiscountDisplay.value = formatRupiah(discount.maximum_discount)
   }
 }
 

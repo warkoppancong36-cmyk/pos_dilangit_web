@@ -162,7 +162,7 @@ class Order extends Model
             'cancelled' => 'Dibatalkan'
         ];
 
-        return $statuses[$this->status] ?? $this->status;
+        return $statuses[$this->status] ?? ($this->status ?? 'Unknown');
     }
 
     public function getOrderTypeTextAttribute(): string
@@ -173,7 +173,7 @@ class Order extends Model
             'delivery' => 'Delivery'
         ];
 
-        return $types[$this->order_type] ?? $this->order_type;
+        return $types[$this->order_type] ?? ($this->order_type ?? 'Unknown');
     }
 
     public function getIsPaidAttribute(): bool

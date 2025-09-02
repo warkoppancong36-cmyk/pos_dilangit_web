@@ -6,7 +6,7 @@ import UserDetailsDialog from '@/components/users/UserDetailsDialog.vue'
 import UserSearchFilters from '@/components/users/UserSearchFilters.vue'
 import UserStatsCards from '@/components/users/UserStatsCards.vue'
 import UserTable from '@/components/users/UserTable.vue'
-import { useUsers } from '@/composables/useUserManagement'
+import { useUserManagement } from '@/composables/useUserManagement'
 
 // Use Users composable
 const {
@@ -67,7 +67,7 @@ const {
   onSearch,
   onFilterChange,
   onSortChange
-} = useUsers()
+} = useUserManagement()
 
 // Additional state for user details dialog
 const userDetailsDialog = ref(false)

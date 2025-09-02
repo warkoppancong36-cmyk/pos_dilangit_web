@@ -1,5 +1,25 @@
 <script setup lang="ts">
 import avatar1 from '@images/avatars/avatar-1.png'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+
+const router = useRouter()
+const authStore = useAuthStore()
+
+const logout = async () => {
+  try {
+    
+    // Use auth store logout method
+    await authStore.logout()
+  
+    await router.push('/login')
+  } catch (error) {
+    // Fallback: clear auth and redirect anyway
+    authStore.clearToken()
+    authStore.clearUser()
+    await router.push('/login')
+  }
+}
 </script>
 
 <template>
@@ -111,7 +131,7 @@ import avatar1 from '@images/avatars/avatar-1.png'
           <VDivider class="my-2" />
 
           <!-- 👉 Logout -->
-          <VListItem to="/login">
+          <VListItem @click="logout">
             <template #prepend>
               <VIcon
                 class="me-2"

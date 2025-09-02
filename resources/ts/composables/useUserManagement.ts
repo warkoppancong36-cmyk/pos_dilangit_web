@@ -44,7 +44,7 @@ export interface UserFormData {
     is_active: boolean
 }
 
-export const useUsers = () => {
+export const useUserManagement = () => {
     // State
     const users = ref<User[]>([])
     const roles = ref<Role[]>([])

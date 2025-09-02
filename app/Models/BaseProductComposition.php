@@ -20,12 +20,14 @@ class BaseProductComposition extends Model
         'ingredient_item_id',
         'quantity',
         'notes',
-        'is_active'
+        'is_active',
+        'is_critical'
     ];
 
     protected $casts = [
         'quantity' => 'decimal:3',
-        'is_active' => 'boolean'
+        'is_active' => 'boolean',
+        'is_critical' => 'boolean'
     ];
 
     protected $dates = [

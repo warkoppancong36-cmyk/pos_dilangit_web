@@ -184,77 +184,30 @@ const closeExportDialog = () => {
   exportDialog.value = false
 }
 
-// Function to check current authentication status
-const checkAuthStatus = () => {
-  console.log('🔍 === AUTH STATUS CHECK ===')
-  
-  // Check all possible token sources
-  const cookieToken = useCookie('accessToken').value
-  const localToken = localStorage.getItem('token')
-  const authToken = localStorage.getItem('auth_token')
-  const accessToken = localStorage.getItem('accessToken')
-  
-  console.log('🍪 Cookie accessToken:', cookieToken ? `Found (${cookieToken.substring(0, 20)}...)` : 'Not found')
-  console.log('💾 localStorage token:', localToken ? `Found (${localToken.substring(0, 20)}...)` : 'Not found')
-  console.log('💾 localStorage auth_token:', authToken ? `Found (${authToken.substring(0, 20)}...)` : 'Not found')
-  console.log('💾 localStorage accessToken:', accessToken ? `Found (${accessToken.substring(0, 20)}...)` : 'Not found')
-  
-  // Check if any auth store exists
-  try {
-    const authStore = useAuthStore()
-    console.log('🏪 Auth Store isLoggedIn:', authStore.isLoggedIn)
-    console.log('🏪 Auth Store user:', authStore.user?.name || 'No user')
-    console.log('🏪 Auth Store token:', authStore.token ? `Found (${authStore.token.substring(0, 20)}...)` : 'Not found')
-  } catch (e) {
-    console.log('🏪 Auth Store not available:', e)
-  }
-  
-  console.log('=========================')
-  
-  return {
-    cookieToken,
-    localToken,
-    authToken,
-    accessToken
-  }
-}
 
-// Helper function to get authentication token with detailed debugging
+
+// Helper function to get authentication token
 const getAuthToken = () => {
   try {
-    // First check auth status
-    const authStatus = checkAuthStatus()
-    
     // Try to get token from cookie first (primary method)
     const cookieToken = useCookie('accessToken').value
-    console.log('🔍 Checking cookie token:', cookieToken ? 'Token found in cookie' : 'No token in cookie')
     
     if (cookieToken) {
-      console.log('✅ Using cookie token (first 20 chars):', cookieToken.substring(0, 20) + '...')
       return cookieToken
     }
     
-    // Fallback to localStorage methods used in other parts
-    console.log('🔍 Checking localStorage methods...')
+    // Fallback to localStorage methods
     const localToken = localStorage.getItem('token') || 
                       localStorage.getItem('auth_token') || 
                       localStorage.getItem('accessToken')
     
-    if (localToken) {
-      console.log('✅ Using localStorage token (first 20 chars):', localToken.substring(0, 20) + '...')
-    } else {
-      console.log('❌ No token found in any storage')
-    }
-    
     return localToken || null
   } catch (error) {
-    console.warn('❌ Error getting auth token:', error)
     // Fallback to localStorage
     const fallbackToken = localStorage.getItem('token') || 
                          localStorage.getItem('auth_token') || 
                          localStorage.getItem('accessToken') || 
                          null
-    console.log('🔄 Fallback token result:', fallbackToken ? 'Found fallback token' : 'No fallback token')
     return fallbackToken
   }
 }
@@ -844,77 +797,7 @@ const closeUploadHistoryDialog = () => {
   uploadHistoryPage.value = 1
 }
 
-// Function to test login and refresh token
-const testLogin = async () => {
-  try {
-    console.log('🚀 Testing login to get fresh token...')
-    
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest'
-      },
-      body: JSON.stringify({
-        login: 'admin',
-        password: 'password123'
-      })
-    })
-    
-    console.log('📊 Login Response Status:', response.status, response.statusText)
-    
-    const data = await response.json()
-    console.log('📋 Login Response Data:', data)
-    
-    if (data.success && data.data.token) {
-      const token = data.data.token
-      console.log('✅ Login successful! Token:', token.substring(0, 30) + '...')
-      
-      // Save to localStorage
-      localStorage.setItem('token', token)
-      console.log('💾 Token saved to localStorage')
-      
-      // Also save to cookie
-      const accessTokenCookie = useCookie('accessToken', {
-        default: () => '',
-        secure: true,
-        sameSite: 'strict',
-        maxAge: 60 * 60 * 24 * 7 // 7 days
-      })
-      accessTokenCookie.value = token
-      console.log('🍪 Token saved to cookie')
-      
-      successMessage.value = 'Login berhasil! Token telah diperbarui. Silakan coba export lagi.'
-      
-      // Test API call with new token
-      console.log('🌐 Testing API call with new token...')
-      const testResponse = await fetch('/api/inventory?per_page=1', {
-        headers: {
-          'Authorization': 'Bearer ' + token,
-          'Accept': 'application/json'
-        }
-      })
-      
-      console.log('📊 Test API Response Status:', testResponse.status, testResponse.statusText)
-      
-      if (testResponse.ok) {
-        console.log('✅ New token works! You can now try the export function.')
-      } else {
-        console.log('❌ New token still doesn\'t work')
-        errorMessage.value = 'Token baru tidak bekerja. Mungkin ada masalah dengan server.'
-      }
-      
-    } else {
-      console.log('❌ Login failed:', data.message)
-      errorMessage.value = 'Login gagal: ' + (data.message || 'Unknown error')
-    }
-    
-  } catch (error) {
-    console.log('💥 Login error:', error)
-    errorMessage.value = 'Error saat login: ' + (error instanceof Error ? error.message : 'Unknown error')
-  }
-}
+
 
 // Debug watcher for totalItems
 watch(totalItems, (newValue, oldValue) => {
@@ -934,26 +817,7 @@ watch(totalItems, (newValue, oldValue) => {
         </p>
       </div>
       <div class="d-flex gap-3 align-center">
-        <!-- Debug Buttons for Authentication Testing -->
-        <VBtn
-          color="info"
-          prepend-icon="tabler-bug"
-          variant="outlined"
-          size="small"
-          @click="checkAuthStatus"
-        >
-          Check Auth
-        </VBtn>
-        
-        <VBtn
-          color="warning"
-          prepend-icon="tabler-login"
-          variant="outlined"
-          size="small"
-          @click="testLogin"
-        >
-          Test Login
-        </VBtn>
+
         
         <VBtn
           color="primary"

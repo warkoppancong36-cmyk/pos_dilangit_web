@@ -11,9 +11,16 @@ onMounted(async () => {
     const success = await authStore.fetchProfile()
     if (!success) {
       router.push('/login')
+      return
     }
   } else if (!authStore.isLoggedIn) {
     router.push('/login')
+    return
+  }
+  
+  // Auto redirect admin/manager to dashboard
+  if (authStore.isAdmin || authStore.isManager) {
+    router.push('/dashboard')
   }
 })
 
@@ -27,12 +34,10 @@ const getRoleColor = () => {
 }
 
 const goToDashboard = () => {
-  if (authStore.isAdmin) {
-    router.push('/admin/dashboard')
-  } else if (authStore.isManager) {
-    router.push('/manager/dashboard')
+  if (authStore.isAdmin || authStore.isManager) {
+    router.push('/dashboard')
   } else if (authStore.isCashier) {
-    router.push('/cashier/dashboard')
+    router.push('/pos')
   } else {
     router.push('/dashboard')
   }
