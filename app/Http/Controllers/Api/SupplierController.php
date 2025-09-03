@@ -44,6 +44,13 @@ class SupplierController extends Controller
             $query->orderBy($sortBy, $sortOrder);
 
             $perPage = $request->get('per_page', 15);
+            
+            // Handle 'all' parameter to return all suppliers without pagination
+            if ($perPage === 'all') {
+                $allSuppliers = $query->get();
+                return $this->successResponse($allSuppliers, 'All suppliers retrieved successfully');
+            }
+            
             $suppliers = $query->paginate($perPage);
 
             return $this->paginatedResponse($suppliers, 'Suppliers retrieved successfully');
