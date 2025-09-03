@@ -1190,12 +1190,12 @@ watch(totalItems, (newValue, oldValue) => {
 
         <!-- Inventory Table -->
         <VCard class="products-inventory-table">
-          <VCardTitle class="d-flex align-center gap-2 coffee-header">
+          <VCardTitle class="d-flex align-center gap-2">
             <VIcon
               icon="tabler-package"
-              class="text-white"
+              color="primary"
             />
-            <span class="text-white">Inventory Produk</span>
+            <span class="font-weight-bold">Inventory Produk</span>
             <VSpacer />
 
             <!-- Export Excel Button -->
@@ -1726,14 +1726,14 @@ watch(totalItems, (newValue, oldValue) => {
       persistent
       class="stock-dialog"
     >
-      <VCard class="stock-movement-dialog coffee-dialog">
-        <VCardTitle class="d-flex align-center justify-space-between coffee-header">
+      <VCard class="stock-movement-dialog">
+        <VCardTitle class="d-flex align-center justify-space-between">
           <div class="d-flex align-center gap-2">
             <VIcon
               icon="tabler-adjustments"
-              class="text-white"
+              color="primary"
             />
-            <span class="text-white">
+            <span class="font-weight-bold">
               Penyesuaian Stok
             </span>
           </div>
@@ -1832,14 +1832,14 @@ watch(totalItems, (newValue, oldValue) => {
       persistent
       class="stock-dialog"
     >
-      <VCard class="stock-movement-dialog coffee-dialog">
+      <VCard class="stock-movement-dialog">
         <VCardTitle class="d-flex align-center justify-space-between coffee-header">
           <div class="d-flex align-center gap-2">
             <VIcon
               :icon="movementFormData.type === 'in' ? 'tabler-plus' : 'tabler-minus'"
-              class="text-white"
+              class="text-primary"
             />
-            <span class="text-white">
+            <span class="text-primary font-weight-bold">
               {{
                 movementFormData.type === 'in' ? 'Stok Masuk'
                 : movementFormData.type === 'out' ? 'Stok Keluar'
@@ -1850,7 +1850,6 @@ watch(totalItems, (newValue, oldValue) => {
           <VBtn
             icon="tabler-x"
             variant="text"
-            color="white"
             @click="closeMovementDialog"
           />
         </VCardTitle>
@@ -1962,14 +1961,14 @@ watch(totalItems, (newValue, oldValue) => {
       persistent
       class="stock-dialog"
     >
-      <VCard class="stock-movement-dialog coffee-dialog">
-        <VCardTitle class="d-flex align-center justify-space-between coffee-header">
+      <VCard class="stock-movement-dialog">
+        <VCardTitle class="d-flex align-center justify-space-between">
           <div class="d-flex align-center gap-2">
             <VIcon
               :icon="movementFormData.type === 'in' ? 'tabler-plus' : 'tabler-minus'"
-              class="text-white"
+              color="primary"
             />
-            <span class="text-white">
+            <span class="font-weight-bold">
               {{
                 movementFormData.type === 'in' ? 'Stok Masuk'
                 : movementFormData.type === 'out' ? 'Stok Keluar'
@@ -1980,7 +1979,6 @@ watch(totalItems, (newValue, oldValue) => {
           <VBtn
             icon="tabler-x"
             variant="text"
-            color="white"
             @click="closeMovementDialog"
           />
         </VCardTitle>
@@ -2095,13 +2093,13 @@ watch(totalItems, (newValue, oldValue) => {
       class="upload-history-dialog"
     >
       <VCard>
-        <VCardTitle class="d-flex align-center justify-space-between coffee-header">
+        <VCardTitle class="d-flex align-center justify-space-between">
           <div class="d-flex align-center gap-2">
             <VIcon
               icon="tabler-history"
-              class="text-white"
+              color="primary"
             />
-            <span class="text-white">Riwayat Upload Data Inventory</span>
+            <span class="font-weight-bold">Riwayat Upload Data Inventory</span>
           </div>
           <VBtn
             icon="tabler-x"
@@ -2509,34 +2507,6 @@ watch(totalItems, (newValue, oldValue) => {
     border-inline-start: 4px solid rgb(var(--v-theme-warning));
   }
 
-  // Coffee Dialog Theme
-  .coffee-dialog {
-    .coffee-header {
-      background: linear-gradient(135deg, #b07124 0%, #8d7053 100%);
-      color: white;
-    }
-
-    .coffee-primary {
-      border: none;
-      background: linear-gradient(135deg, #b07124 0%, #8d7053 100%);
-      color: white;
-
-      &:hover {
-        background: linear-gradient(135deg, #9a5e1f 0%, #7a5d47 100%);
-        box-shadow: 0 4px 12px rgba(176, 113, 36, 40%);
-      }
-    }
-
-    .coffee-secondary {
-      border-color: #b07124;
-      color: #b07124;
-
-      &:hover {
-        background-color: rgba(176, 113, 36, 10%);
-      }
-    }
-  }
-
   // Stock Dialog styling
   .stock-dialog {
     .v-dialog {
@@ -2573,19 +2543,6 @@ watch(totalItems, (newValue, oldValue) => {
 
     .v-tabs-slider {
       background-color: rgb(var(--v-theme-primary));
-    }
-  }
-
-  // Distinguish between products and items tables
-  .products-inventory-table {
-    .coffee-header {
-      background: linear-gradient(135deg, #b07124 0%, #8d7053 100%);
-    }
-
-    .products-table {
-      .v-data-table__td {
-        border-block-end: 1px solid rgba(176, 113, 36, 10%);
-      }
     }
   }
 
