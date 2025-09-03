@@ -452,7 +452,6 @@ const loadReportData = async () => {
       }, 100)
     }
   } catch (error) {
-    console.error('Error loading purchase report:', error)
   } finally {
     isLoading.value = false
   }
@@ -520,8 +519,44 @@ const createDailyPurchaseChart = () => {
 // Export to Excel
 const exportToExcel = async () => {
   if (!reportData.value) {
-    console.warn('No purchase data to export')
     return
+  }
+  
+  // Helper function to properly format currency for Excel (same as sales report)
+  const formatExcelCurrency = (value: any): string => {
+    if (!value && value !== 0) return 'Rp 0'
+    
+    let numValue = 0
+    
+    try {
+      // If it's already a formatted string with Rp (dari backend formatRupiah)
+      if (typeof value === 'string' && value.includes('Rp')) {
+        // Backend formatRupiah menggunakan format "Rp 123.456" dengan titik sebagai pemisah ribuan
+        // Extract semua digit saja
+        const digitsOnly = value.replace(/\D/g, '') // Remove all non-digits
+        numValue = parseInt(digitsOnly, 10)
+      } 
+      // If it's a regular string number
+      else if (typeof value === 'string') {
+        numValue = parseFloat(value.replace(/[^\d]/g, ''))
+      }
+      // If it's already a number
+      else if (typeof value === 'number') {
+        numValue = value
+      }
+      
+      // Validate the number
+      if (isNaN(numValue) || !isFinite(numValue) || numValue < 0) {
+        numValue = 0
+      }
+      
+      // Format dengan pemisah ribuan Indonesia (titik)
+      const formatted = `Rp ${numValue.toLocaleString('id-ID').replace(/,/g, '.')}`
+      return formatted
+      
+    } catch (error) {
+      return 'Rp 0'
+    }
   }
   
   isExporting.value = true
@@ -545,8 +580,8 @@ const exportToExcel = async () => {
       [],
       ['RINGKASAN PEMBELIAN'],
       ['Total Purchase:', reportData.value.summary.total_purchases],
-      ['Total Amount:', Math.round(parseFloat(reportData.value.summary.total_amount.replace(/[^\d.-]/g, '')))],
-      ['Rata-rata Purchase:', Math.round(parseFloat(reportData.value.summary.avg_purchase_value.replace(/[^\d.-]/g, '')))],
+      ['Total Amount:', formatExcelCurrency(reportData.value.summary.total_amount)],
+      ['Rata-rata Purchase:', formatExcelCurrency(reportData.value.summary.avg_purchase_value)],
       ['Purchase Selesai:', reportData.value.summary.completed_purchases],
       ['Purchase Pending:', reportData.value.summary.pending_purchases],
       ['Purchase Dibatalkan:', reportData.value.summary.cancelled_purchases],
@@ -571,8 +606,8 @@ const exportToExcel = async () => {
         ...reportData.value.daily_purchases.map((item: any) => [
           new Date(item.date).toLocaleDateString('id-ID'),
           item.purchase_count,
-          Math.round(typeof item.total_amount === 'string' ? parseFloat(item.total_amount.replace(/[^\d.-]/g, '')) : item.total_amount),
-          Math.round(typeof item.avg_purchase_value === 'string' ? parseFloat(item.avg_purchase_value.replace(/[^\d.-]/g, '')) : item.avg_purchase_value)
+          formatExcelCurrency(item.total_amount),
+          formatExcelCurrency(item.avg_purchase_value)
         ])
       ]
       
@@ -591,7 +626,7 @@ const exportToExcel = async () => {
         ...reportData.value.status_breakdown.map((item: any) => [
           item.status,
           item.purchase_count,
-          Math.round(typeof item.total_amount === 'string' ? parseFloat(item.total_amount.replace(/[^\d.-]/g, '')) : item.total_amount)
+          formatExcelCurrency(item.total_amount)
         ])
       ]
       
@@ -611,8 +646,8 @@ const exportToExcel = async () => {
           index + 1,
           item.name,
           Math.round(parseFloat(item.total_purchased)),
-          Math.round(typeof item.total_amount === 'string' ? parseFloat(item.total_amount.replace(/[^\d.-]/g, '')) : item.total_amount),
-          Math.round(parseFloat(item.avg_unit_cost))
+          formatExcelCurrency(item.total_amount),
+          formatExcelCurrency(item.avg_unit_cost)
         ])
       ]
       
@@ -632,7 +667,7 @@ const exportToExcel = async () => {
           index + 1,
           item.name,
           item.total_purchases,
-          Math.round(typeof item.total_amount === 'string' ? parseFloat(item.total_amount.replace(/[^\d.-]/g, '')) : item.total_amount)
+          formatExcelCurrency(item.total_amount)
         ])
       ]
       
@@ -648,10 +683,8 @@ const exportToExcel = async () => {
     // Download file
     XLSX.writeFile(workbook, filename)
     
-    console.log('✅ Purchase report exported successfully:', filename)
     
   } catch (error) {
-    console.error('Error exporting purchase report:', error)
   } finally {
     isExporting.value = false
   }

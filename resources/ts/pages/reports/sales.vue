@@ -174,6 +174,112 @@ meta:
         </VCol>
       </VRow>
 
+      <!-- Charts Row - Moved to Top Priority -->
+      <VRow class="mb-6">
+        <VCol cols="12">
+          <VCard>
+            <VCardTitle>Trend Penjualan Harian</VCardTitle>
+            <VCardText>
+              <div v-if="reportData && reportData.daily_sales && reportData.daily_sales.length > 0">
+                <canvas ref="dailySalesChart" class="w-100" style="max-height: 300px;"></canvas>
+              </div>
+              <div v-else class="text-center py-8">
+                <VIcon icon="mdi-chart-line" size="48" class="text-medium-emphasis mb-2" />
+                <p class="text-body-2 text-medium-emphasis">Tidak ada data penjualan harian</p>
+              </div>
+            </VCardText>
+          </VCard>
+        </VCol>
+      </VRow>
+
+      <!-- Top Data Tables - After Charts -->
+      <VRow class="mb-6">
+        <VCol cols="12" md="4">
+          <VCard>
+            <VCardTitle>Top 5 Produk</VCardTitle>
+            <VCardText>
+              <div class="top-products-container">
+                <div v-for="(product, index) in reportData.top_products" :key="product.id" class="mb-3">
+                  <div class="d-flex justify-space-between align-center">
+                    <div class="d-flex align-center">
+                      <VChip 
+                        :color="getTopProductColor(index)" 
+                        size="small" 
+                        class="me-2"
+                      >
+                        {{ index + 1 }}
+                      </VChip>
+                      <div>
+                        <div class="font-weight-medium">{{ product.name }}</div>
+                        <div class="text-caption text-medium-emphasis">
+                          {{ product.quantity }} terjual
+                        </div>
+                      </div>
+                    </div>
+                    <div class="text-end">
+                      <div class="font-weight-bold text-success">
+                        {{ formatCurrency(product.revenue) }}
+                      </div>
+                    </div>
+                  </div>
+                  <VDivider v-if="index < reportData.top_products.length - 1" class="mt-3" />
+                </div>
+              </div>
+            </VCardText>
+          </VCard>
+        </VCol>
+        
+        <VCol cols="12" md="4">
+          <VCard>
+            <VCardTitle>Top Customer</VCardTitle>
+            <VCardText>
+              <VDataTable
+                :headers="customerHeaders"
+                :items="reportData.top_customers"
+                :items-per-page="5"
+                class="elevation-0"
+                no-data-text="Tidak ada data customer"
+              >
+                <template #item.orders="{ item }">
+                  <VChip size="small" color="primary" variant="tonal">
+                    {{ (item as any).orders }}
+                  </VChip>
+                </template>
+                <template #item.revenue="{ item }">
+                  <span class="font-weight-bold text-success">
+                    {{ formatCurrency((item as any).revenue) }}
+                  </span>
+                </template>
+              </VDataTable>
+            </VCardText>
+          </VCard>
+        </VCol>
+        
+        <VCol cols="12" md="4">
+          <VCard>
+            <VCardTitle>Penjualan per Hari</VCardTitle>
+            <VCardText>
+              <VDataTable
+                :headers="dailyHeaders"
+                :items="reportData.daily_sales"
+                :items-per-page="7"
+                class="elevation-0"
+                no-data-text="Tidak ada data penjualan"
+              >
+                <template #item.date="{ item }">
+                  {{ formatDate((item as any).date) }}
+                </template>
+                <template #item.total="{ item }">
+                  <span class="font-weight-bold text-success">
+                    {{ formatCurrency((item as any).total) }}
+                  </span>
+                </template>
+              </VDataTable>
+            </VCardText>
+          </VCard>
+        </VCol>
+      </VRow>
+
       <!-- Business Analytics Section -->
       <VRow class="mb-6">
         <!-- Peak Hours Analysis -->
@@ -316,112 +422,6 @@ meta:
                 </template>
                 <template #item.avg_price="{ item }">
                   <span class="text-body-2">{{ formatCurrency((item as any).avg_price) }}</span>
-                </template>
-              </VDataTable>
-            </VCardText>
-          </VCard>
-        </VCol>
-      </VRow>
-
-      <!-- Charts Row -->
-      <VRow class="mb-6">
-        <VCol cols="12" md="8">
-          <VCard>
-            <VCardTitle>Trend Penjualan Harian</VCardTitle>
-            <VCardText>
-              <div v-if="reportData && reportData.daily_sales && reportData.daily_sales.length > 0">
-                <canvas ref="dailySalesChart" class="w-100" style="max-height: 300px;"></canvas>
-              </div>
-              <div v-else class="text-center py-8">
-                <VIcon icon="mdi-chart-line" size="48" class="text-medium-emphasis mb-2" />
-                <p class="text-body-2 text-medium-emphasis">Tidak ada data penjualan harian</p>
-              </div>
-            </VCardText>
-          </VCard>
-        </VCol>
-        
-        <VCol cols="12" md="4">
-          <VCard>
-            <VCardTitle>Top 5 Produk</VCardTitle>
-            <VCardText>
-              <div class="top-products-container">
-                <div v-for="(product, index) in reportData.top_products" :key="product.id" class="mb-3">
-                  <div class="d-flex justify-space-between align-center">
-                    <div class="d-flex align-center">
-                      <VChip 
-                        :color="getTopProductColor(index)" 
-                        size="small" 
-                        class="me-2"
-                      >
-                        {{ index + 1 }}
-                      </VChip>
-                      <div>
-                        <div class="font-weight-medium">{{ product.name }}</div>
-                        <div class="text-caption text-medium-emphasis">
-                          {{ product.quantity }} terjual
-                        </div>
-                      </div>
-                    </div>
-                    <div class="text-end">
-                      <div class="font-weight-bold text-success">
-                        {{ formatCurrency(product.revenue) }}
-                      </div>
-                    </div>
-                  </div>
-                  <VDivider v-if="index < reportData.top_products.length - 1" class="mt-3" />
-                </div>
-              </div>
-            </VCardText>
-          </VCard>
-        </VCol>
-      </VRow>
-
-      <!-- Top Customers -->
-      <VRow>
-        <VCol cols="12" md="6">
-          <VCard>
-            <VCardTitle>Top Customer</VCardTitle>
-            <VCardText>
-              <VDataTable
-                :headers="customerHeaders"
-                :items="reportData.top_customers"
-                :items-per-page="5"
-                class="elevation-0"
-                no-data-text="Tidak ada data customer"
-              >
-                <template #item.orders="{ item }">
-                  <VChip size="small" color="primary" variant="tonal">
-                    {{ (item as any).orders }}
-                  </VChip>
-                </template>
-                <template #item.revenue="{ item }">
-                  <span class="font-weight-bold text-success">
-                    {{ formatCurrency((item as any).revenue) }}
-                  </span>
-                </template>
-              </VDataTable>
-            </VCardText>
-          </VCard>
-        </VCol>
-        
-        <VCol cols="12" md="6">
-          <VCard>
-            <VCardTitle>Penjualan per Hari</VCardTitle>
-            <VCardText>
-              <VDataTable
-                :headers="dailyHeaders"
-                :items="reportData.daily_sales"
-                :items-per-page="7"
-                class="elevation-0"
-                no-data-text="Tidak ada data penjualan"
-              >
-                <template #item.date="{ item }">
-                  {{ formatDate((item as any).date) }}
-                </template>
-                <template #item.total="{ item }">
-                  <span class="font-weight-bold text-success">
-                    {{ formatCurrency((item as any).total) }}
-                  </span>
                 </template>
               </VDataTable>
             </VCardText>
@@ -711,6 +711,43 @@ const exportToExcel = async () => {
   
   isExporting.value = true
   
+  // Helper function to properly format currency for Excel
+  const formatExcelCurrency = (value: any): string => {
+    if (!value && value !== 0) return 'Rp 0'
+    
+    let numValue = 0
+    
+    try {
+      // If it's already a formatted string with Rp (dari backend formatRupiah)
+      if (typeof value === 'string' && value.includes('Rp')) {
+        // Backend formatRupiah menggunakan format "Rp 123.456" dengan titik sebagai pemisah ribuan
+        // Extract semua digit saja
+        const digitsOnly = value.replace(/\D/g, '') // Remove all non-digits
+        numValue = parseInt(digitsOnly, 10)
+      } 
+      // If it's a regular string number
+      else if (typeof value === 'string') {
+        numValue = parseFloat(value.replace(/[^\d]/g, ''))
+      }
+      // If it's already a number
+      else if (typeof value === 'number') {
+        numValue = value
+      }
+      
+      // Validate the number
+      if (isNaN(numValue) || !isFinite(numValue) || numValue < 0) {
+        numValue = 0
+      }
+      
+      // Format dengan pemisah ribuan Indonesia (titik)
+      const formatted = `Rp ${numValue.toLocaleString('id-ID').replace(/,/g, '.')}`
+      return formatted
+      
+    } catch (error) {
+      return 'Rp 0'
+    }
+  }
+  
   try {
     // Dynamic import for better performance
     const XLSX = await import('xlsx')
@@ -730,8 +767,8 @@ const exportToExcel = async () => {
       [],
       ['RINGKASAN PENJUALAN'],
       ['Total Order:', reportData.value.summary.total_orders],
-      ['Total Pendapatan:', Math.round(parseFloat(reportData.value.summary.total_revenue.replace(/[^\d.-]/g, '')))],
-      ['Rata-rata Order (AOV):', Math.round(parseFloat(reportData.value.summary.average_order.replace(/[^\d.-]/g, '')))],
+      ['Total Pendapatan:', formatExcelCurrency(reportData.value.summary.total_revenue)],
+      ['Rata-rata Order (AOV):', formatExcelCurrency(reportData.value.summary.average_order)],
       ['Total Item Terjual:', reportData.value.summary.total_items],
       ['Order Selesai:', reportData.value.summary.completed_orders],
       ['Order Dibatalkan:', reportData.value.summary.cancelled_orders],
@@ -762,7 +799,7 @@ const exportToExcel = async () => {
         ['Tanggal', 'Total Penjualan'],
         ...reportData.value.daily_sales.map((item: any) => [
           new Date(item.date).toLocaleDateString('id-ID'),
-          Math.round(typeof item.total === 'string' ? parseFloat(item.total.replace(/[^\d.-]/g, '')) : item.total)
+          formatExcelCurrency(item.total)
         ])
       ]
       
@@ -782,7 +819,7 @@ const exportToExcel = async () => {
           index + 1,
           item.name,
           item.quantity,
-          Math.round(typeof item.revenue === 'string' ? parseFloat(item.revenue.replace(/[^\d.-]/g, '')) : (item.revenue || 0))
+          formatExcelCurrency(item.revenue)
         ])
       ]
       
@@ -802,8 +839,8 @@ const exportToExcel = async () => {
           index + 1,
           item.name,
           item.orders,
-          Math.round(typeof item.revenue === 'string' ? parseFloat(item.revenue.replace(/[^\d.-]/g, '')) : (item.revenue || 0)),
-          Math.round(typeof item.avg_order === 'string' ? parseFloat(item.avg_order.replace(/[^\d.-]/g, '')) : (item.avg_order || 0)),
+          formatExcelCurrency(item.revenue),
+          formatExcelCurrency(item.avg_order),
           item.customer_lifetime || 0
         ])
       ]
@@ -823,8 +860,8 @@ const exportToExcel = async () => {
         ...reportData.value.peak_hours.map((item: any) => [
           item.hour_display,
           item.order_count,
-          Math.round(typeof item.revenue === 'string' ? parseFloat(item.revenue.replace(/[^\d.-]/g, '')) : (item.revenue || 0)),
-          Math.round(typeof item.avg_order === 'string' ? parseFloat(item.avg_order.replace(/[^\d.-]/g, '')) : (item.avg_order || 0))
+          formatExcelCurrency(item.revenue),
+          formatExcelCurrency(item.avg_order)
         ])
       ]
       
@@ -843,8 +880,8 @@ const exportToExcel = async () => {
         ...reportData.value.sales_by_day.map((item: any) => [
           item.day_name,
           item.order_count,
-          Math.round(typeof item.revenue === 'string' ? parseFloat(item.revenue.replace(/[^\d.-]/g, '')) : (item.revenue || 0)),
-          Math.round(typeof item.avg_order === 'string' ? parseFloat(item.avg_order.replace(/[^\d.-]/g, '')) : (item.avg_order || 0))
+          formatExcelCurrency(item.revenue),
+          formatExcelCurrency(item.avg_order)
         ])
       ]
       
@@ -863,8 +900,8 @@ const exportToExcel = async () => {
         ...reportData.value.payment_methods.map((item: any) => [
           getPaymentLabel(item.method),
           item.order_count,
-          Math.round(typeof item.revenue === 'string' ? parseFloat(item.revenue.replace(/[^\d.-]/g, '')) : (item.revenue || 0)),
-          Math.round(typeof item.avg_order === 'string' ? parseFloat(item.avg_order.replace(/[^\d.-]/g, '')) : (item.avg_order || 0)),
+          formatExcelCurrency(item.revenue),
+          formatExcelCurrency(item.avg_order),
           `${item.percentage}%`
         ])
       ]
@@ -885,8 +922,8 @@ const exportToExcel = async () => {
           item.category,
           item.orders_count,
           item.quantity_sold,
-          Math.round(typeof item.revenue === 'string' ? parseFloat(item.revenue.replace(/[^\d.-]/g, '')) : (item.revenue || 0)),
-          Math.round(typeof item.avg_price === 'string' ? parseFloat(item.avg_price.replace(/[^\d.-]/g, '')) : (item.avg_price || 0))
+          formatExcelCurrency(item.revenue),
+          formatExcelCurrency(item.avg_price)
         ])
       ]
       
