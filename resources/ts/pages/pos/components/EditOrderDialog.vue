@@ -293,6 +293,21 @@
         </VForm>
       </VCardText>
 
+      <!-- Error Alert di Bottom - lebih visible -->
+      <div 
+        v-if="errorMessage" 
+        class="px-6 pb-2"
+      >
+        <VAlert
+          type="error"
+          variant="tonal"
+          closable
+          @click:close="errorMessage = ''"
+        >
+          {{ errorMessage }}
+        </VAlert>
+      </div>
+
       <VCardActions class="pa-6 pt-0">
         <VSpacer />
         <VBtn
@@ -337,6 +352,7 @@ const emit = defineEmits<{
 const formRef = ref()
 const formValid = ref(false)
 const saving = ref(false)
+const errorMessage = ref('')
 const customers = ref<any[]>([])
 const products = ref<any[]>([])
 
@@ -423,6 +439,9 @@ const loadProducts = async () => {
 
 const initializeForm = () => {
   if (props.order) {
+    // Support both possible naming conventions
+    const orderItems = props.order.orderItems || props.order.order_items || []
+    
     formData.value = {
       order_type: props.order.order_type || '',
       table_number: props.order.table_number || '',
@@ -431,12 +450,12 @@ const initializeForm = () => {
       notes: props.order.notes || '',
       discount_type: props.order.discount_type || '',
       discount_value: props.order.discount_amount || 0,
-      items: props.order.orderItems?.map((item: any) => ({
+      items: orderItems.map((item: any) => ({
         id_product: item.id_product,
         quantity: item.quantity,
         unit_price: item.unit_price,
         notes: item.notes || ''
-      })) || []
+      }))
     }
   }
 }
@@ -471,6 +490,7 @@ const saveOrder = async () => {
 
   try {
     saving.value = true
+    errorMessage.value = '' // Clear previous error
     
     const updateData = {
       order_type: formData.value.order_type,
@@ -490,15 +510,23 @@ const saveOrder = async () => {
       closeDialog()
       // Show success message
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating order:', error)
-    // Show error message
+    // Extract error message from API response
+    if (error.message) {
+      errorMessage.value = error.message
+    } else if (error.response?.data?.message) {
+      errorMessage.value = error.response.data.message
+    } else {
+      errorMessage.value = 'Terjadi kesalahan saat memperbarui pesanan'
+    }
   } finally {
     saving.value = false
   }
 }
 
 const closeDialog = () => {
+  errorMessage.value = '' // Clear error when closing dialog
   localDialog.value = false
 }
 
