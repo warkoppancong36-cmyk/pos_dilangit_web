@@ -335,6 +335,10 @@ const formatCurrency = (amount: number) => {
 }
 
 const initializeForm = () => {
+  console.log('=== Initializing form ===')
+  console.log('Mode:', props.mode)
+  console.log('Purchase data:', props.purchase)
+  console.log('Available suppliers:', suppliers.value)
   
   if (props.mode === 'edit' && props.purchase) {
     
@@ -344,10 +348,16 @@ const initializeForm = () => {
                       props.purchase.supplier?.id_supplier ||
                       props.purchase.supplier?.id
     
+    console.log('Found supplier ID:', supplierId)
     
     // Convert to number to match with VSelect item-value
     const supplierIdNumber = supplierId ? Number.parseInt(String(supplierId)) : null
     
+    console.log('Converted supplier ID to number:', supplierIdNumber)
+    
+    // Check if supplier exists in the list
+    const supplierExists = suppliers.value.find(s => s.id_supplier === supplierIdNumber)
+    console.log('Supplier exists in list:', supplierExists)
     
     const formattedDate = props.purchase.purchase_date ? new Date(props.purchase.purchase_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
     
@@ -375,6 +385,7 @@ const initializeForm = () => {
       }) || [],
     }
     
+    console.log('Final form data:', formData.value)
   }
   else {
     formData.value = {

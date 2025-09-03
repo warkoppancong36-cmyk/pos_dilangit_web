@@ -23,6 +23,7 @@
             :hint="searchQuery.length > 0 && searchQuery.length < 3 ? 
               `Ketik ${3 - searchQuery.length} karakter lagi untuk mencari` : ''"
             persistent-hint
+            @click:clear="handleClearSearch"
           />
         </VCol>
 
@@ -160,7 +161,7 @@
             closable
             size="small"
             color="coffee"
-            @click:close="searchQuery = ''; localFilters.search = ''; onFilterChange()"
+            @click:close="handleClearSearch"
           >
             Pencarian: {{ searchQuery }}
           </VChip>
@@ -317,6 +318,13 @@ const hasActiveFilters = computed(() => {
 // Methods
 const onFilterChange = () => {
   emit('update:filters', { ...localFilters })
+}
+
+const handleClearSearch = () => {
+  searchQuery.value = ''
+  localFilters.search = ''
+  emit('search', '')
+  onFilterChange()
 }
 
 const resetFilters = () => {

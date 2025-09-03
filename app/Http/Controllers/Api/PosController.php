@@ -62,9 +62,17 @@ class PosController extends Controller
                 $orders = $query->paginate($perPage);
             }
 
-            // Add daily order sequence to each order
+            // Add daily order sequence to each order and transform order items
             $orders->getCollection()->transform(function ($order) {
                 $order->daily_order_sequence = $order->getDailyOrderSequence();
+                
+                // Transform order items to include kitchen and bar availability
+                $order->orderItems->transform(function ($item) {
+                    $item->available_kitchen = $item->product ? $item->product->available_in_kitchen : null;
+                    $item->available_bar = $item->product ? $item->product->available_in_bar : null;
+                    return $item;
+                });
+                
                 return $order;
             });
 
@@ -113,11 +121,10 @@ class PosController extends Controller
                 $query->whereDate('created_at', '<=', $request->date_to);
             }
 
-            // Only apply date filter if explicitly provided
-            // Remove automatic date limitation to show all transaction history by default
-            // if (!$request->has('date_from') && !$request->has('date_to')) {
-            //     $query->whereDate('created_at', '>=', now()->subDays(90));
-            // }
+            // Default to last 30 days if no date filter
+            if (!$request->has('date_from') && !$request->has('date_to')) {
+                $query->whereDate('created_at', '>=', now()->subDays(30));
+            }
 
             // Handle pagination - support 'all' to get all records
             $perPage = $request->get('per_page', 50);
@@ -135,9 +142,17 @@ class PosController extends Controller
                 $orders = $query->paginate($perPage);
             }
 
-            // Add daily order sequence to each order
+            // Add daily order sequence to each order and transform order items
             $orders->getCollection()->transform(function ($order) {
                 $order->daily_order_sequence = $order->getDailyOrderSequence();
+                
+                // Transform order items to include kitchen and bar availability
+                $order->orderItems->transform(function ($item) {
+                    $item->available_kitchen = $item->product ? $item->product->available_in_kitchen : null;
+                    $item->available_bar = $item->product ? $item->product->available_in_bar : null;
+                    return $item;
+                });
+                
                 return $order;
             });
 
@@ -253,6 +268,7 @@ class PosController extends Controller
                 'discount_amount' => $request->discount_amount ?? 0,
                 'discount_type' => $request->discount_type,
                 'discount_percentage' => $request->discount_percentage ?? 0,
+                'notes' => $request->notes ?? null,
             ]);
 
             // Update inventory based on recipe consumption
@@ -745,6 +761,8 @@ class PosController extends Controller
                     'formatted_unit_price' => 'Rp ' . number_format($item->unit_price, 0, ',', '.'),
                     'formatted_total_price' => 'Rp ' . number_format($item->total_price, 0, ',', '.'),
                     'notes' => $item->notes,
+                    'available_kitchen' => $item->product ? $item->product->available_in_kitchen : null,
+                    'available_bar' => $item->product ? $item->product->available_in_bar : null,
                     'image_url' => $item->product ? $item->product->image_url : null,
                     'created_at' => $item->created_at,
                     'updated_at' => $item->updated_at
@@ -1271,6 +1289,7 @@ class PosController extends Controller
             'cart_items.*.quantity' => 'required|integer|min:1',
             'cart_items.*.unit_price' => 'required|numeric|min:0',
             'cart_items.*.subtotal' => 'required|numeric|min:0',
+            'cart_items.*.notes' => 'nullable|string|max:255',
             'cart_items.*.discount_amount' => 'nullable|numeric|min:0',
             'cart_items.*.discount_type' => 'nullable|string|in:fixed,percentage',
             'cart_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
@@ -1367,6 +1386,7 @@ class PosController extends Controller
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
                     'total_price' => $item['subtotal'],
+                    'notes' => $item['notes'] ?? null,
                     'discount_amount' => $item['discount_amount'] ?? 0,
                     'discount_type' => $item['discount_type'] ?? null,
                     'discount_percentage' => $item['discount_percentage'] ?? null,
@@ -1429,7 +1449,10 @@ class PosController extends Controller
                         'product_name' => $item->product->name,
                         'quantity' => $item->quantity,
                         'unit_price' => $item->unit_price,
-                        'subtotal' => $item->subtotal
+                        'subtotal' => $item->subtotal,
+                        'notes' => $item->notes,
+                        'available_kitchen' => $item->product ? $item->product->available_in_kitchen : null,
+                        'available_bar' => $item->product ? $item->product->available_in_bar : null,
                     ];
                 }),
                 'cashier' => $order->user ? [
@@ -1884,6 +1907,7 @@ class PosController extends Controller
                 'cart_items.*.unit_price' => 'required|numeric|min:0',
                 'cart_items.*.subtotal' => 'nullable|numeric|min:0',
                 'cart_items.*.total_price' => 'nullable|numeric|min:0',
+                'cart_items.*.notes' => 'nullable|string|max:255',
                 'cart_items.*.discount_amount' => 'nullable|numeric|min:0',
                 'cart_items.*.discount_type' => 'nullable|string|in:fixed,percentage',
                 'cart_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
@@ -1961,6 +1985,7 @@ class PosController extends Controller
                         'quantity' => $item['quantity'],
                         'unit_price' => $item['unit_price'],
                         'total_price' => $subtotal,
+                        'notes' => $item['notes'] ?? null,
                         'discount_amount' => $item['discount_amount'] ?? 0,
                         'discount_type' => $item['discount_type'] ?? null,
                         'discount_percentage' => $item['discount_percentage'] ?? null,
@@ -2004,6 +2029,9 @@ class PosController extends Controller
                         'quantity' => $item->quantity,
                         'unit_price' => $item->unit_price,
                         'total_price' => $item->total_price,
+                        'notes' => $item->notes,
+                        'available_kitchen' => $item->product ? $item->product->available_in_kitchen : null,
+                        'available_bar' => $item->product ? $item->product->available_in_bar : null,
                     ];
                 }),
                 'cashier' => $order->user ? [

@@ -123,7 +123,8 @@
               variant="outlined"
               density="compact"
               clearable
-              @input="debounceSearch"
+              @update:model-value="debounceSearch"
+              @click:clear="() => { searchQuery = ''; nextTick(() => fetchAssets()); }"
             />
           </VCol>
           
@@ -499,7 +500,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useAssets } from '@/composables/useAssets'
 import type { Asset } from '@/composables/useAssets'
 import { formatRupiah } from '@/@core/utils/formatters'
@@ -594,7 +595,11 @@ let searchTimeout: NodeJS.Timeout
 const debounceSearch = () => {
   clearTimeout(searchTimeout)
   searchTimeout = setTimeout(() => {
-    searchAssets(searchQuery.value)
+    if (searchQuery.value.trim() === '') {
+      fetchAssets() // Fetch all assets when search is empty
+    } else {
+      searchAssets(searchQuery.value)
+    }
   }, 300)
 }
 
@@ -606,6 +611,7 @@ const applyFilters = () => {
 const clearFilters = () => {
   searchQuery.value = ''
   resetFilters()
+  nextTick(() => fetchAssets())
 }
 
 // Message management

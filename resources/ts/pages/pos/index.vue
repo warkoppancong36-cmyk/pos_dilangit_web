@@ -56,6 +56,7 @@
               clearable
               hide-details
               class="search-input"
+              @click:clear="productSearch = ''"
             />
           </div>
           

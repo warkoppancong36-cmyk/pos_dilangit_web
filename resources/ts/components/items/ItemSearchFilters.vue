@@ -91,6 +91,7 @@ const hasActiveFilters = computed(() => {
             clearable
             variant="outlined"
             @update:model-value="onFilterChange"
+            @click:clear="localFilters.search = ''; onFilterChange()"
           />
         </VCol>
 
