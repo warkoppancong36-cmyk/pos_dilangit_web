@@ -566,7 +566,8 @@ const loadSuppliers = async () => {
       headers['Authorization'] = `Bearer ${token}`
     }
 
-    const response = await axios.get('/api/suppliers', { headers })
+    // Request all suppliers without pagination and status filter
+    const response = await axios.get('/api/suppliers?per_page=all', { headers })
     suppliers.value = response.data.data || []
   } catch (error) {
     console.error('Error loading suppliers:', error)
