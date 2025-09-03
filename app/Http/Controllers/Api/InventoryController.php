@@ -134,7 +134,7 @@ class InventoryController extends Controller
             return $this->successResponse($inventory, 'Inventory data retrieved successfully');
 
         } catch (\Exception $e) {
-            return $this->errorResponse('Failed to retrieve inventory data: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Failed to retrieve inventory data: ' . $e->getMessage(), null, 500);
         }
     }
 
@@ -186,7 +186,7 @@ class InventoryController extends Controller
             return $this->successResponse($stats, 'Inventory statistics retrieved successfully');
 
         } catch (\Exception $e) {
-            return $this->errorResponse('Failed to retrieve inventory statistics: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Failed to retrieve inventory statistics: ' . $e->getMessage(), null, 500);
         }
     }
 
@@ -203,7 +203,7 @@ class InventoryController extends Controller
             return $this->successResponse($inventory, 'Inventory item retrieved successfully');
 
         } catch (\Exception $e) {
-            return $this->errorResponse('Inventory item not found: ' . $e->getMessage(), 404);
+            return $this->errorResponse('Inventory item not found: ' . $e->getMessage(), null, 404);
         }
     }
 
@@ -222,7 +222,7 @@ class InventoryController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return $this->errorResponse('Validation failed', 422, $validator->errors());
+            return $this->errorResponse('Validation failed', $validator->errors(), 422);
         }
 
         try {
@@ -234,7 +234,7 @@ class InventoryController extends Controller
 
             // Validate stock availability for outbound movements
             if (in_array($movementType, ['stock_out', 'transfer']) && $inventory->current_stock < $quantity) {
-                return $this->errorResponse('Insufficient stock available', 400);
+                return $this->errorResponse('Insufficient stock available', null, 400);
             }
 
             // Calculate new stock based on movement type
@@ -297,7 +297,7 @@ class InventoryController extends Controller
 
         } catch (\Exception $e) {
             DB::rollback();
-            return $this->errorResponse('Failed to update stock: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Failed to update stock: ' . $e->getMessage(), null, 500);
         }
     }
 
@@ -316,7 +316,7 @@ class InventoryController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return $this->errorResponse('Validation failed', 422, $validator->errors());
+            return $this->errorResponse('Validation failed', $validator->errors(), 422);
         }
 
         try {
@@ -385,7 +385,7 @@ class InventoryController extends Controller
 
             if (!empty($errors)) {
                 DB::rollback();
-                return $this->errorResponse('Bulk update failed', 400, $errors);
+                return $this->errorResponse('Bulk update failed', $errors, 400);
             }
 
             DB::commit();
@@ -405,7 +405,7 @@ class InventoryController extends Controller
 
         } catch (\Exception $e) {
             DB::rollback();
-            return $this->errorResponse('Failed to perform bulk update: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Failed to perform bulk update: ' . $e->getMessage(), null, 500);
         }
     }
 
@@ -423,7 +423,7 @@ class InventoryController extends Controller
             return $this->successResponse($lowStockItems, 'Low stock alerts retrieved successfully');
 
         } catch (\Exception $e) {
-            return $this->errorResponse('Failed to retrieve low stock alerts: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Failed to retrieve low stock alerts: ' . $e->getMessage(), null, 500);
         }
     }
 
@@ -458,7 +458,7 @@ class InventoryController extends Controller
             return $this->successResponse($movements, 'Inventory movements retrieved successfully');
 
         } catch (\Exception $e) {
-            return $this->errorResponse('Failed to retrieve movements: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Failed to retrieve movements: ' . $e->getMessage(), null, 500);
         }
     }
 
@@ -489,7 +489,7 @@ class InventoryController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return $this->errorResponse('Validation failed', 422, $validator->errors());
+            return $this->errorResponse('Validation failed', $validator->errors(), 422);
         }
 
         try {
@@ -504,7 +504,7 @@ class InventoryController extends Controller
             return $this->successResponse($inventory, 'Reorder level updated successfully');
 
         } catch (\Exception $e) {
-            return $this->errorResponse('Failed to update reorder level: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Failed to update reorder level: ' . $e->getMessage(), null, 500);
         }
     }
 
@@ -517,7 +517,7 @@ class InventoryController extends Controller
             $result = InventorySyncService::syncAllInventory();
             return $this->successResponse($result, 'Inventory synchronization completed successfully');
         } catch (\Exception $e) {
-            return $this->errorResponse('Failed to sync inventory: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Failed to sync inventory: ' . $e->getMessage(), null, 500);
         }
     }
 
@@ -539,7 +539,7 @@ class InventoryController extends Controller
             $inventory = Inventory::where('id_item', $validated['item_id'])->first();
             
             if (!$inventory) {
-                return $this->errorResponse('Inventory record not found for this item', 404);
+                return $this->errorResponse('Inventory record not found for this item', null, 404);
             }
 
             $stockBefore = $inventory->current_stock;
@@ -551,6 +551,8 @@ class InventoryController extends Controller
             ]);
 
             // Create inventory movement record
+            // 'unit_cost' => $inventory->average_cost, // Always use inventory average cost for adjustments
+            //     'total_cost' => $inventory->average_cost * abs($newStock - $stockBefore),
             InventoryMovement::create([
                 'id_inventory' => $inventory->id_inventory,
                 'movement_type' => 'adjustment',
@@ -574,7 +576,7 @@ class InventoryController extends Controller
             ], 'Stock adjustment recorded successfully');
 
         } catch (\Exception $e) {
-            return $this->errorResponse('Failed to record movement: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Failed to record movement: ' . $e->getMessage(), null, 500);
         }
     }
 }

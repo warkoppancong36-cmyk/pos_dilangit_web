@@ -134,6 +134,19 @@ const handleAdjustment = (inventoryItem: any) => {
   }
 }
 
+// Force integer formatting for cost fields
+watch(() => stockUpdateForm.cost_per_unit, (newValue) => {
+  if (newValue && typeof newValue === 'number') {
+    stockUpdateForm.cost_per_unit = Math.round(newValue)
+  }
+}, { immediate: true })
+
+watch(() => movementFormData.cost_per_unit, (newValue) => {
+  if (newValue && typeof newValue === 'number') {
+    movementFormData.cost_per_unit = Math.round(newValue)
+  }
+}, { immediate: true })
+
 // Computed properties for inventory view
 const currentStats = computed(() => {
   return stats.value
@@ -1498,7 +1511,7 @@ watch(totalItems, (newValue, oldValue) => {
         >
           <VCard>
             <VCardTitle>
-              Update Stok - {{ selectedInventory?.product?.name }}
+              Update Stok - {{ selectedInventory?.item?.name || selectedInventory?.product?.name || 'Unknown Item' }}
             </VCardTitle>
             <VDivider />
             <VForm @submit.prevent="updateStock">
@@ -1574,12 +1587,16 @@ watch(totalItems, (newValue, oldValue) => {
                     md="6"
                   >
                     <VTextField
-                      v-model.number="stockUpdateForm.cost_per_unit"
-                      label="Harga per Unit"
+                      :model-value="stockUpdateForm.cost_per_unit ? Math.round(stockUpdateForm.cost_per_unit) : ''"
+                      label="Harga per Unit (Integer)"
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="1"
                       variant="outlined"
+                      placeholder="50000"
+                      @update:model-value="(value) => {
+                        stockUpdateForm.cost_per_unit = value ? Math.round(parseInt(value)) : undefined;
+                      }"
                     />
                   </VCol>
                 </VRow>
@@ -1627,7 +1644,7 @@ watch(totalItems, (newValue, oldValue) => {
         >
           <VCard>
             <VCardTitle>
-              Set Reorder Level - {{ selectedInventory?.product?.name }}
+              Set Reorder Level - {{ selectedInventory?.item?.name || selectedInventory?.product?.name || 'Unknown Item' }}
             </VCardTitle>
             <VDivider />
             <VForm @submit.prevent="setReorderLevel">
@@ -1886,14 +1903,19 @@ watch(totalItems, (newValue, oldValue) => {
 
               <VCol cols="12" md="6">
                 <VTextField
-                  v-model.number="movementFormData.cost_per_unit"
-                  label="Harga per Unit"
+                  :model-value="movementFormData.cost_per_unit ? Math.round(movementFormData.cost_per_unit) : ''"
+                  label="Harga per Unit (Integer)"
                   type="number"
-                  step="0.01"
+                  step="1"
                   min="0"
                   variant="outlined"
-                  prefix="Rp"
+                  placeholder="50000"
                   :readonly="movementFormData.type !== 'in'"
+                  :hint="movementFormData.type === 'adjustment' ? 'Harga tidak dapat diubah saat adjustment' : ''"
+                  persistent-hint
+                  @update:model-value="(value) => {
+                    movementFormData.cost_per_unit = value ? Math.round(parseInt(value)) : 0;
+                  }"
                 />
               </VCol>
 
@@ -2014,12 +2036,17 @@ watch(totalItems, (newValue, oldValue) => {
                 md="6"
               >
                 <VTextField
-                  v-model.number="movementFormData.cost_per_unit"
-                  label="Harga per Unit"
+                  :model-value="movementFormData.cost_per_unit ? Math.round(movementFormData.cost_per_unit) : ''"
+                  label="Harga per Unit (Integer)"
                   type="number"
+                  step="1"
+                  min="0"
                   variant="outlined"
-                  prefix="Rp"
+                  placeholder="50000"
                   :readonly="movementFormData.type !== 'in'"
+                  @update:model-value="(value) => {
+                    movementFormData.cost_per_unit = value ? Math.round(parseInt(value)) : 0;
+                  }"
                 />
               </VCol>
 
