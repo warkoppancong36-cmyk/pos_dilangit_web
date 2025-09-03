@@ -12,6 +12,7 @@
             clearable
             variant="outlined"
             @update:model-value="debouncedSearch"
+            @click:clear="localFilters.search = ''; onFilterChange()"
           />
         </VCol>
 
@@ -95,6 +96,7 @@
                 clearable
                 variant="outlined"
                 @update:model-value="debouncedSearch"
+                @click:clear="localFilters.city = ''; onFilterChange()"
               />
             </VCol>
 
@@ -122,6 +124,7 @@
                 clearable
                 variant="outlined"
                 @update:model-value="debouncedSearch"
+                @click:clear="localFilters.min_visits = undefined; onFilterChange()"
               />
             </VCol>
 

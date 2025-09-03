@@ -66,6 +66,7 @@
               density="compact"
               clearable
               @input="debouncedSearch"
+              @click:clear="filters.search = ''; fetchPromotions()"
             />
           </VCol>
           <VCol cols="12" md="2">

@@ -105,6 +105,7 @@ const hasActiveFilters = computed(() => {
             variant="outlined"
             @update:model-value="(value) => updateFilters('search', value)"
             @keydown.enter="handleSearch"
+            @click:clear="updateFilters('search', ''); handleSearch()"
           />
         </VCol>
 
@@ -130,6 +131,7 @@ const hasActiveFilters = computed(() => {
             variant="outlined"
             clearable
             @update:model-value="(value) => updateFilters('city', value)"
+            @click:clear="updateFilters('city', '')"
           />
         </VCol>
 
@@ -141,6 +143,7 @@ const hasActiveFilters = computed(() => {
             variant="outlined"
             clearable
             @update:model-value="(value) => updateFilters('province', value)"
+            @click:clear="updateFilters('province', '')"
           />
         </VCol>
 

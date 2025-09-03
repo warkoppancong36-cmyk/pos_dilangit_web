@@ -11,8 +11,8 @@
             variant="outlined"
             prepend-inner-icon="tabler-search"
             clearable
-            @update:model-value="$emit('update:search', $event)"
-            @keyup.enter="$emit('search')"
+            @update:model-value="$emit('update:search', $event); $emit('search')"
+            @click:clear="$emit('update:search', ''); $emit('search')"
           />
         </VCol>
 
