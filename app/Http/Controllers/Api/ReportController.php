@@ -93,45 +93,221 @@ class ReportController extends Controller
                     'customers.name',
                     'customers.id_customer as id',
                     DB::raw('COUNT(*) as total_orders'),
-                    DB::raw('SUM(orders.total_amount) as total_spent')
+                    DB::raw('SUM(orders.total_amount) as total_spent'),
+                    DB::raw('AVG(orders.total_amount) as avg_order_value'),
+                    DB::raw('MIN(orders.order_date) as first_order'),
+                    DB::raw('MAX(orders.order_date) as last_order')
                 )
                 ->where('orders.status', '!=', 'cancelled')
                 ->whereBetween('orders.order_date', [$startDate, $endDate])
                 ->groupBy('customers.id_customer', 'customers.name')
                 ->orderBy('total_spent', 'desc')
-                ->limit(20)
+                ->limit(10)
                 ->get();
+
+            // Sales by hour (peak hours analysis)
+            $salesByHour = Order::select(
+                    DB::raw('HOUR(order_date) as hour'),
+                    DB::raw('COUNT(*) as order_count'),
+                    DB::raw('SUM(total_amount) as total_revenue'),
+                    DB::raw('AVG(total_amount) as avg_order_value')
+                )
+                ->where('status', '!=', 'cancelled')
+                ->whereBetween('order_date', [$startDate, $endDate])
+                ->groupBy(DB::raw('HOUR(order_date)'))
+                ->orderBy('hour')
+                ->get();
+
+            // Sales by day of week
+            $salesByDayOfWeek = Order::select(
+                    DB::raw('DAYOFWEEK(order_date) as day_of_week'),
+                    DB::raw('CASE DAYOFWEEK(order_date)
+                        WHEN 1 THEN "Minggu"
+                        WHEN 2 THEN "Senin" 
+                        WHEN 3 THEN "Selasa"
+                        WHEN 4 THEN "Rabu"
+                        WHEN 5 THEN "Kamis"
+                        WHEN 6 THEN "Jumat"
+                        WHEN 7 THEN "Sabtu"
+                    END as day_name'),
+                    DB::raw('COUNT(*) as order_count'),
+                    DB::raw('SUM(total_amount) as total_revenue'),
+                    DB::raw('AVG(total_amount) as avg_order_value')
+                )
+                ->where('status', '!=', 'cancelled')
+                ->whereBetween('order_date', [$startDate, $endDate])
+                ->groupBy(DB::raw('DAYOFWEEK(order_date)'), DB::raw('CASE DAYOFWEEK(order_date)
+                        WHEN 1 THEN "Minggu"
+                        WHEN 2 THEN "Senin" 
+                        WHEN 3 THEN "Selasa"
+                        WHEN 4 THEN "Rabu"
+                        WHEN 5 THEN "Kamis"
+                        WHEN 6 THEN "Jumat"
+                        WHEN 7 THEN "Sabtu"
+                    END'))
+                ->orderBy(DB::raw('DAYOFWEEK(order_date)'))
+                ->get();
+
+            // Payment method analysis - Join dengan table payments
+            $totalOrdersForPercentage = Order::where('status', '!=', 'cancelled')
+                ->whereBetween('order_date', [$startDate, $endDate])
+                ->count();
+
+            $paymentMethods = DB::table('payments')
+                ->join('orders', 'payments.id_order', '=', 'orders.id_order')
+                ->select(
+                    'payments.payment_method',
+                    DB::raw('COUNT(payments.id_payment) as order_count'),
+                    DB::raw('SUM(payments.amount) as total_revenue'),
+                    DB::raw('AVG(payments.amount) as avg_order_value'),
+                    DB::raw('ROUND((COUNT(payments.id_payment) * 100.0 / ' . $totalOrdersForPercentage . '), 2) as percentage')
+                )
+                ->where('orders.status', '!=', 'cancelled')
+                ->where('payments.status', 'paid')
+                ->whereBetween('orders.order_date', [$startDate, $endDate])
+                ->whereNull('orders.deleted_at')
+                ->groupBy('payments.payment_method')
+                ->orderBy('total_revenue', 'desc')
+                ->get();
+
+            // Category performance
+            $categoryPerformance = DB::table('order_items')
+                ->join('orders', 'order_items.id_order', '=', 'orders.id_order')
+                ->join('products', 'order_items.id_product', '=', 'products.id_product')
+                ->join('categories', 'products.category_id', '=', 'categories.id_category')
+                ->select(
+                    'categories.name as category_name',
+                    'categories.id_category as id',
+                    DB::raw('COUNT(DISTINCT order_items.id_order) as orders_with_category'),
+                    DB::raw('SUM(order_items.quantity) as total_quantity'),
+                    DB::raw('SUM(order_items.total_price) as total_revenue'),
+                    DB::raw('AVG(order_items.unit_price) as avg_price')
+                )
+                ->where('orders.status', '!=', 'cancelled')
+                ->whereBetween('orders.order_date', [$startDate, $endDate])
+                ->whereNull('orders.deleted_at')
+                ->groupBy('categories.id_category', 'categories.name')
+                ->orderBy('total_revenue', 'desc')
+                ->get();
+
+            // Customer behavior analysis
+            $customerBehavior = [
+                'new_customers' => Customer::whereBetween('created_at', [$startDate, $endDate])->count(),
+                'returning_customers' => Order::select('id_customer')
+                    ->where('status', '!=', 'cancelled')
+                    ->whereBetween('order_date', [$startDate, $endDate])
+                    ->groupBy('id_customer')
+                    ->havingRaw('COUNT(*) > 1')
+                    ->get()->count(),
+                'one_time_customers' => Order::select('id_customer')
+                    ->where('status', '!=', 'cancelled')
+                    ->whereBetween('order_date', [$startDate, $endDate])
+                    ->groupBy('id_customer')
+                    ->havingRaw('COUNT(*) = 1')
+                    ->get()->count()
+            ];
+
+            // Growth comparison (vs previous period)
+            $periodLength = Carbon::parse($endDate)->diffInDays(Carbon::parse($startDate)) + 1;
+            $previousStartDate = Carbon::parse($startDate)->subDays($periodLength)->format('Y-m-d');
+            $previousEndDate = Carbon::parse($startDate)->subDay()->format('Y-m-d');
+
+            $previousPeriodSales = Order::where('status', '!=', 'cancelled')
+                ->whereBetween('order_date', [$previousStartDate, $previousEndDate])
+                ->sum('total_amount');
+
+            $currentPeriodSales = $salesSummary->total_revenue ?: 0;
+            $growthPercentage = $previousPeriodSales > 0 
+                ? round((($currentPeriodSales - $previousPeriodSales) / $previousPeriodSales) * 100, 2)
+                : 0;
 
             return $this->successResponse([
                 'summary' => [
                     'total_orders' => $salesSummary->total_orders ?: 0,
-                    'total_revenue' => number_format($salesSummary->total_revenue ?: 0, 0, ',', '.'),
-                    'average_order' => number_format($salesSummary->average_order ?: 0, 0, ',', '.'),
+                    'total_revenue' => $this->formatRupiah($salesSummary->total_revenue),
+                    'average_order' => $this->formatRupiah($salesSummary->average_order),
                     'total_items' => $salesSummary->total_items ?: 0,
                     'completed_orders' => $salesSummary->completed_orders ?: 0,
-                    'cancelled_orders' => $salesSummary->cancelled_orders ?: 0
+                    'cancelled_orders' => $salesSummary->cancelled_orders ?: 0,
+                    'growth_percentage' => $growthPercentage,
+                    'previous_period_revenue' => $this->formatRupiah($previousPeriodSales)
                 ],
                 'daily_sales' => $dailySales->map(function($item) {
                     return [
                         'date' => $item->date,
-                        'total' => $item->total ?: 0
+                        'total' => $this->formatRupiah($item->total)
                     ];
                 }),
+                'sales_by_type' => $salesByType->map(function($item) {
+                    return [
+                        'type' => $item->order_type,
+                        'order_count' => $item->order_count ?: 0,
+                        'revenue' => $this->formatRupiah($item->total_revenue)
+                    ];
+                }),
+                'peak_hours' => $salesByHour->map(function($item) {
+                    return [
+                        'hour' => $item->hour,
+                        'hour_display' => sprintf('%02d:00', $item->hour),
+                        'order_count' => $item->order_count ?: 0,
+                        'revenue' => $this->formatRupiah($item->total_revenue),
+                        'avg_order' => $this->formatRupiah($item->avg_order_value)
+                    ];
+                }),
+                'sales_by_day' => $salesByDayOfWeek->map(function($item) {
+                    return [
+                        'day_name' => $item->day_name,
+                        'order_count' => $item->order_count ?: 0,
+                        'revenue' => $this->formatRupiah($item->total_revenue),
+                        'avg_order' => $this->formatRupiah($item->avg_order_value)
+                    ];
+                }),
+                'payment_methods' => $paymentMethods->map(function($item) {
+                    return [
+                        'method' => $item->payment_method,
+                        'order_count' => $item->order_count ?: 0,
+                        'revenue' => $this->formatRupiah($item->total_revenue),
+                        'avg_order' => $this->formatRupiah($item->avg_order_value),
+                        'percentage' => $item->percentage ?: 0
+                    ];
+                }),
+                'category_performance' => $categoryPerformance->map(function($item) {
+                    return [
+                        'category' => $item->category_name,
+                        'orders_count' => $item->orders_with_category ?: 0,
+                        'quantity_sold' => $item->total_quantity ?: 0,
+                        'revenue' => $this->formatRupiah($item->total_revenue),
+                        'avg_price' => $this->formatRupiah($item->avg_price)
+                    ];
+                }),
+                'customer_behavior' => [
+                    'new_customers' => $customerBehavior['new_customers'],
+                    'returning_customers' => $customerBehavior['returning_customers'],
+                    'one_time_customers' => $customerBehavior['one_time_customers'],
+                    'retention_rate' => $customerBehavior['returning_customers'] + $customerBehavior['one_time_customers'] > 0 
+                        ? round(($customerBehavior['returning_customers'] / ($customerBehavior['returning_customers'] + $customerBehavior['one_time_customers'])) * 100, 2)
+                        : 0
+                ],
                 'top_products' => $topProducts->map(function($item) {
                     return [
                         'name' => $item->name,
                         'quantity' => $item->total_sold ?: 0,
-                        'revenue' => number_format($item->total_revenue ?: 0, 0, ',', '.')
+                        'revenue' => $this->formatRupiah($item->total_revenue),
+                        'avg_price' => $this->formatRupiah($item->avg_price)
                     ];
                 }),
                 'top_customers' => $salesByCustomer->map(function($item) {
                     return [
                         'name' => $item->name,
                         'orders' => $item->total_orders ?: 0,
-                        'revenue' => number_format($item->total_spent ?: 0, 0, ',', '.')
+                        'revenue' => $this->formatRupiah($item->total_spent),
+                        'avg_order' => $this->formatRupiah($item->avg_order_value),
+                        'first_order' => $item->first_order,
+                        'last_order' => $item->last_order,
+                        'customer_lifetime' => Carbon::parse($item->first_order)->diffInDays(Carbon::parse($item->last_order))
                     ];
                 })
-            ], 'Sales report retrieved successfully');
+            ], 'Enhanced sales report with business analytics retrieved successfully');
 
         } catch (\Exception $e) {
             return $this->serverErrorResponse('Failed to retrieve sales report: ' . $e->getMessage());
@@ -234,7 +410,15 @@ class ReportController extends Controller
     }
 
     /**
-     * Get start date from request
+     * Format currency to Indonesian Rupiah format
+     */
+    private function formatRupiah($amount): string
+    {
+        return 'Rp ' . number_format($amount ?: 0, 0, ',', '.');
+    }
+
+    /**
+     * Get start date for filtering
      */
     private function getStartDate(Request $request): Carbon
     {
@@ -279,7 +463,7 @@ class ReportController extends Controller
                 'latest_order' => $latestOrder ? [
                     'id' => $latestOrder->id_order,
                     'date' => $latestOrder->order_date,
-                    'amount' => $latestOrder->total_amount,
+                    'amount' => $this->formatRupiah($latestOrder->total_amount),
                     'status' => $latestOrder->status
                 ] : null
             ]);

@@ -115,6 +115,15 @@ meta:
                 {{ formatCurrency(reportData.summary.total_revenue) }}
               </div>
               <div class="text-body-2 text-medium-emphasis">Total Pendapatan</div>
+              <div v-if="reportData.summary.growth_percentage !== undefined" class="mt-1">
+                <VChip 
+                  :color="reportData.summary.growth_percentage >= 0 ? 'success' : 'error'" 
+                  size="x-small" 
+                  variant="tonal"
+                >
+                  {{ reportData.summary.growth_percentage >= 0 ? '+' : '' }}{{ reportData.summary.growth_percentage }}%
+                </VChip>
+              </div>
             </VCardText>
           </VCard>
         </VCol>
@@ -127,6 +136,9 @@ meta:
                 {{ reportData.summary.total_orders }}
               </div>
               <div class="text-body-2 text-medium-emphasis">Total Order</div>
+              <div class="text-caption text-medium-emphasis mt-1">
+                AOV: {{ formatCurrency(reportData.summary.average_order) }}
+              </div>
             </VCardText>
           </VCard>
         </VCol>
@@ -139,6 +151,9 @@ meta:
                 {{ reportData.summary.total_items }}
               </div>
               <div class="text-body-2 text-medium-emphasis">Total Item</div>
+              <div class="text-caption text-medium-emphasis mt-1">
+                {{ reportData.summary.completed_orders }} selesai
+              </div>
             </VCardText>
           </VCard>
         </VCol>
@@ -146,11 +161,163 @@ meta:
         <VCol cols="6" md="3">
           <VCard>
             <VCardText class="text-center">
-              <VIcon icon="mdi-calculator" size="32" class="text-warning mb-2" />
+              <VIcon icon="mdi-account-group" size="32" class="text-warning mb-2" />
               <div class="text-h5 font-weight-bold text-warning">
-                {{ formatCurrency(reportData.summary.average_order) }}
+                {{ reportData.customer_behavior?.new_customers || 0 }}
               </div>
-              <div class="text-body-2 text-medium-emphasis">Rata-rata Order</div>
+              <div class="text-body-2 text-medium-emphasis">Customer Baru</div>
+              <div class="text-caption text-medium-emphasis mt-1">
+                Retention: {{ reportData.customer_behavior?.retention_rate || 0 }}%
+              </div>
+            </VCardText>
+          </VCard>
+        </VCol>
+      </VRow>
+
+      <!-- Business Analytics Section -->
+      <VRow class="mb-6">
+        <!-- Peak Hours Analysis -->
+        <VCol cols="12" md="6">
+          <VCard>
+            <VCardTitle class="d-flex align-center gap-2">
+              <VIcon icon="mdi-clock-outline" />
+              Jam Ramai (Peak Hours)
+            </VCardTitle>
+            <VCardText>
+              <div v-if="reportData.peak_hours && reportData.peak_hours.length > 0">
+                <div v-for="hour in getTopHours(reportData.peak_hours)" :key="hour.hour" class="mb-2">
+                  <div class="d-flex justify-space-between align-center">
+                    <div class="d-flex align-center gap-2">
+                      <VIcon :icon="getHourIcon(hour.hour)" size="16" />
+                      <span class="font-weight-medium">{{ hour.hour_display }}</span>
+                    </div>
+                    <div class="text-end">
+                      <div class="text-body-2 font-weight-bold">{{ hour.order_count }} order</div>
+                      <div class="text-caption text-success">{{ formatCurrency(hour.revenue) }}</div>
+                    </div>
+                  </div>
+                  <VProgressLinear
+                    :model-value="getHourPercentage(hour.order_count, reportData.peak_hours)"
+                    color="primary"
+                    height="4"
+                    class="mt-1"
+                  />
+                </div>
+              </div>
+              <div v-else class="text-center py-4">
+                <p class="text-body-2 text-medium-emphasis">Tidak ada data jam ramai</p>
+              </div>
+            </VCardText>
+          </VCard>
+        </VCol>
+
+        <!-- Payment Methods -->
+        <VCol cols="12" md="6">
+          <VCard>
+            <VCardTitle class="d-flex align-center gap-2">
+              <VIcon icon="mdi-credit-card-outline" />
+              Metode Pembayaran
+            </VCardTitle>
+            <VCardText>
+              <div v-if="reportData.payment_methods && reportData.payment_methods.length > 0">
+                <div v-for="method in reportData.payment_methods" :key="method.method" class="mb-3">
+                  <div class="d-flex justify-space-between align-center mb-1">
+                    <div class="d-flex align-center gap-2">
+                      <VIcon :icon="getPaymentIcon(method.method)" size="16" />
+                      <span class="font-weight-medium">{{ getPaymentLabel(method.method) }}</span>
+                    </div>
+                    <div class="text-end">
+                      <VChip size="small" color="primary" variant="tonal">
+                        {{ method.percentage }}%
+                      </VChip>
+                    </div>
+                  </div>
+                  <div class="d-flex justify-space-between align-center">
+                    <span class="text-body-2">{{ method.order_count }} transaksi</span>
+                    <span class="text-body-2 font-weight-bold text-success">{{ formatCurrency(method.revenue) }}</span>
+                  </div>
+                  <VProgressLinear
+                    :model-value="method.percentage"
+                    color="success"
+                    height="4"
+                    class="mt-1"
+                  />
+                </div>
+              </div>
+              <div v-else class="text-center py-4">
+                <p class="text-body-2 text-medium-emphasis">Tidak ada data metode pembayaran</p>
+              </div>
+            </VCardText>
+          </VCard>
+        </VCol>
+      </VRow>
+
+      <!-- Sales by Day of Week -->
+      <VRow class="mb-6" v-if="reportData.sales_by_day && reportData.sales_by_day.length > 0">
+        <VCol cols="12">
+          <VCard>
+            <VCardTitle class="d-flex align-center gap-2">
+              <VIcon icon="mdi-calendar-week" />
+              Performa Penjualan per Hari
+            </VCardTitle>
+            <VCardText>
+              <VRow>
+                <VCol v-for="day in reportData.sales_by_day" :key="day.day_name" cols="6" md="1.7">
+                  <div class="text-center">
+                    <div class="text-h6 font-weight-bold text-primary">{{ day.order_count }}</div>
+                    <div class="text-caption text-medium-emphasis mb-1">{{ day.day_name }}</div>
+                    <div class="text-body-2 font-weight-medium text-success">{{ formatCurrency(day.revenue) }}</div>
+                    <VProgressLinear
+                      :model-value="getDayPercentage(day.order_count, reportData.sales_by_day)"
+                      color="primary"
+                      height="3"
+                      class="mt-1"
+                    />
+                  </div>
+                </VCol>
+              </VRow>
+            </VCardText>
+          </VCard>
+        </VCol>
+      </VRow>
+
+      <!-- Category Performance -->
+      <VRow class="mb-6" v-if="reportData.category_performance && reportData.category_performance.length > 0">
+        <VCol cols="12">
+          <VCard>
+            <VCardTitle class="d-flex align-center gap-2">
+              <VIcon icon="mdi-shape-outline" />
+              Performa Kategori Produk
+            </VCardTitle>
+            <VCardText>
+              <VDataTable
+                :headers="categoryHeaders"
+                :items="reportData.category_performance"
+                :items-per-page="10"
+                class="elevation-0"
+                no-data-text="Tidak ada data kategori"
+              >
+                <template #item.category="{ item }">
+                  <div class="d-flex align-center gap-2">
+                    <VIcon icon="mdi-tag" size="16" color="primary" />
+                    <span class="font-weight-medium">{{ (item as any).category }}</span>
+                  </div>
+                </template>
+                <template #item.orders_count="{ item }">
+                  <VChip size="small" color="info" variant="tonal">
+                    {{ (item as any).orders_count }}
+                  </VChip>
+                </template>
+                <template #item.quantity_sold="{ item }">
+                  <span class="font-weight-bold">{{ (item as any).quantity_sold }}</span>
+                </template>
+                <template #item.revenue="{ item }">
+                  <span class="font-weight-bold text-success">{{ formatCurrency((item as any).revenue) }}</span>
+                </template>
+                <template #item.avg_price="{ item }">
+                  <span class="text-body-2">{{ formatCurrency((item as any).avg_price) }}</span>
+                </template>
+              </VDataTable>
             </VCardText>
           </VCard>
         </VCol>
@@ -322,12 +489,21 @@ const monthOptions = [
 const customerHeaders = [
   { title: 'Customer', key: 'name', align: 'start' as const },
   { title: 'Total Order', key: 'orders', align: 'center' as const },
-  { title: 'Total Belanja', key: 'revenue', align: 'end' as const }
+  { title: 'Total Belanja', key: 'revenue', align: 'end' as const },
+  { title: 'AOV', key: 'avg_order', align: 'end' as const }
 ]
 
 const dailyHeaders = [
   { title: 'Tanggal', key: 'date', align: 'start' as const },
   { title: 'Pendapatan', key: 'total', align: 'end' as const }
+]
+
+const categoryHeaders = [
+  { title: 'Kategori', key: 'category', align: 'start' as const },
+  { title: 'Order', key: 'orders_count', align: 'center' as const },
+  { title: 'Qty Terjual', key: 'quantity_sold', align: 'center' as const },
+  { title: 'Revenue', key: 'revenue', align: 'end' as const },
+  { title: 'Harga Rata2', key: 'avg_price', align: 'end' as const }
 ]
 
 // Utility functions
@@ -356,6 +532,61 @@ const formatDate = (dateString: string) => {
 const getTopProductColor = (index: number) => {
   const colors = ['warning', 'success', 'info', 'secondary', 'primary']
   return colors[index] || 'primary'
+}
+
+// Analytics utility functions
+const getTopHours = (hours: any[]) => {
+  return hours.sort((a, b) => b.order_count - a.order_count).slice(0, 5)
+}
+
+const getHourPercentage = (orderCount: number, hours: any[]) => {
+  const maxOrders = Math.max(...hours.map(h => h.order_count))
+  return maxOrders > 0 ? (orderCount / maxOrders) * 100 : 0
+}
+
+const getDayPercentage = (orderCount: number, days: any[]) => {
+  const maxOrders = Math.max(...days.map(d => d.order_count))
+  return maxOrders > 0 ? (orderCount / maxOrders) * 100 : 0
+}
+
+const getHourIcon = (hour: number) => {
+  if (hour >= 6 && hour < 12) return 'mdi-weather-sunny'
+  if (hour >= 12 && hour < 18) return 'mdi-weather-partly-cloudy'
+  if (hour >= 18 && hour < 22) return 'mdi-weather-night'
+  return 'mdi-weather-night'
+}
+
+const getPaymentIcon = (method: string) => {
+  switch (method?.toLowerCase()) {
+    case 'cash':
+    case 'tunai':
+      return 'mdi-cash'
+    case 'card':
+    case 'kartu':
+      return 'mdi-credit-card'
+    case 'digital':
+    case 'e-wallet':
+      return 'mdi-cellphone'
+    case 'transfer':
+      return 'mdi-bank-transfer'
+    default:
+      return 'mdi-credit-card-outline'
+  }
+}
+
+const getPaymentLabel = (method: string) => {
+  switch (method?.toLowerCase()) {
+    case 'cash':
+      return 'Tunai'
+    case 'card':
+      return 'Kartu'
+    case 'digital':
+      return 'Digital'
+    case 'transfer':
+      return 'Transfer'
+    default:
+      return method || 'Lainnya'
+  }
 }
 
 // Event handlers
@@ -489,9 +720,9 @@ const exportToExcel = async () => {
       ? `${customStartDate.value} s/d ${customEndDate.value}`
       : `Bulan ${selectedMonth.value}`
     
-    // Prepare Summary Data
+    // Prepare Summary Data with Enhanced Analytics
     const summaryData = [
-      ['LAPORAN PENJUALAN'],
+      ['LAPORAN PENJUALAN ENHANCED'],
       ['Periode:', periodInfo],
       ['Tanggal Export:', new Date().toLocaleDateString('id-ID', { 
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
@@ -500,10 +731,17 @@ const exportToExcel = async () => {
       ['RINGKASAN PENJUALAN'],
       ['Total Order:', reportData.value.summary.total_orders],
       ['Total Pendapatan:', Math.round(parseFloat(reportData.value.summary.total_revenue.replace(/[^\d.-]/g, '')))],
-      ['Rata-rata Order:', Math.round(parseFloat(reportData.value.summary.average_order.replace(/[^\d.-]/g, '')))],
+      ['Rata-rata Order (AOV):', Math.round(parseFloat(reportData.value.summary.average_order.replace(/[^\d.-]/g, '')))],
       ['Total Item Terjual:', reportData.value.summary.total_items],
       ['Order Selesai:', reportData.value.summary.completed_orders],
       ['Order Dibatalkan:', reportData.value.summary.cancelled_orders],
+      reportData.value.summary.growth_percentage !== undefined ? ['Growth vs Periode Sebelumnya:', `${reportData.value.summary.growth_percentage}%`] : [],
+      [],
+      ['ANALISIS CUSTOMER'],
+      ['Customer Baru:', reportData.value.customer_behavior?.new_customers || 0],
+      ['Returning Customer:', reportData.value.customer_behavior?.returning_customers || 0],
+      ['One-time Customer:', reportData.value.customer_behavior?.one_time_customers || 0],
+      ['Retention Rate:', `${reportData.value.customer_behavior?.retention_rate || 0}%`],
       [], // Empty row
     ]
     
@@ -553,34 +791,147 @@ const exportToExcel = async () => {
       XLSX.utils.book_append_sheet(workbook, productsSheet, 'Produk Terlaris')
     }
     
-    // 4. Top Customers Sheet
+    // 4. Enhanced Top Customers Sheet
     if (reportData.value.top_customers && reportData.value.top_customers.length > 0) {
       const topCustomersData = [
-        ['CUSTOMER TERBAIK'],
+        ['CUSTOMER TERBAIK - ANALISIS LENGKAP'],
         ['Periode:', periodInfo],
         [],
-        ['No', 'Nama Customer', 'Jumlah Order', 'Total Belanja'],
+        ['No', 'Nama Customer', 'Jumlah Order', 'Total Belanja', 'AOV', 'Customer Lifetime (hari)'],
         ...reportData.value.top_customers.map((item: any, index: number) => [
           index + 1,
           item.name,
           item.orders,
-          Math.round(typeof item.revenue === 'string' ? parseFloat(item.revenue.replace(/[^\d.-]/g, '')) : (item.revenue || 0))
+          Math.round(typeof item.revenue === 'string' ? parseFloat(item.revenue.replace(/[^\d.-]/g, '')) : (item.revenue || 0)),
+          Math.round(typeof item.avg_order === 'string' ? parseFloat(item.avg_order.replace(/[^\d.-]/g, '')) : (item.avg_order || 0)),
+          item.customer_lifetime || 0
         ])
       ]
       
       const customersSheet = XLSX.utils.aoa_to_sheet(topCustomersData)
-      customersSheet['!cols'] = [{ wch: 5 }, { wch: 25 }, { wch: 15 }, { wch: 20 }]
-      XLSX.utils.book_append_sheet(workbook, customersSheet, 'Customer Terbaik')
+      customersSheet['!cols'] = [{ wch: 5 }, { wch: 25 }, { wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 20 }]
+      XLSX.utils.book_append_sheet(workbook, customersSheet, 'Customer Analytics')
     }
+
+    // 5. Peak Hours Analysis Sheet
+    if (reportData.value.peak_hours && reportData.value.peak_hours.length > 0) {
+      const peakHoursData = [
+        ['ANALISIS JAM RAMAI'],
+        ['Periode:', periodInfo],
+        [],
+        ['Jam', 'Jumlah Order', 'Total Revenue', 'AOV'],
+        ...reportData.value.peak_hours.map((item: any) => [
+          item.hour_display,
+          item.order_count,
+          Math.round(typeof item.revenue === 'string' ? parseFloat(item.revenue.replace(/[^\d.-]/g, '')) : (item.revenue || 0)),
+          Math.round(typeof item.avg_order === 'string' ? parseFloat(item.avg_order.replace(/[^\d.-]/g, '')) : (item.avg_order || 0))
+        ])
+      ]
+      
+      const hoursSheet = XLSX.utils.aoa_to_sheet(peakHoursData)
+      hoursSheet['!cols'] = [{ wch: 10 }, { wch: 15 }, { wch: 20 }, { wch: 15 }]
+      XLSX.utils.book_append_sheet(workbook, hoursSheet, 'Peak Hours')
+    }
+
+    // 6. Sales by Day of Week Sheet
+    if (reportData.value.sales_by_day && reportData.value.sales_by_day.length > 0) {
+      const dayAnalysisData = [
+        ['ANALISIS PENJUALAN PER HARI'],
+        ['Periode:', periodInfo],
+        [],
+        ['Hari', 'Jumlah Order', 'Total Revenue', 'AOV'],
+        ...reportData.value.sales_by_day.map((item: any) => [
+          item.day_name,
+          item.order_count,
+          Math.round(typeof item.revenue === 'string' ? parseFloat(item.revenue.replace(/[^\d.-]/g, '')) : (item.revenue || 0)),
+          Math.round(typeof item.avg_order === 'string' ? parseFloat(item.avg_order.replace(/[^\d.-]/g, '')) : (item.avg_order || 0))
+        ])
+      ]
+      
+      const daysSheet = XLSX.utils.aoa_to_sheet(dayAnalysisData)
+      daysSheet['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 15 }]
+      XLSX.utils.book_append_sheet(workbook, daysSheet, 'Sales by Day')
+    }
+
+    // 7. Payment Methods Analysis Sheet
+    if (reportData.value.payment_methods && reportData.value.payment_methods.length > 0) {
+      const paymentData = [
+        ['ANALISIS METODE PEMBAYARAN'],
+        ['Periode:', periodInfo],
+        [],
+        ['Metode', 'Jumlah Order', 'Total Revenue', 'AOV', 'Persentase'],
+        ...reportData.value.payment_methods.map((item: any) => [
+          getPaymentLabel(item.method),
+          item.order_count,
+          Math.round(typeof item.revenue === 'string' ? parseFloat(item.revenue.replace(/[^\d.-]/g, '')) : (item.revenue || 0)),
+          Math.round(typeof item.avg_order === 'string' ? parseFloat(item.avg_order.replace(/[^\d.-]/g, '')) : (item.avg_order || 0)),
+          `${item.percentage}%`
+        ])
+      ]
+      
+      const paymentSheet = XLSX.utils.aoa_to_sheet(paymentData)
+      paymentSheet['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 12 }]
+      XLSX.utils.book_append_sheet(workbook, paymentSheet, 'Payment Methods')
+    }
+
+    // 8. Category Performance Sheet
+    if (reportData.value.category_performance && reportData.value.category_performance.length > 0) {
+      const categoryData = [
+        ['PERFORMA KATEGORI PRODUK'],
+        ['Periode:', periodInfo],
+        [],
+        ['Kategori', 'Order dengan Kategori', 'Qty Terjual', 'Total Revenue', 'Harga Rata-rata'],
+        ...reportData.value.category_performance.map((item: any) => [
+          item.category,
+          item.orders_count,
+          item.quantity_sold,
+          Math.round(typeof item.revenue === 'string' ? parseFloat(item.revenue.replace(/[^\d.-]/g, '')) : (item.revenue || 0)),
+          Math.round(typeof item.avg_price === 'string' ? parseFloat(item.avg_price.replace(/[^\d.-]/g, '')) : (item.avg_price || 0))
+        ])
+      ]
+      
+      const categorySheet = XLSX.utils.aoa_to_sheet(categoryData)
+      categorySheet['!cols'] = [{ wch: 20 }, { wch: 18 }, { wch: 15 }, { wch: 20 }, { wch: 18 }]
+      XLSX.utils.book_append_sheet(workbook, categorySheet, 'Category Performance')
+    }
+
+    // 9. Business Insights Sheet
+    const insightsData = [
+      ['BUSINESS INSIGHTS & RECOMMENDATIONS'],
+      ['Periode:', periodInfo],
+      [],
+      ['RINGKASAN PERFORMA'],
+      ['Growth Rate:', reportData.value.summary.growth_percentage !== undefined ? `${reportData.value.summary.growth_percentage}%` : 'N/A'],
+      ['Customer Retention:', `${reportData.value.customer_behavior?.retention_rate || 0}%`],
+      [],
+      ['TOP PERFORMERS'],
+      ['Jam Tersibuk:', reportData.value.peak_hours && reportData.value.peak_hours.length > 0 ? 
+        getTopHours(reportData.value.peak_hours)[0]?.hour_display : 'N/A'],
+      ['Hari Terbaik:', reportData.value.sales_by_day && reportData.value.sales_by_day.length > 0 ? 
+        reportData.value.sales_by_day.sort((a: any, b: any) => b.order_count - a.order_count)[0]?.day_name : 'N/A'],
+      ['Metode Bayar Favorit:', reportData.value.payment_methods && reportData.value.payment_methods.length > 0 ? 
+        getPaymentLabel(reportData.value.payment_methods[0]?.method) : 'N/A'],
+      [],
+      ['REKOMENDASI BISNIS'],
+      ['1. Optimasi Operasional:', 'Focus staff scheduling pada jam dan hari ramai'],
+      ['2. Customer Retention:', 'Implementasi loyalty program untuk meningkatkan retention'],
+      ['3. Product Strategy:', 'Push produk top-selling dan evaluasi slow-moving items'],
+      ['4. Payment Strategy:', 'Optimalkan metode pembayaran yang paling disukai customer'],
+      ['5. Marketing Time:', 'Jalankan promosi saat jam dan hari dengan traffic rendah']
+    ]
+
+    const insightsSheet = XLSX.utils.aoa_to_sheet(insightsData)
+    insightsSheet['!cols'] = [{ wch: 25 }, { wch: 50 }]
+    XLSX.utils.book_append_sheet(workbook, insightsSheet, 'Business Insights')
     
     // Generate filename with timestamp
     const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
-    const filename = `laporan-penjualan-${timestamp}.xlsx`
+    const filename = `laporan-penjualan-enhanced-analytics-${timestamp}.xlsx`
     
     // Download file
     XLSX.writeFile(workbook, filename)
     
-    console.log('✅ Sales report exported successfully:', filename)
+    console.log('✅ Enhanced Sales Analytics report exported successfully:', filename)
     
   } catch (error) {
     console.error('Error exporting sales report:', error)
