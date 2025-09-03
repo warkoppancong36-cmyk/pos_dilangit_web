@@ -53,7 +53,6 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
     Route::prefix('reports')->group(function () {
         Route::get('sales', [ReportController::class, 'salesReport']);
         Route::get('purchases', [ReportController::class, 'purchaseReport']);
-        Route::get('test-data', [ReportController::class, 'testData']); // Debug endpoint
     });
 
     Route::prefix('logs')->group(function () {
