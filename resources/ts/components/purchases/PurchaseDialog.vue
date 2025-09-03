@@ -117,7 +117,7 @@ const loadSuppliers = async () => {
     if (token)
       headers.Authorization = `Bearer ${token}`
 
-    const response = await axios.get('/api/suppliers', { headers })
+    const response = await axios.get('/api/suppliers?per_page=all', { headers })
 
     suppliers.value = response.data.data || []
   }
