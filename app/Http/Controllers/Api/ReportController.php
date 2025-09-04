@@ -39,14 +39,19 @@ class ReportController extends Controller
                     DB::raw('COUNT(*) as total_orders'),
                     DB::raw('SUM(total_amount) as total_revenue'),
                     DB::raw('CASE WHEN COUNT(*) > 0 THEN SUM(total_amount)/COUNT(*) ELSE 0 END as average_order'),
-                    DB::raw('SUM(order_items.quantity) as total_items'),
                     DB::raw('SUM(CASE WHEN orders.status = "completed" THEN 1 ELSE 0 END) as completed_orders'),
                     DB::raw('SUM(CASE WHEN orders.status = "cancelled" THEN 1 ELSE 0 END) as cancelled_orders')
                 )
-                ->leftJoin('order_items', 'orders.id_order', '=', 'order_items.id_order')
                 ->where('orders.status', '!=', 'cancelled')
                 ->whereBetween('orders.order_date', [$startDate, $endDate])
                 ->first();
+
+            // Total items sold (separate query to avoid JOIN issues)
+            $totalItems = DB::table('order_items')
+                ->join('orders', 'order_items.id_order', '=', 'orders.id_order')
+                ->where('orders.status', '!=', 'cancelled')
+                ->whereBetween('orders.order_date', [$startDate, $endDate])
+                ->sum('order_items.quantity');
 
                         // Daily sales trend
             $dailySales = Order::select(
@@ -229,7 +234,7 @@ class ReportController extends Controller
                     'total_revenue_formatted' => $this->formatRupiah($salesSummary->total_revenue),
                     'average_order' => floatval($salesSummary->average_order ?: 0),  // RAW number for frontend
                     'average_order_formatted' => $this->formatRupiah($salesSummary->average_order),
-                    'total_items' => $salesSummary->total_items ?: 0,
+                    'total_items' => $totalItems ?: 0,
                     'completed_orders' => $salesSummary->completed_orders ?: 0,
                     'cancelled_orders' => $salesSummary->cancelled_orders ?: 0,
                     'growth_percentage' => $growthPercentage,
