@@ -225,13 +225,16 @@ class ReportController extends Controller
             return $this->successResponse([
                 'summary' => [
                     'total_orders' => $salesSummary->total_orders ?: 0,
-                    'total_revenue' => $this->formatRupiah($salesSummary->total_revenue),
-                    'average_order' => $this->formatRupiah($salesSummary->average_order),
+                    'total_revenue' => floatval($salesSummary->total_revenue ?: 0),  // RAW number for frontend
+                    'total_revenue_formatted' => $this->formatRupiah($salesSummary->total_revenue),
+                    'average_order' => floatval($salesSummary->average_order ?: 0),  // RAW number for frontend
+                    'average_order_formatted' => $this->formatRupiah($salesSummary->average_order),
                     'total_items' => $salesSummary->total_items ?: 0,
                     'completed_orders' => $salesSummary->completed_orders ?: 0,
                     'cancelled_orders' => $salesSummary->cancelled_orders ?: 0,
                     'growth_percentage' => $growthPercentage,
-                    'previous_period_revenue' => $this->formatRupiah($previousPeriodSales)
+                    'previous_period_revenue' => floatval($previousPeriodSales ?: 0),  // RAW number
+                    'previous_period_revenue_formatted' => $this->formatRupiah($previousPeriodSales)
                 ],
                 'daily_sales' => $dailySales->map(function($item) {
                     return [
