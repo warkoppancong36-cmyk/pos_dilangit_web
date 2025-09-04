@@ -621,7 +621,7 @@ class PosController extends Controller
     public function processPayment(Request $request, Order $order): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'payment_method' => 'required|in:cash,card,kartu,credit_card,debit_card,digital_wallet,bank_transfer,qris,gopay,ovo,dana,shopeepay,other',
+            'payment_method' => 'required|in:cash,card,kartu,credit_card,debit_card,digital_wallet,ewallet,bank_transfer,qris,gopay,ovo,dana,shopeepay,other',
             'amount' => 'required|numeric|min:0',
             'reference_number' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:255',
