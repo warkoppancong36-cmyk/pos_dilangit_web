@@ -88,10 +88,10 @@ meta:
           <VCard class="summary-card h-100">
             <VCardText class="d-flex align-center">
               <div class="flex-grow-1">
-                <div class="text-h6 font-weight-bold">Penjualan Hari Ini</div>
-                <div class="text-h4 text-success mt-2">{{ formatCurrency(summaryData.today_sales?.value || 0) }}</div>
+                <div class="text-h6 font-weight-bold">Total Pendapatan</div>
+                <div class="text-h4 text-success mt-2">{{ formatCurrency(summaryData.period_summary?.total_revenue || 0) }}</div>
                 <div class="text-caption text-medium-emphasis">
-                  {{ (summaryData.today_sales?.growth ?? 0) >= 0 ? '+' : '' }}{{ summaryData.today_sales?.growth ?? 0 }}% dari kemarin
+                  {{ (summaryData.period_summary?.growth ?? 0) >= 0 ? '+' : '' }}{{ summaryData.period_summary?.growth ?? 0 }}% dari periode sebelumnya
                 </div>
               </div>
               <VIcon icon="mdi-currency-usd" size="48" class="text-success" />

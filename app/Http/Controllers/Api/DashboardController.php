@@ -306,6 +306,17 @@ class DashboardController extends Controller
                 ->whereNotNull('purchase_date')
                 ->whereBetween('purchase_date', [$startDate, $endDate])
                 ->sum('total_amount') ?: 0;
+                
+            // Previous period for growth calculation
+            $periodLength = $startDate->diffInDays($endDate);
+            $prevStartDate = $startDate->copy()->subDays($periodLength + 1);
+            $prevEndDate = $startDate->copy()->subDay();
+            
+            $prevPeriodSales = Order::where('status', '!=', 'cancelled')
+                ->whereNotNull('order_date')
+                ->whereBetween('order_date', [$prevStartDate, $prevEndDate])
+                ->sum('total_amount') ?: 0;
+                
         } catch (\Exception $e) {
             // Error handling for queries
         }
@@ -323,6 +334,12 @@ class DashboardController extends Controller
 
         $salesGrowth = $yesterdaySales > 0 ? (($todaySales - $yesterdaySales) / $yesterdaySales * 100) : 13.64;
         $ordersGrowth = $yesterdayOrders > 0 ? (($todayOrders - $yesterdayOrders) / $yesterdayOrders * 100) : 18.42;
+        
+        // Calculate period growth
+        $periodGrowth = 0;
+        if ($prevPeriodSales > 0) {
+            $periodGrowth = (($periodSales - $prevPeriodSales) / $prevPeriodSales) * 100;
+        }
 
         // Total inventory value - using inventory table
         $inventoryValue = 0;
@@ -360,9 +377,11 @@ class DashboardController extends Controller
             ],
             'period_summary' => [
                 'total_sales' => $periodSales,
+                'total_revenue' => $periodSales, // Alias untuk kompatibilitas frontend
                 'total_orders' => $periodOrders, 
                 'total_purchases' => $periodPurchases,
-                'avg_order_value' => $periodOrders > 0 ? round($periodSales / $periodOrders) : 0
+                'avg_order_value' => $periodOrders > 0 ? round($periodSales / $periodOrders) : 0,
+                'growth' => round($periodGrowth, 2)
             ]
         ];
     }
