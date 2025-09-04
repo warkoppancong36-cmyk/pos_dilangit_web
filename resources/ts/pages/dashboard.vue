@@ -102,13 +102,13 @@ meta:
           <VCard class="summary-card h-100">
             <VCardText class="d-flex align-center">
               <div class="flex-grow-1">
-                <div class="text-h6 font-weight-bold">Transaksi Penjualan Hari Ini</div>
-                <div class="text-h4 text-info mt-2">{{ summaryData.today_orders?.value || 0 }}</div>
+                <div class="text-h6 font-weight-bold">Penjualan Hari Ini</div>
+                <div class="text-h4 text-info mt-2">{{ formatCurrency(summaryData.today_sales?.value || 0) }}</div>
                 <div class="text-caption text-medium-emphasis">
-                  {{ (summaryData.today_orders?.growth ?? 0) >= 0 ? '+' : '' }}{{ summaryData.today_orders?.growth ?? 0 }}% dari kemarin
+                  {{ (summaryData.today_sales?.growth ?? 0) >= 0 ? '+' : '' }}{{ summaryData.today_sales?.growth ?? 0 }}% dari kemarin
                 </div>
               </div>
-              <VIcon icon="mdi-receipt" size="48" class="text-info" />
+              <VIcon icon="mdi-cash-multiple" size="48" class="text-info" />
             </VCardText>
           </VCard>
         </VCol>
@@ -137,6 +137,20 @@ meta:
                 </div>
               </div>
               <VIcon icon="mdi-chart-line" size="48" class="text-primary" />
+            </VCardText>
+          </VCard>
+        </VCol>
+        <VCol cols="12" md="3">
+          <VCard class="summary-card h-100">
+            <VCardText class="d-flex align-center">
+              <div class="flex-grow-1">
+                <div class="text-h6 font-weight-bold">Total Order Hari Ini</div>
+                <div class="text-h4 text-secondary mt-2">{{ summaryData.today_orders?.value || 0 }}</div>
+                <div class="text-caption text-medium-emphasis">
+                  {{ (summaryData.today_orders?.growth ?? 0) >= 0 ? '+' : '' }}{{ summaryData.today_orders?.growth ?? 0 }}% dari kemarin
+                </div>
+              </div>
+              <VIcon icon="mdi-receipt-text" size="48" class="text-secondary" />
             </VCardText>
           </VCard>
         </VCol>
