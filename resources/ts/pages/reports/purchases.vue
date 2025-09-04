@@ -148,7 +148,7 @@ meta:
             <VCardText class="text-center">
               <VIcon icon="mdi-calculator" size="32" class="text-warning mb-2" />
               <div class="text-h5 font-weight-bold text-warning">
-                {{ formatCurrency(reportData.summary.average_purchase) }}
+                {{ formatCurrency(reportData.summary.avg_purchase_value) }}
               </div>
               <div class="text-body-2 text-medium-emphasis">Rata-rata Purchase</div>
             </VCardText>
@@ -451,7 +451,8 @@ const loadReportData = async () => {
         createDailyPurchaseChart()
       }, 100)
     }
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Error loading purchase report:', error)
   } finally {
     isLoading.value = false
   }
@@ -476,9 +477,14 @@ const createDailyPurchaseChart = () => {
   // Prepare chart data
   const chartLabels = reportData.value.daily_purchases.map((item: any) => formatDate(item.date))
   const chartData = reportData.value.daily_purchases.map((item: any) => {
-    // Convert string to number if needed
-    const value = typeof item.total_amount === 'string' ? parseFloat(item.total_amount.replace(/[^\d.-]/g, '')) : item.total_amount
-    return value || 0
+    // Handle backend formatted currency properly
+    if (typeof item.total_amount === 'string' && item.total_amount.includes('Rp')) {
+      // Extract all digits from "Rp 123.456" format
+      const digitsOnly = item.total_amount.replace(/\D/g, '') // Remove all non-digits
+      return parseInt(digitsOnly, 10) || 0
+    }
+    // If it's already a number
+    return typeof item.total_amount === 'number' ? item.total_amount : 0
   })
   
   chartInstance = new Chart(ctx, {
@@ -579,12 +585,12 @@ const exportToExcel = async () => {
       })],
       [],
       ['RINGKASAN PEMBELIAN'],
-      ['Total Purchase:', reportData.value.summary.total_purchases],
+      ['Total Purchase:', reportData.value.summary.total_purchases || 0],
       ['Total Amount:', formatExcelCurrency(reportData.value.summary.total_amount)],
       ['Rata-rata Purchase:', formatExcelCurrency(reportData.value.summary.avg_purchase_value)],
-      ['Purchase Selesai:', reportData.value.summary.completed_purchases],
-      ['Purchase Pending:', reportData.value.summary.pending_purchases],
-      ['Purchase Dibatalkan:', reportData.value.summary.cancelled_purchases],
+      ['Purchase Selesai:', reportData.value.summary.completed_purchases || 0],
+      ['Purchase Pending:', reportData.value.summary.pending_purchases || 0],
+      ['Purchase Dibatalkan:', reportData.value.summary.cancelled_purchases || 0],
       [], // Empty row
     ]
     
@@ -602,12 +608,11 @@ const exportToExcel = async () => {
         ['PEMBELIAN HARIAN'],
         ['Periode:', periodInfo],
         [],
-        ['Tanggal', 'Jumlah Purchase', 'Total Amount', 'Rata-rata'],
+        ['Tanggal', 'Jumlah Purchase', 'Total Amount'],
         ...reportData.value.daily_purchases.map((item: any) => [
           new Date(item.date).toLocaleDateString('id-ID'),
-          item.purchase_count,
-          formatExcelCurrency(item.total_amount),
-          formatExcelCurrency(item.avg_purchase_value)
+          item.purchase_count || 0,
+          formatExcelCurrency(item.total_amount || 0)
         ])
       ]
       
@@ -625,8 +630,8 @@ const exportToExcel = async () => {
         ['Status', 'Jumlah Purchase', 'Total Amount'],
         ...reportData.value.status_breakdown.map((item: any) => [
           item.status,
-          item.purchase_count,
-          formatExcelCurrency(item.total_amount)
+          item.purchase_count || 0,
+          formatExcelCurrency(item.total_amount || 0)
         ])
       ]
       
@@ -644,10 +649,10 @@ const exportToExcel = async () => {
         ['No', 'Nama Item', 'Total Dibeli', 'Total Amount', 'Rata-rata Unit Cost'],
         ...reportData.value.top_items.map((item: any, index: number) => [
           index + 1,
-          item.name,
-          Math.round(parseFloat(item.total_purchased)),
-          formatExcelCurrency(item.total_amount),
-          formatExcelCurrency(item.avg_unit_cost)
+          item.name || '',
+          Math.round(parseFloat(item.total_purchased || 0)),
+          formatExcelCurrency(item.total_amount || 0),
+          formatExcelCurrency(item.avg_unit_cost || 0)
         ])
       ]
       
@@ -665,9 +670,9 @@ const exportToExcel = async () => {
         ['No', 'Nama Supplier', 'Jumlah Purchase', 'Total Amount'],
         ...reportData.value.top_suppliers.map((item: any, index: number) => [
           index + 1,
-          item.name,
-          item.total_purchases,
-          formatExcelCurrency(item.total_amount)
+          item.name || '',
+          item.total_purchases || 0,
+          formatExcelCurrency(item.total_amount || 0)
         ])
       ]
       
