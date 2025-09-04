@@ -662,9 +662,14 @@ const createDailySalesChart = () => {
   // Prepare chart data
   const chartLabels = reportData.value.daily_sales.map((item: any) => formatDate(item.date))
   const chartData = reportData.value.daily_sales.map((item: any) => {
-    // Convert string to number if needed
-    const value = typeof item.total === 'string' ? parseFloat(item.total.replace(/[^\d.-]/g, '')) : item.total
-    return value || 0
+    // Handle backend formatted currency properly
+    if (typeof item.total === 'string' && item.total.includes('Rp')) {
+      // Extract all digits from "Rp 123.456" format
+      const digitsOnly = item.total.replace(/\D/g, '') // Remove all non-digits
+      return parseInt(digitsOnly, 10) || 0
+    }
+    // If it's already a number
+    return typeof item.total === 'number' ? item.total : 0
   })
   
   chartInstance = new Chart(ctx, {

@@ -329,14 +329,34 @@ class ReportController extends Controller
                     DB::raw('COUNT(*) as total_purchases'),
                     DB::raw('COALESCE(SUM(total_amount), 0) as total_amount'),
                     DB::raw('COALESCE(AVG(total_amount), 0) as avg_purchase_value'),
-                    DB::raw('SUM(CASE WHEN status = "completed" THEN 1 ELSE 0 END) as completed_purchases'),
-                    DB::raw('SUM(CASE WHEN status = "pending" THEN 1 ELSE 0 END) as pending_purchases'),
+                    DB::raw('SUM(CASE WHEN status IN ("received", "completed") THEN 1 ELSE 0 END) as completed_purchases'),
+                    DB::raw('SUM(CASE WHEN status IN ("draft", "sent", "partial") THEN 1 ELSE 0 END) as pending_purchases'),
                     DB::raw('SUM(CASE WHEN status = "cancelled" THEN 1 ELSE 0 END) as cancelled_purchases'),
-                    DB::raw('COALESCE(SUM(CASE WHEN status = "completed" THEN total_amount ELSE 0 END), 0) as completed_amount'),
-                    DB::raw('COALESCE(SUM(CASE WHEN status = "pending" THEN total_amount ELSE 0 END), 0) as pending_amount')
+                    DB::raw('COALESCE(SUM(CASE WHEN status IN ("received", "completed") THEN total_amount ELSE 0 END), 0) as completed_amount'),
+                    DB::raw('COALESCE(SUM(CASE WHEN status IN ("draft", "sent", "partial") THEN total_amount ELSE 0 END), 0) as pending_amount')
                 )
                 ->whereBetween('purchase_date', [$startDate, $endDate])
                 ->first();
+
+            // Calculate total items purchased
+            $totalItems = DB::table('purchase_items')
+                ->join('purchases', 'purchase_items.purchase_id', '=', 'purchases.id_purchase')
+                ->where('purchases.status', '!=', 'cancelled')
+                ->whereNull('purchase_items.deleted_at')  // Exclude soft deleted items
+                ->whereBetween('purchases.purchase_date', [$startDate, $endDate])
+                ->sum('purchase_items.quantity_ordered') ?? 0;
+
+            // Daily Purchase Trend
+            $dailyPurchases = Purchase::select(
+                    DB::raw('DATE(purchase_date) as date'),
+                    DB::raw('COUNT(*) as purchase_count'),
+                    DB::raw('SUM(total_amount) as total_amount')
+                )
+                ->where('status', '!=', 'cancelled')
+                ->whereBetween('purchase_date', [$startDate, $endDate])
+                ->groupBy(DB::raw('DATE(purchase_date)'))
+                ->orderBy('date')
+                ->get();
 
             // Purchase vs Sales Cost Analysis
             $totalSalesRevenue = Order::where('status', '!=', 'cancelled')
@@ -361,17 +381,18 @@ class ReportController extends Controller
                     'items.name',
                     'items.id_item as id',
                     DB::raw('COUNT(purchase_items.id_purchase_item) as order_frequency'),
-                    DB::raw('SUM(purchase_items.quantity_ordered) as total_quantity'),
-                    DB::raw('AVG(purchase_items.quantity_ordered) as avg_order_quantity'),
-                    DB::raw('SUM(purchase_items.total_cost) as total_cost'),
-                    DB::raw('AVG(purchase_items.unit_cost) as avg_unit_cost'),
+                    DB::raw('COALESCE(SUM(purchase_items.quantity_ordered), 0) as total_quantity'),
+                    DB::raw('COALESCE(AVG(purchase_items.quantity_ordered), 0) as avg_order_quantity'),
+                    DB::raw('COALESCE(SUM(purchase_items.total_cost), 0) as total_cost'),
+                    DB::raw('COALESCE(AVG(purchase_items.unit_cost), 0) as avg_unit_cost'),
                     DB::raw('MAX(purchases.purchase_date) as last_ordered'),
                     DB::raw('MIN(purchases.purchase_date) as first_ordered')
                 )
                 ->where('purchases.status', '!=', 'cancelled')
+                ->whereNull('purchase_items.deleted_at')  // Exclude soft deleted items
                 ->whereBetween('purchases.purchase_date', [$startDate, $endDate])
                 ->groupBy('items.id_item', 'items.name')
-                ->havingRaw('COUNT(purchase_items.id_purchase_item) > 1')
+                ->havingRaw('COUNT(purchase_items.id_purchase_item) > 0')
                 ->orderBy('order_frequency', 'desc')
                 ->limit(20)
                 ->get();
@@ -383,16 +404,17 @@ class ReportController extends Controller
                 ->select(
                     'items.name',
                     'items.id_item as id',
-                    DB::raw('MIN(purchase_items.unit_cost) as lowest_cost'),
-                    DB::raw('MAX(purchase_items.unit_cost) as highest_cost'),
-                    DB::raw('AVG(purchase_items.unit_cost) as avg_cost'),
-                    DB::raw('(MAX(purchase_items.unit_cost) - MIN(purchase_items.unit_cost)) as cost_variance'),
-                    DB::raw('ROUND(((MAX(purchase_items.unit_cost) - MIN(purchase_items.unit_cost)) / MIN(purchase_items.unit_cost)) * 100, 2) as price_volatility_percent')
+                    DB::raw('COALESCE(MIN(purchase_items.unit_cost), 0) as lowest_cost'),
+                    DB::raw('COALESCE(MAX(purchase_items.unit_cost), 0) as highest_cost'),
+                    DB::raw('COALESCE(AVG(purchase_items.unit_cost), 0) as avg_cost'),
+                    DB::raw('COALESCE((MAX(purchase_items.unit_cost) - MIN(purchase_items.unit_cost)), 0) as cost_variance'),
+                    DB::raw('COALESCE(ROUND(((MAX(purchase_items.unit_cost) - MIN(purchase_items.unit_cost)) / NULLIF(MIN(purchase_items.unit_cost), 0)) * 100, 2), 0) as price_volatility_percent')
                 )
                 ->where('purchases.status', '!=', 'cancelled')
+                ->whereNull('purchase_items.deleted_at')  // Exclude soft deleted items
                 ->whereBetween('purchases.purchase_date', [$startDate, $endDate])
                 ->groupBy('items.id_item', 'items.name')
-                ->havingRaw('COUNT(purchase_items.id_purchase_item) > 1')
+                ->havingRaw('COUNT(purchase_items.id_purchase_item) > 0')
                 ->orderBy('price_volatility_percent', 'desc')
                 ->get();
 
@@ -403,12 +425,12 @@ class ReportController extends Controller
                     'suppliers.name',
                     'suppliers.id_supplier as id',
                     DB::raw('COUNT(*) as total_orders'),
-                    DB::raw('SUM(purchases.total_amount) as total_spent'),
-                    DB::raw('AVG(purchases.total_amount) as avg_order_value'),
-                    DB::raw('SUM(CASE WHEN purchases.status = "completed" THEN 1 ELSE 0 END) as completed_orders'),
+                    DB::raw('COALESCE(SUM(purchases.total_amount), 0) as total_spent'),
+                    DB::raw('COALESCE(AVG(purchases.total_amount), 0) as avg_order_value'),
+                    DB::raw('SUM(CASE WHEN purchases.status IN ("received", "completed") THEN 1 ELSE 0 END) as completed_orders'),
                     DB::raw('SUM(CASE WHEN purchases.status = "cancelled" THEN 1 ELSE 0 END) as cancelled_orders'),
-                    DB::raw('ROUND((SUM(CASE WHEN purchases.status = "completed" THEN 1 ELSE 0 END) / COUNT(*)) * 100, 2) as completion_rate'),
-                    DB::raw('AVG(DATEDIFF(purchases.updated_at, purchases.purchase_date)) as avg_delivery_days')
+                    DB::raw('COALESCE(ROUND((SUM(CASE WHEN purchases.status IN ("received", "completed") THEN 1 ELSE 0 END) / COUNT(*)) * 100, 2), 0) as completion_rate'),
+                    DB::raw('COALESCE(AVG(DATEDIFF(purchases.updated_at, purchases.purchase_date)), 0) as avg_delivery_days')
                 )
                 ->whereBetween('purchases.purchase_date', [$startDate, $endDate])
                 ->groupBy('suppliers.id_supplier', 'suppliers.name')
@@ -420,8 +442,8 @@ class ReportController extends Controller
                     DB::raw('MONTH(purchase_date) as month'),
                     DB::raw('YEAR(purchase_date) as year'),
                     DB::raw('COUNT(*) as purchase_count'),
-                    DB::raw('SUM(total_amount) as total_amount'),
-                    DB::raw('AVG(total_amount) as avg_purchase')
+                    DB::raw('COALESCE(SUM(total_amount), 0) as total_amount'),
+                    DB::raw('COALESCE(AVG(total_amount), 0) as avg_purchase')
                 )
                 ->where('status', '!=', 'cancelled')
                 ->whereBetween('purchase_date', [$startDate, $endDate])
@@ -434,10 +456,11 @@ class ReportController extends Controller
             $criticalStockAnalysis = DB::table('inventory')
                 ->join('items', 'inventory.id_item', '=', 'items.id_item')
                 ->leftJoin(
-                    DB::raw('(SELECT item_id, MAX(purchase_date) as last_purchase_date, AVG(quantity_ordered) as avg_purchase_qty 
+                    DB::raw('(SELECT item_id, MAX(purchase_date) as last_purchase_date, COALESCE(AVG(quantity_ordered), 0) as avg_purchase_qty 
                              FROM purchase_items 
                              JOIN purchases ON purchase_items.purchase_id = purchases.id_purchase 
                              WHERE purchases.status != "cancelled" 
+                             AND purchase_items.deleted_at IS NULL
                              GROUP BY item_id) as last_purchases'),
                     'items.id_item', '=', 'last_purchases.item_id'
                 )
@@ -469,6 +492,7 @@ class ReportController extends Controller
             $avgItemsQuery = DB::table('purchase_items')
                 ->join('purchases', 'purchase_items.purchase_id', '=', 'purchases.id_purchase')
                 ->where('purchases.status', '!=', 'cancelled')
+                ->whereNull('purchase_items.deleted_at')  // Exclude soft deleted items
                 ->whereBetween('purchases.purchase_date', [$startDate, $endDate])
                 ->groupBy('purchases.id_purchase')
                 ->selectRaw('COUNT(*) as items_count')
@@ -477,6 +501,7 @@ class ReportController extends Controller
             $distinctItemTypes = DB::table('purchase_items')
                 ->join('purchases', 'purchase_items.purchase_id', '=', 'purchases.id_purchase')
                 ->where('purchases.status', '!=', 'cancelled')
+                ->whereNull('purchase_items.deleted_at')  // Exclude soft deleted items
                 ->whereBetween('purchases.purchase_date', [$startDate, $endDate])
                 ->distinct('item_id')
                 ->count();
@@ -485,7 +510,7 @@ class ReportController extends Controller
                 'order_frequency' => $totalDays > 0 ? $totalPurchaseCount / $totalDays : 0,
                 'avg_items_per_order' => $avgItemsQuery->count() > 0 ? ($avgItemsQuery->avg('items_count') ?? 0) : 0,
                 'cost_per_item_type' => $distinctItemTypes > 0 && is_numeric($purchaseSummary->total_amount) ? 
-                    ($purchaseSummary->total_amount ?? 0) / $distinctItemTypes : 0
+                    (floatval($purchaseSummary->total_amount ?? 0) / $distinctItemTypes) : 0
             ];
 
             // Growth comparison with previous period
@@ -493,6 +518,7 @@ class ReportController extends Controller
             $previousStartDate = Carbon::parse($startDate)->subDays($periodLength);
             $previousEndDate = Carbon::parse($startDate)->subDay();
 
+            // Previous period comparison  
             $previousPeriodPurchases = Purchase::where('status', '!=', 'cancelled')
                 ->whereBetween('purchase_date', [$previousStartDate, $previousEndDate])
                 ->sum('total_amount');
@@ -507,77 +533,119 @@ class ReportController extends Controller
                 $purchaseGrowth = is_finite($growth) ? round($growth, 2) : 0;
             }
 
-            return $this->successResponse([
+            $responseData = [
                 'summary' => [
                     'total_purchases' => (int)($purchaseSummary->total_purchases ?? 0),
-                    'total_amount' => $this->formatRupiah($purchaseSummary->total_amount ?? 0),
-                    'completed_amount' => $this->formatRupiah($purchaseSummary->completed_amount ?? 0),
-                    'pending_amount' => $this->formatRupiah($purchaseSummary->pending_amount ?? 0),
-                    'avg_purchase_value' => $this->formatRupiah($purchaseSummary->avg_purchase_value ?? 0),
+                    'total_amount' => floatval($purchaseSummary->total_amount ?? 0),  // RAW number for frontend
+                    'completed_amount' => floatval($purchaseSummary->completed_amount ?? 0),  // RAW number
+                    'pending_amount' => floatval($purchaseSummary->pending_amount ?? 0),  // RAW number  
+                    'avg_purchase_value' => floatval($purchaseSummary->avg_purchase_value ?? 0),  // RAW number
                     'completed_purchases' => (int)($purchaseSummary->completed_purchases ?? 0),
                     'pending_purchases' => (int)($purchaseSummary->pending_purchases ?? 0),
                     'cancelled_purchases' => (int)($purchaseSummary->cancelled_purchases ?? 0),
+                    'total_items' => (int)($totalItems ?? 0),
                     'cost_of_sales_ratio' => is_numeric($costOfSalesRatio) && !is_nan($costOfSalesRatio) ? $costOfSalesRatio : 0,
                     'purchase_growth' => is_numeric($purchaseGrowth) && !is_nan($purchaseGrowth) ? $purchaseGrowth : 0,
-                    'previous_period_amount' => $this->formatRupiah($previousPeriodPurchases ?? 0)
+                    'previous_period_amount' => floatval($previousPeriodPurchases ?? 0)  // RAW number
                 ],
+                'status_breakdown' => [
+                    [
+                        'status' => 'Completed',
+                        'count' => (int)($purchaseSummary->completed_purchases ?? 0),
+                        'total_amount' => floatval($purchaseSummary->completed_amount ?? 0)
+                    ],
+                    [
+                        'status' => 'Pending', 
+                        'count' => (int)($purchaseSummary->pending_purchases ?? 0),
+                        'total_amount' => floatval($purchaseSummary->pending_amount ?? 0)
+                    ],
+                    [
+                        'status' => 'Cancelled',
+                        'count' => (int)($purchaseSummary->cancelled_purchases ?? 0), 
+                        'total_amount' => 0 // Cancelled orders don't contribute to amounts
+                    ]
+                ],
+                'daily_purchases' => $dailyPurchases->map(function($item) {
+                    return [
+                        'date' => $item->date,
+                        'total_amount' => floatval($item->total_amount ?? 0),  // RAW number for charts
+                        'purchase_count' => (int)($item->purchase_count ?? 0)
+                    ];
+                }),
+                'top_suppliers' => $supplierPerformance->take(5)->map(function($item) {
+                    return [
+                        'name' => $item->name ?? 'Unknown',
+                        'total_purchases' => (int)($item->total_orders ?? 0),
+                        'total_amount' => floatval($item->total_spent ?? 0),  // RAW number
+                        'completion_rate' => round(floatval($item->completion_rate ?? 0), 2)
+                    ];
+                }),
+                'top_items' => $frequentlyOrderedItems->take(5)->map(function($item) {
+                    return [
+                        'id' => $item->id ?? 0,
+                        'name' => $item->name ?? 'Unknown',
+                        'total_quantity' => (int)($item->total_quantity ?? 0),
+                        'total_amount' => floatval($item->total_cost ?? 0)  // RAW number
+                    ];
+                }),
                 'frequently_ordered_items' => $frequentlyOrderedItems->map(function($item) {
                     return [
-                        'name' => $item->name,
-                        'order_frequency' => $item->order_frequency,
-                        'total_quantity' => $item->total_quantity,
-                        'avg_order_quantity' => round($item->avg_order_quantity, 2),
-                        'total_cost' => $this->formatRupiah($item->total_cost),
-                        'avg_unit_cost' => $this->formatRupiah($item->avg_unit_cost),
-                        'last_ordered' => $item->last_ordered,
-                        'days_between_orders' => Carbon::parse($item->first_ordered)->diffInDays(Carbon::parse($item->last_ordered)) / max(1, $item->order_frequency - 1)
+                        'name' => $item->name ?? 'Unknown',
+                        'order_frequency' => (int)($item->order_frequency ?? 0),
+                        'total_quantity' => (int)($item->total_quantity ?? 0),
+                        'avg_order_quantity' => round(floatval($item->avg_order_quantity ?? 0), 2),
+                        'total_cost' => $this->formatRupiah($item->total_cost ?? 0),
+                        'avg_unit_cost' => $this->formatRupiah($item->avg_unit_cost ?? 0),
+                        'last_ordered' => $item->last_ordered ?? null,
+                        'days_between_orders' => $item->first_ordered && $item->last_ordered ? 
+                            Carbon::parse($item->first_ordered)->diffInDays(Carbon::parse($item->last_ordered)) / max(1, ($item->order_frequency ?? 1) - 1) : 0
                     ];
                 }),
                 'cost_trend_analysis' => $costTrendAnalysis->map(function($item) {
                     return [
-                        'name' => $item->name,
-                        'lowest_cost' => $this->formatRupiah($item->lowest_cost),
-                        'highest_cost' => $this->formatRupiah($item->highest_cost),
-                        'avg_cost' => $this->formatRupiah($item->avg_cost),
-                        'cost_variance' => $this->formatRupiah($item->cost_variance),
-                        'price_volatility_percent' => $item->price_volatility_percent
+                        'name' => $item->name ?? 'Unknown',
+                        'lowest_cost' => $this->formatRupiah($item->lowest_cost ?? 0),
+                        'highest_cost' => $this->formatRupiah($item->highest_cost ?? 0),
+                        'avg_cost' => $this->formatRupiah($item->avg_cost ?? 0),
+                        'cost_variance' => $this->formatRupiah($item->cost_variance ?? 0),
+                        'price_volatility_percent' => round(floatval($item->price_volatility_percent ?? 0), 2)
                     ];
                 }),
                 'supplier_performance' => $supplierPerformance->map(function($item) {
                     return [
-                        'name' => $item->name,
-                        'total_orders' => $item->total_orders,
-                        'total_spent' => $this->formatRupiah($item->total_spent),
-                        'avg_order_value' => $this->formatRupiah($item->avg_order_value),
-                        'completion_rate' => $item->completion_rate,
-                        'avg_delivery_days' => round($item->avg_delivery_days ?: 0, 1),
-                        'cancelled_orders' => $item->cancelled_orders
+                        'name' => $item->name ?? 'Unknown',
+                        'total_orders' => (int)($item->total_orders ?? 0),
+                        'total_spent' => $this->formatRupiah($item->total_spent ?? 0),
+                        'avg_order_value' => $this->formatRupiah($item->avg_order_value ?? 0),
+                        'completion_rate' => round(floatval($item->completion_rate ?? 0), 2),
+                        'avg_delivery_days' => round(floatval($item->avg_delivery_days ?? 0), 1),
+                        'cancelled_orders' => (int)($item->cancelled_orders ?? 0)
                     ];
                 }),
                 'monthly_pattern' => $monthlyPattern->map(function($item) {
                     return [
-                        'period' => $item->year . '-' . sprintf('%02d', $item->month),
-                        'purchase_count' => $item->purchase_count,
-                        'total_amount' => $this->formatRupiah($item->total_amount),
-                        'avg_purchase' => $this->formatRupiah($item->avg_purchase)
+                        'period' => ($item->year ?? date('Y')) . '-' . sprintf('%02d', $item->month ?? 1),
+                        'purchase_count' => (int)($item->purchase_count ?? 0),
+                        'total_amount' => $this->formatRupiah($item->total_amount ?? 0),
+                        'avg_purchase' => $this->formatRupiah($item->avg_purchase ?? 0)
                     ];
                 }),
                 'critical_stock_analysis' => $criticalStockAnalysis->map(function($item) {
                     return [
-                        'name' => $item->name,
-                        'current_stock' => $item->current_stock,
-                        'reorder_level' => $item->reorder_level,
-                        'stock_status' => $item->stock_status,
-                        'last_purchase_date' => $item->last_purchase_date,
-                        'days_since_last_purchase' => $item->days_since_last_purchase,
-                        'avg_purchase_qty' => round($item->avg_purchase_qty ?: 0, 2),
-                        'recommended_action' => $this->getRecommendedAction($item->stock_status, $item->days_since_last_purchase)
+                        'name' => $item->name ?? 'Unknown',
+                        'current_stock' => (int)($item->current_stock ?? 0),
+                        'reorder_level' => (int)($item->reorder_level ?? 0),
+                        'stock_status' => $item->stock_status ?? 'Unknown',
+                        'last_purchase_date' => $item->last_purchase_date ?? null,
+                        'days_since_last_purchase' => (int)($item->days_since_last_purchase ?? 0),
+                        'avg_purchase_qty' => round(floatval($item->avg_purchase_qty ?? 0), 2),
+                        'recommended_action' => $this->getRecommendedAction($item->stock_status ?? 'Unknown', $item->days_since_last_purchase ?? 0)
                     ];
                 }),
                 'efficiency_metrics' => [
-                    'orders_per_day' => round($efficiencyMetrics['order_frequency'], 2),
-                    'avg_items_per_order' => round($efficiencyMetrics['avg_items_per_order'] ?: 0, 2),
-                    'cost_per_item_type' => $this->formatRupiah($efficiencyMetrics['cost_per_item_type'])
+                    'orders_per_day' => round(floatval($efficiencyMetrics['order_frequency'] ?? 0), 2),
+                    'avg_items_per_order' => round(floatval($efficiencyMetrics['avg_items_per_order'] ?? 0), 2),
+                    'cost_per_item_type' => $this->formatRupiah($efficiencyMetrics['cost_per_item_type'] ?? 0)
                 ],
                 'business_insights' => $this->generatePurchaseInsights($supplierPerformance, $criticalStockAnalysis, $costTrendAnalysis, $purchaseGrowth),
                 'period' => [
@@ -585,7 +653,9 @@ class ReportController extends Controller
                     'end_date' => $endDate->format('Y-m-d'),
                     'days' => $periodLength
                 ]
-            ], 'Comprehensive purchase analytics report retrieved successfully');
+            ];
+
+            return $this->successResponse($responseData, 'Comprehensive purchase analytics report retrieved successfully');
 
         } catch (\Exception $e) {
             return $this->serverErrorResponse('Failed to retrieve purchase report: ' . $e->getMessage());
