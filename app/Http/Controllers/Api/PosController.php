@@ -1236,6 +1236,103 @@ class PosController extends Controller
         }
     }
 
+     /**
+     * Get products for POS (with inventory info)
+     */
+    public function getProductsNonOnline(Request $request): JsonResponse
+    {
+        try {
+            $query = Product::with(['category', 'inventory'])
+                ->where('active', true)
+                ->where('status', 'published');
+                
+            // Only exclude 'online' category if no specific category_id is requested
+            if (!$request->filled('category_id')) {
+                $query->whereHas('category', function($q) {
+                    $q->where('name', '!=', 'online')
+                      ->where('name', '!=', 'Online')
+                      ->where('name', '!=', 'ONLINE');
+                });
+            }
+
+            // Search by name or SKU
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('sku', 'like', "%{$search}%");
+                });
+            }
+
+            // Filter by category
+            if ($request->filled('category_id')) {
+                $query->where('category_id', $request->category_id);
+            }
+
+            // Filter by station availability
+            if ($request->filled('station')) {
+                $station = $request->station;
+                if ($station === 'kitchen') {
+                    $query->where('available_in_kitchen', true);
+                } elseif ($station === 'bar') {
+                    $query->where('available_in_bar', true);
+                } elseif ($station === 'both') {
+                    $query->where('available_in_kitchen', true)
+                          ->where('available_in_bar', true);
+                }
+            }
+
+            $products = $query->orderBy('name')->get();
+
+            // Add stock information - VARIANT SYSTEM REMOVED, use product inventory directly
+            $products->each(function($product) {
+                // Check if product has recipe (ProductItems)
+                $productItems = \App\Models\ProductItem::where('product_id', $product->id_product)->get();
+                
+                if ($productItems->count() > 0) {
+                    // Product has recipe - calculate stock based on available ingredients
+                    $minProducible = PHP_INT_MAX;
+                    $canProduce = true;
+                    
+                    foreach ($productItems as $productItem) {
+                        $itemInventory = \App\Models\Inventory::where('id_item', $productItem->item_id)->first();
+                        
+                        if ($itemInventory) {
+                            // Calculate how many products can be made from this specific item
+                            $quantityNeeded = $productItem->quantity_needed > 0 ? $productItem->quantity_needed : 1;
+                            $possibleFromThisItem = floor($itemInventory->available_stock / $quantityNeeded);
+                            $minProducible = min($minProducible, $possibleFromThisItem);
+                        } else {
+                            $canProduce = false;
+                            $minProducible = 0;
+                            break;
+                        }
+                    }
+                    
+                    $availableStock = $canProduce ? ($minProducible == PHP_INT_MAX ? 0 : $minProducible) : 0;
+                    
+                    $product->stock_info = [
+                        'current_stock' => $availableStock,
+                        'available_stock' => $availableStock,
+                        'is_available' => $availableStock > 0
+                    ];
+                } else {
+                    
+                    // No inventory record - create one with default stock for finished products
+                    $product->stock_info = [
+                        'current_stock' => 0, // Default stock for finished products
+                        'available_stock' => 0,
+                        'is_available' => true
+                    ];
+                }
+            });
+
+            return $this->successResponse($products, 'Products retrieved successfully');
+        } catch (\Exception $e) {
+            return $this->serverErrorResponse('Failed to retrieve products: ' . $e->getMessage());
+        }
+    }
+
     /**
      * Get POS statistics
      */
@@ -1473,20 +1570,30 @@ class PosController extends Controller
     }
 
     /**
-     * Generate unique order number
+     * Generate unique order number with daily sequence
      */
     private function generateOrderNumber(): string
     {
         $prefix = 'ORD';
         $date = date('Ymd');
-        $random = str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
         
-        $orderNumber = $prefix . $date . $random;
+        // Get today's start and end
+        $todayStart = date('Y-m-d 00:00:00');
+        $todayEnd = date('Y-m-d 23:59:59');
         
-        // Check if order number already exists
+        // Count orders created today to get the next sequence
+        $todayOrderCount = Order::whereBetween('created_at', [$todayStart, $todayEnd])->count();
+        
+        // Next sequence number for today
+        $sequence = str_pad($todayOrderCount + 1, 4, '0', STR_PAD_LEFT);
+        
+        $orderNumber = $prefix . $date . $sequence;
+        
+        // Double check if order number already exists (safety check)
         while (Order::where('order_number', $orderNumber)->exists()) {
-            $random = str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
-            $orderNumber = $prefix . $date . $random;
+            $todayOrderCount++;
+            $sequence = str_pad($todayOrderCount + 1, 4, '0', STR_PAD_LEFT);
+            $orderNumber = $prefix . $date . $sequence;
         }
         
         return $orderNumber;

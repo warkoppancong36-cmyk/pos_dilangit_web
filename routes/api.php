@@ -303,6 +303,7 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
     Route::prefix('pos')->group(function () {
         Route::get('/stats', [PosController::class, 'getStats']);
         Route::get('/products', [PosController::class, 'getProducts']);
+        Route::get('/product_mobile', [PosController::class, 'getProductsNonOnline']);
         
         // Order routes - specific routes first
         Route::get('/orders', [PosController::class, 'getActiveOrders']);
