@@ -447,6 +447,11 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
         Route::get('/', [App\Http\Controllers\Api\BluetoothDeviceController::class, 'index']);
         Route::post('/', [App\Http\Controllers\Api\BluetoothDeviceController::class, 'store']);
         Route::get('/defaults', [App\Http\Controllers\Api\BluetoothDeviceController::class, 'getDefaults']);
+        
+        // Mobile-optimized endpoints
+        Route::get('/mobile', [App\Http\Controllers\Api\BluetoothDeviceController::class, 'mobileDevices']);
+        Route::get('/check-updates', [App\Http\Controllers\Api\BluetoothDeviceController::class, 'checkUpdates']);
+        
         Route::get('/{id}', [App\Http\Controllers\Api\BluetoothDeviceController::class, 'show']);
         Route::put('/{id}', [App\Http\Controllers\Api\BluetoothDeviceController::class, 'update']);
         Route::delete('/{id}', [App\Http\Controllers\Api\BluetoothDeviceController::class, 'destroy']);
