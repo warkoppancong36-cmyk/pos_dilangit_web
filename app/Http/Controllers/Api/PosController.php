@@ -620,6 +620,11 @@ class PosController extends Controller
      */
     public function processPayment(Request $request, Order $order): JsonResponse
     {
+        // Handle backward compatibility: accept both 'amount' and 'paid_amount'
+        if ($request->has('paid_amount') && !$request->has('amount')) {
+            $request->merge(['amount' => $request->paid_amount]);
+        }
+
         $validator = Validator::make($request->all(), [
             'payment_method' => 'required|in:cash,card,kartu,credit_card,debit_card,digital_wallet,ewallet,bank_transfer,qris,gopay,ovo,dana,shopeepay,other',
             'amount' => 'required|numeric|min:0',
@@ -648,18 +653,33 @@ class PosController extends Controller
 
             // Check if payment amount doesn't exceed remaining amount
             $remainingAmount = $order->remaining_amount;
-            if ($request->amount > $remainingAmount) {
+            
+            // For cash payments, allow overpayment (customer gets change)
+            // For non-cash payments, amount must not exceed remaining balance
+            if ($dbPaymentMethod !== 'cash' && $request->amount > $remainingAmount) {
                 return $this->errorResponse('Payment amount exceeds remaining balance', 400);
             }
-
+            
+            // For all payment methods, amount must be positive
+            if ($request->amount <= 0) {
+                return $this->errorResponse('Payment amount must be greater than zero', 400);
+            }
+            
+            // Calculate actual payment amount (don't exceed remaining for recording)
+            $actualPaymentAmount = min($request->amount, $remainingAmount);
+            $changeAmount = 0;
+            if ($dbPaymentMethod === 'cash' && $request->amount > $remainingAmount) {
+                $changeAmount = $request->amount - $remainingAmount;
+            }
             // Create payment record
             $paymentNumber = $this->generatePaymentNumber();
             $payment = Payment::create([
                 'id_order' => $order->id_order,
                 'payment_number' => $paymentNumber,
                 'payment_method' => $dbPaymentMethod,
-                'amount' => $request->amount,
+                'amount' => $actualPaymentAmount,
                 'reference_number' => $request->reference_number,
+                'change_amount' => $changeAmount,
                 'status' => 'paid',
                 'notes' => $request->notes,
                 'processed_by' => Auth::id(),
@@ -709,10 +729,15 @@ class PosController extends Controller
 
             $order->load(['payments', 'orderItems']);
 
+            // Calculate change amount (only for cash payments)
+       
+
             return $this->successResponse([
                 'payment' => $payment,
                 'order' => $order,
-                'change_amount' => $request->payment_method === 'cash' ? max(0, $request->amount - $remainingAmount) : 0
+                'change_amount' => $changeAmount,
+                'paid_amount' => $request->amount,
+                'actual_payment_recorded' => $actualPaymentAmount
             ], 'Payment processed successfully');
         } catch (\Exception $e) {
             DB::rollback();

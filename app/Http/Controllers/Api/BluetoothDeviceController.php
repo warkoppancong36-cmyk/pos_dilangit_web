@@ -12,13 +12,14 @@ use Illuminate\Validation\Rule;
 
 class BluetoothDeviceController extends Controller
 {
+
     /**
      * Get all Bluetooth devices for the authenticated user
      */
     public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
-        $query = BluetoothDevice::forUser($user->id);
+        $query = BluetoothDevice::query();
 
         // Filter by device type if provided
         if ($request->has('device_type')) {
@@ -30,7 +31,7 @@ class BluetoothDeviceController extends Controller
             $query->active();
         }
 
-        $devices = $query->orderBy('device_name')->get();
+        $devices = $query->with('user:id,name,email')->orderBy('device_name')->get();
 
         return response()->json([
             'success' => true,
