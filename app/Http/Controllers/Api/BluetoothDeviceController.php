@@ -12,13 +12,14 @@ use Illuminate\Validation\Rule;
 
 class BluetoothDeviceController extends Controller
 {
+
     /**
      * Get all Bluetooth devices for the authenticated user
      */
     public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
-        $query = BluetoothDevice::forUser($user->id);
+        $query = BluetoothDevice::query();
 
         // Filter by device type if provided
         if ($request->has('device_type')) {
@@ -30,7 +31,7 @@ class BluetoothDeviceController extends Controller
             $query->active();
         }
 
-        $devices = $query->orderBy('device_name')->get();
+        $devices = $query->with('user:id,name,email')->orderBy('device_name')->get();
 
         return response()->json([
             'success' => true,
@@ -259,6 +260,61 @@ class BluetoothDeviceController extends Controller
         return response()->json([
             'success' => true,
             'data' => $result
+        ]);
+    }
+
+    /**
+     * Get mobile-optimized device list with minimal data
+     * Khusus untuk mobile apps dengan data yang sudah di-optimize
+     */
+    public function mobileDevices(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        
+        // Get active devices only for mobile
+        $devices = BluetoothDevice::forUser($user->id)
+            ->active()
+            ->select([
+                'id_bluetooth_device',
+                'device_name', 
+                'device_address',
+                'device_type',
+                'is_default',
+                'last_connected_at',
+                'updated_at'
+            ])
+            ->orderBy('is_default', 'desc')
+            ->orderBy('device_name')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $devices,
+            'meta' => [
+                'last_sync' => now()->toISOString(),
+                'total_devices' => $devices->count(),
+                'cache_duration' => 300 // 5 minutes recommended cache
+            ]
+        ]);
+    }
+
+    /**
+     * Check for device updates since last sync
+     * Untuk efficient mobile sync
+     */
+    public function checkUpdates(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        $lastSync = $request->input('last_sync', now()->subDay());
+
+        $hasUpdates = BluetoothDevice::forUser($user->id)
+            ->where('updated_at', '>', $lastSync)
+            ->exists();
+
+        return response()->json([
+            'success' => true,
+            'has_updates' => $hasUpdates,
+            'last_check' => now()->toISOString()
         ]);
     }
 

@@ -126,6 +126,12 @@ export default [
         icon: { icon: 'tabler-speakerphone' },
         role: ['admin', 'manager'], // Only admin and manager can access
       },
+      {
+        title: 'Perangkat Bluetooth',
+        to: { name: 'bluetooth-devices-management' },
+        icon: { icon: 'tabler-bluetooth' },
+        role: ['admin', 'manager'], // Only admin and manager can access
+      },
     ],
   },
   {
