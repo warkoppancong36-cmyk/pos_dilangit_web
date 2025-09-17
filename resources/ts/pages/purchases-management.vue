@@ -218,7 +218,7 @@
                 >
                   {{ purchaseItem.item?.name || 'Unknown Item' }}
                 </VChip>
-                <span class="text-caption">x{{ purchaseItem.quantity_ordered }}</span>
+                <span class="text-caption">x{{ formatQuantity(purchaseItem.quantity_ordered) }}</span>
               </div>
               <div v-if="item.items.length > 2" class="text-caption text-medium-emphasis">
                 +{{ item.items.length - 2 }} item lainnya
@@ -401,7 +401,7 @@
                 class="d-flex justify-space-between text-caption mb-1"
               >
                 <span>{{ item.item?.name || 'Unknown Item' }}</span>
-                <span>{{ item.quantity_ordered }} x {{ formatCurrency(item.unit_cost) }}</span>
+                <span>{{ formatQuantity(item.quantity_ordered) }} x {{ formatCurrency(item.unit_cost) }}</span>
               </div>
             </div>
           </div>
@@ -754,6 +754,12 @@ const formatCurrency = (amount) => {
 const formatDate = (date) => {
   if (!date) return '-'
   return new Date(date).toLocaleDateString('id-ID')
+}
+
+const formatQuantity = (quantity) => {
+  const numericQuantity = typeof quantity === 'string' ? parseFloat(quantity) : quantity
+  if (isNaN(numericQuantity)) return 0
+  return Math.floor(numericQuantity) // Convert to integer
 }
 
 const getTotalItems = (purchase) => {
