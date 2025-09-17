@@ -227,6 +227,9 @@ class ReportController extends Controller
                 ? round((($currentPeriodSales - $previousPeriodSales) / $previousPeriodSales) * 100, 2)
                 : 0;
 
+            // Calculate daily sales analytics
+            $dailySalesAnalytics = $this->calculateDailySalesAnalytics($dailySales);
+
             return $this->successResponse([
                 'summary' => [
                     'total_orders' => $salesSummary->total_orders ?: 0,
@@ -239,12 +242,20 @@ class ReportController extends Controller
                     'cancelled_orders' => $salesSummary->cancelled_orders ?: 0,
                     'growth_percentage' => $growthPercentage,
                     'previous_period_revenue' => floatval($previousPeriodSales ?: 0),  // RAW number
-                    'previous_period_revenue_formatted' => $this->formatRupiah($previousPeriodSales)
+                    'previous_period_revenue_formatted' => $this->formatRupiah($previousPeriodSales),
+                    // Daily sales analytics for new cards
+                    'daily_total_sales' => $dailySalesAnalytics['total_sales'],
+                    'daily_total_sales_formatted' => $this->formatRupiah($dailySalesAnalytics['total_sales']),
+                    'daily_average_sales' => $dailySalesAnalytics['average_sales'],
+                    'daily_average_sales_formatted' => $this->formatRupiah($dailySalesAnalytics['average_sales']),
+                    'active_days_count' => $dailySalesAnalytics['active_days'],
+                    'total_days_in_period' => $dailySalesAnalytics['total_days']
                 ],
                 'daily_sales' => $dailySales->map(function($item) {
                     return [
                         'date' => $item->date,
-                        'total' => $this->formatRupiah($item->total)
+                        'total' => $this->formatRupiah($item->total),
+                        'revenue' => floatval($item->total ?: 0)  // Raw number for calculations
                     ];
                 }),
                 'sales_by_type' => $salesByType->map(function($item) {
@@ -803,6 +814,75 @@ class ReportController extends Controller
             ]);
         } catch (\Exception $e) {
             return $this->errorResponse('Error getting test data: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Calculate daily sales analytics for new cards
+     */
+    private function calculateDailySalesAnalytics($dailySales)
+    {
+        if (!$dailySales || $dailySales->isEmpty()) {
+            return [
+                'total_sales' => 0,
+                'average_sales' => 0,
+                'active_days' => 0,
+                'total_days' => 0
+            ];
+        }
+
+        // Calculate total sales from daily data
+        $totalSales = $dailySales->sum('total');
+
+        // Filter days with sales > 0 (active days)
+        $activeDays = $dailySales->filter(function($day) {
+            return floatval($day->total) > 0;
+        });
+
+        $activeDaysCount = $activeDays->count();
+        $totalDaysInPeriod = $dailySales->count();
+
+        // Calculate average sales (only from active days)
+        $averageSales = $activeDaysCount > 0 ? $totalSales / $activeDaysCount : 0;
+
+        return [
+            'total_sales' => floatval($totalSales),
+            'average_sales' => floatval($averageSales),
+            'active_days' => $activeDaysCount,
+            'total_days' => $totalDaysInPeriod
+        ];
+    }
+
+    /**
+     * Get today's sales data
+     */
+    public function todaySales(): JsonResponse
+    {
+        try {
+            $today = Carbon::today();
+            
+            // Get today's sales summary
+            $todaySummary = Order::select(
+                    DB::raw('COUNT(*) as total_orders'),
+                    DB::raw('SUM(total_amount) as total_sales'),
+                    DB::raw('CASE WHEN COUNT(*) > 0 THEN SUM(total_amount)/COUNT(*) ELSE 0 END as avg_order_value')
+                )
+                ->where('status', '!=', 'cancelled')
+                ->whereDate('order_date', $today)
+                ->first();
+
+            return $this->successResponse([
+                'total_sales' => floatval($todaySummary->total_sales ?: 0),
+                'total_sales_formatted' => $this->formatRupiah($todaySummary->total_sales ?: 0),
+                'total_orders' => $todaySummary->total_orders ?: 0,
+                'avg_order_value' => floatval($todaySummary->avg_order_value ?: 0),
+                'avg_order_value_formatted' => $this->formatRupiah($todaySummary->avg_order_value ?: 0),
+                'date' => $today->format('Y-m-d'),
+                'date_formatted' => $today->format('d M Y')
+            ], 'Today\'s sales data retrieved successfully');
+
+        } catch (\Exception $e) {
+            return $this->serverErrorResponse('Failed to retrieve today\'s sales: ' . $e->getMessage());
         }
     }
 }

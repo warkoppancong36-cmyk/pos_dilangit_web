@@ -106,6 +106,39 @@ meta:
     <!-- Report Content -->
     <div v-else-if="reportData">
       <!-- Summary Cards -->
+
+       <!-- Today's Sales Cards -->
+      <VRow class="mb-6">
+        <VCol cols="12" md="6">
+          <VCard>
+            <VCardText class="text-center">
+              <VIcon icon="mdi-calendar-today" size="32" class="text-purple mb-2" />
+              <div class="text-h5 font-weight-bold text-purple">
+                {{ formatCurrency(todaySalesData.total_sales) }}
+              </div>
+              <div class="text-body-2 text-medium-emphasis">Penjualan Hari Ini</div>
+              <div class="text-caption text-medium-emphasis mt-1">
+                {{ todaySalesData.total_orders }} order | {{ formatDate(new Date()) }}
+              </div>
+            </VCardText>
+          </VCard>
+        </VCol>
+        
+        <VCol cols="12" md="6">
+          <VCard>
+            <VCardText class="text-center">
+              <VIcon icon="mdi-chart-bar" size="32" class="text-indigo mb-2" />
+              <div class="text-h5 font-weight-bold text-indigo">
+                {{ formatCurrency(getDailyAverageSales()) }}
+              </div>
+              <div class="text-body-2 text-medium-emphasis">Rata-rata Penjualan Harian</div>
+              <div class="text-caption text-medium-emphasis mt-1">
+                Per {{ getTotalDaysInPeriod() }} hari aktif
+              </div>
+            </VCardText>
+          </VCard>
+        </VCol>
+      </VRow>
       <VRow class="mb-6">
         <VCol cols="6" md="3">
           <VCard>
@@ -173,6 +206,8 @@ meta:
           </VCard>
         </VCol>
       </VRow>
+
+     
 
       <!-- Charts Row - Moved to Top Priority -->
       <VRow class="mb-6">
@@ -453,6 +488,11 @@ const router = useRouter()
 const isLoading = ref(false)
 const isExporting = ref(false)
 const reportData = ref<any>(null)
+const todaySalesData = ref({
+  total_sales: 0,
+  total_orders: 0,
+  avg_order_value: 0
+})
 const selectedPeriod = ref('month')
 const selectedMonth = ref('')
 const customStartDate = ref('')
@@ -589,6 +629,75 @@ const getPaymentLabel = (method: string) => {
   }
 }
 
+// Daily sales calculation functions
+const getDailyTotalSales = () => {
+  // Use data from API if available
+  if (reportData.value?.summary?.daily_total_sales !== undefined) {
+    return reportData.value.summary.daily_total_sales
+  }
+  
+  // Fallback to calculation from daily_sales data
+  if (!reportData.value?.daily_sales || !Array.isArray(reportData.value.daily_sales)) {
+    return 0
+  }
+  
+  return reportData.value.daily_sales.reduce((total, day) => {
+    return total + (parseFloat(day.revenue) || 0)
+  }, 0)
+}
+
+const getDailyAverageSales = () => {
+  // Use data from API if available
+  if (reportData.value?.summary?.daily_average_sales !== undefined) {
+    return reportData.value.summary.daily_average_sales
+  }
+  
+  // Fallback to calculation from daily_sales data
+  if (!reportData.value?.daily_sales || !Array.isArray(reportData.value.daily_sales)) {
+    return 0
+  }
+  
+  const activeDays = reportData.value.daily_sales.filter(day => parseFloat(day.revenue) > 0)
+  
+  if (activeDays.length === 0) {
+    return 0
+  }
+  
+  const totalSales = activeDays.reduce((total, day) => {
+    return total + (parseFloat(day.revenue) || 0)
+  }, 0)
+  
+  return totalSales / activeDays.length
+}
+
+const getTotalDaysInPeriod = () => {
+  // Use data from API if available
+  if (reportData.value?.summary?.active_days_count !== undefined) {
+    return reportData.value.summary.active_days_count
+  }
+  
+  // Fallback to calculation from daily_sales data
+  if (!reportData.value?.daily_sales || !Array.isArray(reportData.value.daily_sales)) {
+    return 0
+  }
+  
+  return reportData.value.daily_sales.filter(day => parseFloat(day.revenue) > 0).length
+}
+
+const getSelectedPeriodLabel = () => {
+  if (selectedPeriod.value === 'custom' && customStartDate.value && customEndDate.value) {
+    return `${formatDate(customStartDate.value)} - ${formatDate(customEndDate.value)}`
+  } else if (selectedPeriod.value === 'month' && selectedMonth.value) {
+    const [year, month] = selectedMonth.value.split('-')
+    const monthNames = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ]
+    return `${monthNames[parseInt(month) - 1]} ${year}`
+  }
+  return selectedPeriod.value
+}
+
 // Event handlers
 const onPeriodChange = () => {
   if (selectedPeriod.value === 'month') {
@@ -630,6 +739,9 @@ const loadReportData = async () => {
     if (response.data.success) {
       reportData.value = response.data.data
       
+      // Load today's sales data
+      await loadTodaySales()
+      
       await nextTick()
       // Add delay to ensure DOM is ready
       setTimeout(() => {
@@ -640,6 +752,25 @@ const loadReportData = async () => {
     console.error('Error loading sales report:', error)
   } finally {
     isLoading.value = false
+  }
+}
+
+// Load today's sales data
+const loadTodaySales = async () => {
+  try {
+    const response = await axios.get('/api/reports/today-sales')
+    
+    if (response.data.success) {
+      todaySalesData.value = response.data.data
+    }
+  } catch (error) {
+    console.error('Error loading today sales:', error)
+    // Set default values on error
+    todaySalesData.value = {
+      total_sales: 0,
+      total_orders: 0,
+      avg_order_value: 0
+    }
   }
 }
 
@@ -989,6 +1120,7 @@ onMounted(() => {
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   selectedMonth.value = currentMonth
   loadReportData()
+  loadTodaySales() // Load today's sales independently
 })
 </script>
 
