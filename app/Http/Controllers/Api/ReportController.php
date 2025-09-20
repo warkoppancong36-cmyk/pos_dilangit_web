@@ -854,21 +854,24 @@ class ReportController extends Controller
     }
 
     /**
-     * Get today's sales data
+     * Get today's sales data - only paid orders
      */
     public function todaySales(): JsonResponse
     {
         try {
             $today = Carbon::today();
             
-            // Get today's sales summary
-            $todaySummary = Order::select(
-                    DB::raw('COUNT(*) as total_orders'),
-                    DB::raw('SUM(total_amount) as total_sales'),
-                    DB::raw('CASE WHEN COUNT(*) > 0 THEN SUM(total_amount)/COUNT(*) ELSE 0 END as avg_order_value')
+            // Get today's sales summary - only paid orders
+            $todaySummary = DB::table('orders')
+                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
+                ->select(
+                    DB::raw('COUNT(DISTINCT orders.id_order) as total_orders'),
+                    DB::raw('SUM(orders.total_amount) as total_sales'),
+                    DB::raw('CASE WHEN COUNT(DISTINCT orders.id_order) > 0 THEN SUM(orders.total_amount)/COUNT(DISTINCT orders.id_order) ELSE 0 END as avg_order_value')
                 )
-                ->where('status', '!=', 'cancelled')
-                ->whereDate('order_date', $today)
+                ->where('orders.status', '!=', 'cancelled')
+                ->where('payments.status', 'paid')
+                ->whereDate('orders.order_date', $today)
                 ->first();
 
             return $this->successResponse([
@@ -893,6 +896,17 @@ class ReportController extends Controller
     {
         try {
             $today = Carbon::today();
+            
+            // Debug: Check if there are any orders today
+            $totalOrdersToday = DB::table('orders')
+                ->where('status', '!=', 'cancelled')
+                ->whereDate('order_date', $today)
+                ->count();
+                
+            // Debug: Check if there are any payments today
+            $totalPaymentsToday = DB::table('payments')
+                ->whereDate('created_at', $today)
+                ->count();
             
             // Get payment methods breakdown for today only - paid orders
             $paymentMethods = DB::table('orders')
@@ -924,7 +938,9 @@ class ReportController extends Controller
                 'total_amount' => $formattedData->sum('total_amount'),
                 'total_amount_formatted' => $this->formatRupiah($formattedData->sum('total_amount')),
                 'method_count' => $formattedData->count(),
-                'total_orders' => $formattedData->sum('order_count')
+                'total_orders' => $formattedData->sum('order_count'),
+                'debug_orders_today' => $totalOrdersToday,
+                'debug_payments_today' => $totalPaymentsToday
             ];
 
             return $this->successResponse([
@@ -947,7 +963,7 @@ class ReportController extends Controller
         try {
             $today = Carbon::today();
             
-            // Get order types breakdown for today only - paid orders
+            // Get order types breakdown for today only - paid orders  
             $orderTypes = DB::table('orders')
                 ->join('payments', 'orders.id_order', '=', 'payments.id_order')
                 ->select(
@@ -989,6 +1005,59 @@ class ReportController extends Controller
 
         } catch (\Exception $e) {
             return $this->serverErrorResponse('Failed to retrieve order types analytics: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Debug method to check data
+     */
+    public function debugToday(): JsonResponse
+    {
+        try {
+            $today = Carbon::today();
+            
+            // Count total orders today
+            $totalOrders = DB::table('orders')
+                ->where('status', '!=', 'cancelled')
+                ->whereDate('order_date', $today)
+                ->count();
+            
+            // Count total payments today
+            $totalPayments = DB::table('payments')
+                ->whereDate('created_at', $today)
+                ->count();
+            
+            // Count paid payments today
+            $paidPayments = DB::table('payments')
+                ->where('status', 'paid')
+                ->whereDate('created_at', $today)
+                ->count();
+            
+            // Sample of payment statuses
+            $paymentStatuses = DB::table('payments')
+                ->select('status', DB::raw('COUNT(*) as count'))
+                ->whereDate('created_at', $today)
+                ->groupBy('status')
+                ->get();
+            
+            // Orders with payments today
+            $ordersWithPayments = DB::table('orders')
+                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
+                ->where('orders.status', '!=', 'cancelled')
+                ->whereDate('orders.order_date', $today)
+                ->count();
+            
+            return $this->successResponse([
+                'date' => $today->format('Y-m-d'),
+                'total_orders_today' => $totalOrders,
+                'total_payments_today' => $totalPayments,
+                'paid_payments_today' => $paidPayments,
+                'orders_with_payments' => $ordersWithPayments,
+                'payment_statuses' => $paymentStatuses
+            ], 'Debug data retrieved successfully');
+            
+        } catch (\Exception $e) {
+            return $this->serverErrorResponse('Debug failed: ' . $e->getMessage());
         }
     }
 }
