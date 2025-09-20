@@ -870,8 +870,10 @@ class ReportController extends Controller
                     DB::raw('CASE WHEN COUNT(DISTINCT orders.id_order) > 0 THEN SUM(orders.total_amount)/COUNT(DISTINCT orders.id_order) ELSE 0 END as avg_order_value')
                 )
                 ->where('orders.status', '!=', 'cancelled')
+                ->where('orders.status', '!=', 'pending')    // Exclude pending orders
                 ->where('payments.status', 'paid')
                 ->whereDate('orders.order_date', $today)
+                ->whereNull('orders.deleted_at')             // Exclude soft deleted orders
                 ->first();
 
             return $this->successResponse([
@@ -917,8 +919,10 @@ class ReportController extends Controller
                     DB::raw('SUM(orders.total_amount) as total_amount')
                 )
                 ->where('orders.status', '!=', 'cancelled')
+                ->where('orders.status', '!=', 'pending')    // Exclude pending orders
                 ->where('payments.status', 'paid')
                 ->whereDate('orders.order_date', $today)
+                ->whereNull('orders.deleted_at')             // Exclude soft deleted orders
                 ->groupBy('payments.payment_method')
                 ->orderBy('total_amount', 'desc')
                 ->get();
@@ -972,8 +976,10 @@ class ReportController extends Controller
                     DB::raw('SUM(orders.total_amount) as total_amount')
                 )
                 ->where('orders.status', '!=', 'cancelled')
+                ->where('orders.status', '!=', 'pending')    // Exclude pending orders
                 ->where('payments.status', 'paid')
                 ->whereDate('orders.order_date', $today)
+                ->whereNull('orders.deleted_at')             // Exclude soft deleted orders
                 ->groupBy('orders.order_type')
                 ->orderBy('total_amount', 'desc')
                 ->get();
