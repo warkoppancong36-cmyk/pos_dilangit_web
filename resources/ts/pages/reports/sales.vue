@@ -902,7 +902,7 @@ const loadPaymentMethodAnalytics = async () => {
     console.log('Payment Methods Response:', response.data)
     
     if (response.data.success) {
-      paymentMethodData.value = response.data.data || []
+      paymentMethodData.value = response.data.data.data || []
     } else {
       paymentMethodData.value = []
     }
@@ -919,7 +919,7 @@ const loadOrderTypeAnalytics = async () => {
     console.log('Order Types Response:', response.data)
     
     if (response.data.success) {
-      orderTypeData.value = response.data.data || []
+      orderTypeData.value = response.data.data.data || []
     } else {
       orderTypeData.value = []
     }
