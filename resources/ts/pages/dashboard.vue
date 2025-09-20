@@ -114,29 +114,59 @@ meta:
         </VCol>
         <VCol cols="12" md="3">
           <VCard class="summary-card h-100">
-            <VCardText class="d-flex align-center">
-              <div class="flex-grow-1">
-                <div class="text-h6 font-weight-bold">Nilai Inventory</div>
-                <div class="text-h4 text-warning mt-2">{{ formatCurrency(summaryData.inventory_value?.value || 0) }}</div>
-                <div class="text-caption text-medium-emphasis">
-                  {{ summaryData.inventory_value?.low_stock_count || 0 }} item stok rendah
+            <VCardTitle class="d-flex align-center">
+              <VIcon icon="mdi-credit-card" class="me-2" />
+              Jumlah Pembayaran Hari Ini
+            </VCardTitle>
+            <VCardText>
+              <div v-if="summaryData.payment_methods_today?.data && summaryData.payment_methods_today.data.length > 0">
+                <div v-for="item in summaryData.payment_methods_today.data" :key="item.payment_method" class="d-flex justify-space-between align-center py-1">
+                  <div class="d-flex align-center">
+                    <div class="payment-method-color me-2" :style="`background-color: ${getPaymentMethodColor(item.payment_method)}; width: 12px; height: 12px; border-radius: 50%;`"></div>
+                    <span class="text-body-2">{{ item.payment_method_formatted }}</span>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-h6 font-weight-bold">{{ item.total_amount_formatted }}</div>
+                    <div class="text-caption text-medium-emphasis">{{ item.percentage }}%</div>
+                  </div>
                 </div>
               </div>
-              <VIcon icon="mdi-package-variant" size="48" class="text-warning" />
+              
+              <!-- NO DATA STATE -->
+              <div v-else class="text-center py-4">
+                <VIcon icon="mdi-cash-off" size="48" class="text-grey-400 mb-2" />
+                <div class="text-body-2 text-medium-emphasis">Tidak ada pembayaran hari ini</div>
+                <div class="text-h6 font-weight-bold mt-1">Rp 0</div>
+              </div>
             </VCardText>
           </VCard>
         </VCol>
         <VCol cols="12" md="3">
           <VCard class="summary-card h-100">
-            <VCardText class="d-flex align-center">
-              <div class="flex-grow-1">
-                <div class="text-h6 font-weight-bold">Rata-rata Order</div>
-                <div class="text-h4 text-primary mt-2">{{ formatCurrency(summaryData.period_summary?.avg_order_value || 0) }}</div>
-                <div class="text-caption text-medium-emphasis">
-                  {{ summaryData.period_summary?.total_orders || 0 }} total order
+            <VCardTitle class="d-flex align-center">
+              <VIcon icon="mdi-food" class="me-2" />
+              Jenis Pesanan Hari Ini
+            </VCardTitle>
+            <VCardText>
+              <div v-if="summaryData.order_types_today?.data && summaryData.order_types_today.data.length > 0">
+                <div v-for="item in summaryData.order_types_today.data" :key="item.order_type" class="d-flex justify-space-between align-center py-1">
+                  <div class="d-flex align-center">
+                    <div class="order-type-color me-2" :style="`background-color: ${getOrderTypeColor(item.order_type)}; width: 12px; height: 12px; border-radius: 50%;`"></div>
+                    <span class="text-body-2">{{ item.order_type_formatted }}</span>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-h6 font-weight-bold">{{ item.total_amount_formatted }}</div>
+                    <div class="text-caption text-medium-emphasis">{{ item.percentage }}%</div>
+                  </div>
                 </div>
               </div>
-              <VIcon icon="mdi-chart-line" size="48" class="text-primary" />
+              
+              <!-- NO DATA STATE -->
+              <div v-else class="text-center py-4">
+                <VIcon icon="mdi-food-off" size="48" class="text-grey-400 mb-2" />
+                <div class="text-body-2 text-medium-emphasis">Tidak ada pesanan hari ini</div>
+                <div class="text-h6 font-weight-bold mt-1">Rp 0</div>
+              </div>
             </VCardText>
           </VCard>
         </VCol>
@@ -327,6 +357,32 @@ interface DashboardData {
     today_orders?: { value: number; growth: number }
     inventory_value?: { value: number; low_stock_count: number }
     period_summary?: { avg_order_value: number; total_orders: number }
+    payment_methods_today?: {
+      data: Array<{
+        payment_method: string
+        payment_method_formatted: string
+        transaction_count: number
+        total_amount: number
+        total_amount_formatted: string
+        percentage: number
+      }>
+      total_amount: number
+      total_amount_formatted: string
+      method_count: number
+    }
+    order_types_today?: {
+      data: Array<{
+        order_type: string
+        order_type_formatted: string
+        order_count: number
+        total_amount: number
+        total_amount_formatted: string
+        percentage: number
+      }>
+      total_amount: number
+      total_amount_formatted: string
+      type_count: number
+    }
   }
   sales: {
     daily_trend: Array<{ date: string; total_revenue: number }>
@@ -432,6 +488,8 @@ const loadDashboard = async () => {
       dashboardData.value = response.data.data
       await nextTick()
       createCharts()
+    } else {
+      console.error('API returned error:', response.data)
     }
   } catch (error) {
     console.error('Error loading dashboard:', error)
@@ -477,6 +535,34 @@ const getDateRangeDisplay = () => {
     const periodLabel = periodOptions.find(p => p.value === selectedPeriod.value)?.label || '30 Hari Terakhir'
     return `(${periodLabel})`
   }
+}
+
+// Color mapping for payment methods
+const getPaymentMethodColor = (method: string) => {
+  const colors: { [key: string]: string } = {
+    'qris': '#2196F3',
+    'cash': '#4CAF50',
+    'credit_card': '#9C27B0',
+    'debit_card': '#FF5722',
+    'bank_transfer': '#607D8B',
+    'e_wallet': '#FF9800',
+    'gopay': '#00D982',
+    'ovo': '#4C3DDB',
+    'dana': '#118EEA',
+    'shopeepay': '#EE4D2D'
+  }
+  return colors[method] || '#9E9E9E'
+}
+
+// Color mapping for order types
+const getOrderTypeColor = (type: string) => {
+  const colors: { [key: string]: string } = {
+    'dine_in': '#4CAF50',
+    'take_away': '#FF9800',
+    'delivery': '#2196F3',
+    'pickup': '#9C27B0'
+  }
+  return colors[type] || '#9E9E9E'
 }
 
 // Create charts

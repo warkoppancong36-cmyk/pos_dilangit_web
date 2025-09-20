@@ -271,35 +271,63 @@ class DashboardController extends Controller
         $yesterdayOrders = 0;
         
         try {
-            $todaySales = Order::where('status', '!=', 'cancelled')
-                ->whereNotNull('order_date')
-                ->whereDate('order_date', $today)
-                ->sum('total_amount') ?: 0;
+            // Today sales - only count orders that have been paid
+            $todaySales = DB::table('orders')
+                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
+                ->where('orders.status', '!=', 'cancelled')
+                ->where('orders.status', '!=', 'pending')
+                ->where('payments.status', 'paid')
+                ->whereDate('orders.order_date', $today)
+                ->whereNull('orders.deleted_at')
+                ->sum('orders.total_amount') ?: 0;
                 
-            $yesterdaySales = Order::where('status', '!=', 'cancelled')
-                ->whereNotNull('order_date')
-                ->whereDate('order_date', $yesterday)
-                ->sum('total_amount') ?: 0;
+            // Yesterday sales - only count orders that have been paid
+            $yesterdaySales = DB::table('orders')
+                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
+                ->where('orders.status', '!=', 'cancelled')
+                ->where('orders.status', '!=', 'pending')
+                ->where('payments.status', 'paid')
+                ->whereDate('orders.order_date', $yesterday)
+                ->whereNull('orders.deleted_at')
+                ->sum('orders.total_amount') ?: 0;
 
-            $todayOrders = Order::where('status', '!=', 'cancelled')
-                ->whereNotNull('order_date')
-                ->whereDate('order_date', $today)
+            // Today orders count - only count orders that have been paid
+            $todayOrders = DB::table('orders')
+                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
+                ->where('orders.status', '!=', 'cancelled')
+                ->where('orders.status', '!=', 'pending')
+                ->where('payments.status', 'paid')
+                ->whereDate('orders.order_date', $today)
+                ->whereNull('orders.deleted_at')
                 ->count() ?: 0;
                 
-            $yesterdayOrders = Order::where('status', '!=', 'cancelled')
-                ->whereNotNull('order_date')
-                ->whereDate('order_date', $yesterday)
+            // Yesterday orders count - only count orders that have been paid
+            $yesterdayOrders = DB::table('orders')
+                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
+                ->where('orders.status', '!=', 'cancelled')
+                ->where('orders.status', '!=', 'pending')
+                ->where('payments.status', 'paid')
+                ->whereDate('orders.order_date', $yesterday)
+                ->whereNull('orders.deleted_at')
                 ->count() ?: 0;
                 
-            // Period totals for summary
-            $periodSales = Order::where('status', '!=', 'cancelled')
-                ->whereNotNull('order_date')
-                ->whereBetween('order_date', [$startDate, $endDate])
-                ->sum('total_amount') ?: 0;
+            // Period totals for summary - only count orders that have been paid
+            $periodSales = DB::table('orders')
+                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
+                ->where('orders.status', '!=', 'cancelled')
+                ->where('orders.status', '!=', 'pending')
+                ->where('payments.status', 'paid')
+                ->whereBetween('orders.order_date', [$startDate, $endDate])
+                ->whereNull('orders.deleted_at')
+                ->sum('orders.total_amount') ?: 0;
                 
-            $periodOrders = Order::where('status', '!=', 'cancelled')
-                ->whereNotNull('order_date')
-                ->whereBetween('order_date', [$startDate, $endDate])
+            $periodOrders = DB::table('orders')
+                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
+                ->where('orders.status', '!=', 'cancelled')
+                ->where('orders.status', '!=', 'pending')
+                ->where('payments.status', 'paid')
+                ->whereBetween('orders.order_date', [$startDate, $endDate])
+                ->whereNull('orders.deleted_at')
                 ->count() ?: 0;
                 
             $periodPurchases = Purchase::where('status', '!=', 'cancelled')
@@ -307,15 +335,19 @@ class DashboardController extends Controller
                 ->whereBetween('purchase_date', [$startDate, $endDate])
                 ->sum('total_amount') ?: 0;
                 
-            // Previous period for growth calculation
+            // Previous period for growth calculation - only count orders that have been paid
             $periodLength = $startDate->diffInDays($endDate);
             $prevStartDate = $startDate->copy()->subDays($periodLength + 1);
             $prevEndDate = $startDate->copy()->subDay();
             
-            $prevPeriodSales = Order::where('status', '!=', 'cancelled')
-                ->whereNotNull('order_date')
-                ->whereBetween('order_date', [$prevStartDate, $prevEndDate])
-                ->sum('total_amount') ?: 0;
+            $prevPeriodSales = DB::table('orders')
+                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
+                ->where('orders.status', '!=', 'cancelled')
+                ->where('orders.status', '!=', 'pending')
+                ->where('payments.status', 'paid')
+                ->whereBetween('orders.order_date', [$prevStartDate, $prevEndDate])
+                ->whereNull('orders.deleted_at')
+                ->sum('orders.total_amount') ?: 0;
                 
         } catch (\Exception $e) {
             // Error handling for queries
@@ -360,7 +392,97 @@ class DashboardController extends Controller
             // Error handling for inventory queries
         }
 
-        return [
+        // Payment methods breakdown for today - ONLY PAID SALES TODAY
+        $paymentMethodsToday = [];
+        $totalPaymentsToday = 0;
+        
+        try {
+            $paymentMethodsData = DB::table('payments')
+                ->join('orders', 'payments.id_order', '=', 'orders.id_order')
+                ->select(
+                    'payments.payment_method',
+                    DB::raw('COUNT(DISTINCT orders.id_order) as transaction_count'),
+                    DB::raw('SUM(orders.total_amount) as total_amount')
+                )
+                ->where('orders.status', '!=', 'cancelled')  // Order tidak dibatalkan
+                ->where('orders.status', '!=', 'pending')    // Order tidak pending
+                ->where('payments.status', 'paid')           // Payment sudah dibayar
+                ->whereDate('orders.order_date', $today)     // Hanya hari ini
+                ->whereNull('orders.deleted_at')             // Order tidak dihapus
+                ->groupBy('payments.payment_method')
+                ->orderBy('total_amount', 'desc')
+                ->get();
+                
+            $totalPaymentsToday = $paymentMethodsData->sum('total_amount');
+            
+            $paymentMethodsToday = $paymentMethodsData->map(function ($item) use ($totalPaymentsToday) {
+                $percentage = $totalPaymentsToday > 0 ? round(($item->total_amount / $totalPaymentsToday) * 100, 2) : 0;
+                
+                return [
+                    'payment_method' => $item->payment_method,
+                    'payment_method_formatted' => $this->formatPaymentMethod($item->payment_method),
+                    'transaction_count' => (int) $item->transaction_count,
+                    'total_amount' => floatval($item->total_amount),
+                    'total_amount_formatted' => $this->formatRupiah($item->total_amount),
+                    'percentage' => $percentage
+                ];
+            })->toArray();
+            
+        } catch (\Exception $e) {
+            // Log error untuk debug
+            \Log::error('Error in payment methods query: ' . $e->getMessage());
+            
+            // Return empty data if query fails
+            $paymentMethodsToday = [];
+            $totalPaymentsToday = 0;
+        }
+
+        // Order types breakdown for today - ONLY PAID SALES TODAY
+        $orderTypesToday = [];
+        $totalOrdersAmountToday = 0;
+        
+        try {
+            $orderTypesData = DB::table('orders')
+                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
+                ->select(
+                    'orders.order_type',
+                    DB::raw('COUNT(DISTINCT orders.id_order) as order_count'),
+                    DB::raw('SUM(orders.total_amount) as total_amount')
+                )
+                ->where('orders.status', '!=', 'cancelled')  // Order tidak dibatalkan
+                ->where('orders.status', '!=', 'pending')    // Order tidak pending
+                ->where('payments.status', 'paid')           // Payment sudah dibayar
+                ->whereDate('orders.order_date', $today)     // Hanya hari ini
+                ->whereNull('orders.deleted_at')             // Order tidak dihapus
+                ->groupBy('orders.order_type')
+                ->orderBy('total_amount', 'desc')
+                ->get();
+                
+            $totalOrdersAmountToday = $orderTypesData->sum('total_amount');
+            
+            $orderTypesToday = $orderTypesData->map(function ($item) use ($totalOrdersAmountToday) {
+                $percentage = $totalOrdersAmountToday > 0 ? round(($item->total_amount / $totalOrdersAmountToday) * 100, 2) : 0;
+                
+                return [
+                    'order_type' => $item->order_type,
+                    'order_type_formatted' => $this->formatOrderType($item->order_type),
+                    'order_count' => (int) $item->order_count,
+                    'total_amount' => floatval($item->total_amount),
+                    'total_amount_formatted' => $this->formatRupiah($item->total_amount),
+                    'percentage' => $percentage
+                ];
+            })->toArray();
+            
+        } catch (\Exception $e) {
+            // Log error untuk debug
+            \Log::error('Error in order types query: ' . $e->getMessage());
+            
+            // Return empty data if query fails
+            $orderTypesToday = [];
+            $totalOrdersAmountToday = 0;
+        }
+
+        $result = [
             'today_sales' => [
                 'value' => $todaySales,
                 'growth' => round($salesGrowth, 2),
@@ -375,6 +497,18 @@ class DashboardController extends Controller
                 'value' => $inventoryValue,
                 'low_stock_count' => $lowStockCount
             ],
+            'payment_methods_today' => [
+                'data' => $paymentMethodsToday,
+                'total_amount' => $totalPaymentsToday,
+                'total_amount_formatted' => $this->formatRupiah($totalPaymentsToday),
+                'method_count' => count($paymentMethodsToday)
+            ],
+            'order_types_today' => [
+                'data' => $orderTypesToday,
+                'total_amount' => $totalOrdersAmountToday,
+                'total_amount_formatted' => $this->formatRupiah($totalOrdersAmountToday),
+                'type_count' => count($orderTypesToday)
+            ],
             'period_summary' => [
                 'total_sales' => $periodSales,
                 'total_revenue' => $periodSales, // Alias untuk kompatibilitas frontend
@@ -384,6 +518,16 @@ class DashboardController extends Controller
                 'growth' => round($periodGrowth, 2)
             ]
         ];
+        
+        // DEBUG: Log hasil akhir
+        \Log::info('getSummaryCards result:', [
+            'payment_methods_count' => count($paymentMethodsToday),
+            'order_types_count' => count($orderTypesToday),
+            'payment_total' => $totalPaymentsToday,
+            'order_total' => $totalOrdersAmountToday
+        ]);
+        
+        return $result;
     }
     
     /**
@@ -411,5 +555,49 @@ class DashboardController extends Controller
             ->get();
 
         return $purchaseStatus;
+    }
+
+    /**
+     * Format payment method for display
+     */
+    private function formatPaymentMethod(string $method): string
+    {
+        $methodNames = [
+            'cash' => 'Cash',
+            'credit_card' => 'Credit Card',
+            'debit_card' => 'Debit Card',
+            'qris' => 'QRIS',
+            'bank_transfer' => 'Bank Transfer',
+            'e_wallet' => 'E-Wallet',
+            'gopay' => 'GoPay',
+            'ovo' => 'OVO',
+            'dana' => 'DANA',
+            'shopeepay' => 'ShopeePay'
+        ];
+
+        return $methodNames[$method] ?? ucfirst(str_replace('_', ' ', $method));
+    }
+
+    /**
+     * Format order type for display
+     */
+    private function formatOrderType(string $type): string
+    {
+        $typeNames = [
+            'dine_in' => 'Dine In',
+            'take_away' => 'Take Away',
+            'delivery' => 'Delivery',
+            'pickup' => 'Pickup'
+        ];
+
+        return $typeNames[$type] ?? ucfirst(str_replace('_', ' ', $type));
+    }
+
+    /**
+     * Format amount to Rupiah currency
+     */
+    private function formatRupiah($amount): string
+    {
+        return 'Rp ' . number_format($amount, 0, ',', '.');
     }
 }

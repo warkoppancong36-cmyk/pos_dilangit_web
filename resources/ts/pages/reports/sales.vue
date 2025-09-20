@@ -139,6 +139,88 @@ meta:
           </VCard>
         </VCol>
       </VRow>
+
+      <!-- Payment Methods and Order Types Analytics Cards -->
+      <VRow class="mb-6">
+        <!-- Payment Methods Card -->
+        <VCol cols="12" md="6">
+          <VCard>
+            <VCardTitle class="pb-2">
+              <VIcon icon="mdi-credit-card" class="me-2" />
+              Metode Pembayaran
+            </VCardTitle>
+            <VCardText>
+              <div v-if="paymentMethodData.length > 0">
+                <div 
+                  v-for="(item, index) in paymentMethodData" 
+                  :key="index"
+                  class="d-flex justify-space-between align-center mb-3"
+                >
+                  <div class="d-flex align-center">
+                    <VIcon 
+                      :icon="getPaymentIcon(item.payment_method)" 
+                      :color="getPaymentMethodColor(index)"
+                      class="me-2"
+                    />
+                    <span class="text-body-2">{{ getPaymentLabel(item.payment_method) }}</span>
+                  </div>
+                  <div class="text-end">
+                    <div class="text-body-2 font-weight-bold">{{ item.total_amount_formatted }}</div>
+                    <div class="text-caption text-medium-emphasis">{{ item.order_count }} order</div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- NO DATA STATE -->
+              <div v-else class="text-center py-4">
+                <VIcon icon="mdi-cash-off" size="48" class="text-grey-lighten-1 mb-2" />
+                <div class="text-body-2 text-medium-emphasis">Tidak ada pembayaran hari ini</div>
+                <div class="text-h6 font-weight-bold text-grey">Rp 0</div>
+              </div>
+            </VCardText>
+          </VCard>
+        </VCol>
+
+        <!-- Order Types Card -->
+        <VCol cols="12" md="6">
+          <VCard>
+            <VCardTitle class="pb-2">
+              <VIcon icon="mdi-food" class="me-2" />
+              Tipe Order
+            </VCardTitle>
+            <VCardText>
+              <div v-if="orderTypeData.length > 0">
+                <div 
+                  v-for="(item, index) in orderTypeData" 
+                  :key="index"
+                  class="d-flex justify-space-between align-center mb-3"
+                >
+                  <div class="d-flex align-center">
+                    <VIcon 
+                      icon="mdi-food" 
+                      :color="getOrderTypeColor(index)"
+                      class="me-2"
+                    />
+                    <span class="text-body-2 text-capitalize">{{ item.order_type }}</span>
+                  </div>
+                  <div class="text-end">
+                    <div class="text-body-2 font-weight-bold">{{ item.total_amount_formatted }}</div>
+                    <div class="text-caption text-medium-emphasis">{{ item.order_count }} order</div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- NO DATA STATE -->
+              <div v-else class="text-center py-4">
+                <VIcon icon="mdi-food-off" size="48" class="text-grey-lighten-1 mb-2" />
+                <div class="text-body-2 text-medium-emphasis">Tidak ada pesanan hari ini</div>
+                <div class="text-h6 font-weight-bold text-grey">Rp 0</div>
+              </div>
+            </VCardText>
+          </VCard>
+        </VCol>
+      </VRow>
+
       <VRow class="mb-6">
         <VCol cols="6" md="3">
           <VCard>
@@ -207,7 +289,6 @@ meta:
         </VCol>
       </VRow>
 
-     
 
       <!-- Charts Row - Moved to Top Priority -->
       <VRow class="mb-6">
@@ -493,6 +574,8 @@ const todaySalesData = ref({
   total_orders: 0,
   avg_order_value: 0
 })
+const paymentMethodData = ref<any[]>([])
+const orderTypeData = ref<any[]>([])
 const selectedPeriod = ref('month')
 const selectedMonth = ref('')
 const customStartDate = ref('')
@@ -629,6 +712,40 @@ const getPaymentLabel = (method: string) => {
   }
 }
 
+// Color mapping for payment methods
+const getPaymentMethodColor = (index: number): string => {
+  const colors = [
+    '#1976D2', // Blue
+    '#388E3C', // Green
+    '#F57C00', // Orange
+    '#7B1FA2', // Purple
+    '#D32F2F', // Red
+    '#303F9F', // Indigo
+    '#00796B', // Teal
+    '#F57F17', // Yellow
+    '#5D4037', // Brown
+    '#616161'  // Grey
+  ]
+  return colors[index % colors.length]
+}
+
+// Color mapping for order types
+const getOrderTypeColor = (index: number): string => {
+  const colors = [
+    '#2E7D32', // Dark Green
+    '#1565C0', // Dark Blue
+    '#E65100', // Dark Orange
+    '#6A1B9A', // Dark Purple
+    '#C62828', // Dark Red
+    '#283593', // Dark Indigo
+    '#00695C', // Dark Teal
+    '#F9A825', // Dark Yellow
+    '#4E342E', // Dark Brown
+    '#424242'  // Dark Grey
+  ]
+  return colors[index % colors.length]
+}
+
 // Daily sales calculation functions
 const getDailyTotalSales = () => {
   // Use data from API if available
@@ -742,6 +859,10 @@ const loadReportData = async () => {
       // Load today's sales data
       await loadTodaySales()
       
+      // Load analytics data
+      await loadPaymentMethodAnalytics()
+      await loadOrderTypeAnalytics()
+      
       await nextTick()
       // Add delay to ensure DOM is ready
       setTimeout(() => {
@@ -771,6 +892,40 @@ const loadTodaySales = async () => {
       total_orders: 0,
       avg_order_value: 0
     }
+  }
+}
+
+// Load payment method analytics
+const loadPaymentMethodAnalytics = async () => {
+  try {
+    const response = await axios.get('/api/reports/payment-methods')
+    console.log('Payment Methods Response:', response.data)
+    
+    if (response.data.success) {
+      paymentMethodData.value = response.data.data || []
+    } else {
+      paymentMethodData.value = []
+    }
+  } catch (error) {
+    console.error('Error loading payment method analytics:', error)
+    paymentMethodData.value = []
+  }
+}
+
+// Load order type analytics  
+const loadOrderTypeAnalytics = async () => {
+  try {
+    const response = await axios.get('/api/reports/order-types')
+    console.log('Order Types Response:', response.data)
+    
+    if (response.data.success) {
+      orderTypeData.value = response.data.data || []
+    } else {
+      orderTypeData.value = []
+    }
+  } catch (error) {
+    console.error('Error loading order type analytics:', error)
+    orderTypeData.value = []
   }
 }
 

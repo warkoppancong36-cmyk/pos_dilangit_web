@@ -885,4 +885,110 @@ class ReportController extends Controller
             return $this->serverErrorResponse('Failed to retrieve today\'s sales: ' . $e->getMessage());
         }
     }
+
+    /**
+     * Get payment methods analytics for today
+     */
+    public function paymentMethods(): JsonResponse
+    {
+        try {
+            $today = Carbon::today();
+            
+            // Get payment methods breakdown for today only - paid orders
+            $paymentMethods = DB::table('orders')
+                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
+                ->select(
+                    'payments.payment_method',
+                    DB::raw('COUNT(DISTINCT orders.id_order) as order_count'),
+                    DB::raw('SUM(orders.total_amount) as total_amount')
+                )
+                ->where('orders.status', '!=', 'cancelled')
+                ->where('payments.status', 'paid')
+                ->whereDate('orders.order_date', $today)
+                ->groupBy('payments.payment_method')
+                ->orderBy('total_amount', 'desc')
+                ->get();
+
+            // Format the data
+            $formattedData = $paymentMethods->map(function ($item) {
+                return [
+                    'payment_method' => $item->payment_method,
+                    'order_count' => $item->order_count,
+                    'total_amount' => floatval($item->total_amount),
+                    'total_amount_formatted' => $this->formatRupiah($item->total_amount)
+                ];
+            });
+
+            // Calculate summary
+            $summary = [
+                'total_amount' => $formattedData->sum('total_amount'),
+                'total_amount_formatted' => $this->formatRupiah($formattedData->sum('total_amount')),
+                'method_count' => $formattedData->count(),
+                'total_orders' => $formattedData->sum('order_count')
+            ];
+
+            return $this->successResponse([
+                'data' => $formattedData->toArray(),
+                'summary' => $summary,
+                'date' => $today->format('Y-m-d'),
+                'date_formatted' => $today->format('d M Y')
+            ], 'Payment methods analytics retrieved successfully');
+
+        } catch (\Exception $e) {
+            return $this->serverErrorResponse('Failed to retrieve payment methods analytics: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Get order types analytics for today
+     */
+    public function orderTypes(): JsonResponse
+    {
+        try {
+            $today = Carbon::today();
+            
+            // Get order types breakdown for today only - paid orders
+            $orderTypes = DB::table('orders')
+                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
+                ->select(
+                    'orders.order_type',
+                    DB::raw('COUNT(DISTINCT orders.id_order) as order_count'),
+                    DB::raw('SUM(orders.total_amount) as total_amount')
+                )
+                ->where('orders.status', '!=', 'cancelled')
+                ->where('payments.status', 'paid')
+                ->whereDate('orders.order_date', $today)
+                ->groupBy('orders.order_type')
+                ->orderBy('total_amount', 'desc')
+                ->get();
+
+            // Format the data
+            $formattedData = $orderTypes->map(function ($item) {
+                return [
+                    'order_type' => $item->order_type ?: 'Unknown',
+                    'order_count' => $item->order_count,
+                    'total_amount' => floatval($item->total_amount),
+                    'total_amount_formatted' => $this->formatRupiah($item->total_amount)
+                ];
+            });
+
+            // Calculate summary
+            $summary = [
+                'total_amount' => $formattedData->sum('total_amount'),
+                'total_amount_formatted' => $this->formatRupiah($formattedData->sum('total_amount')),
+                'type_count' => $formattedData->count(),
+                'total_orders' => $formattedData->sum('order_count')
+            ];
+
+            return $this->successResponse([
+                'data' => $formattedData->toArray(),
+                'summary' => $summary,
+                'date' => $today->format('Y-m-d'),
+                'date_formatted' => $today->format('d M Y')
+            ], 'Order types analytics retrieved successfully');
+
+        } catch (\Exception $e) {
+            return $this->serverErrorResponse('Failed to retrieve order types analytics: ' . $e->getMessage());
+        }
+    }
 }
