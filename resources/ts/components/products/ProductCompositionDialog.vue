@@ -298,7 +298,7 @@
                 
                 <VListItemSubtitle>
                   <div class="d-flex align-center gap-4 mt-1">
-                    <span>Dibutuhkan: {{ parseFloat(item.quantity_needed) }} {{ item.unit }}</span>
+                    <span>Dibutuhkan: {{ parseFloat(item.quantity_needed.toString()) }} {{ item.unit }}</span>
                     <span v-if="item.item?.inventory" :class="item.item.inventory.current_stock >= item.quantity_needed ? 'text-success' : 'text-error'">
                       Stok: {{ item.item.inventory.current_stock }} {{ item.unit }}
                     </span>
@@ -439,6 +439,8 @@ interface Product {
   name: string
   sku?: string
   price?: number
+  hpp?: number
+  cost?: number
   image_url?: string
   id?: string // for backward compatibility
   product_name?: string // for backward compatibility
@@ -456,6 +458,7 @@ interface AvailableItem {
 interface NewItemForm {
   itemId: string | number | null
   quantity: number
+  unit: string
   isCritical: boolean
 }
 
@@ -463,6 +466,7 @@ interface ProductItemFormData {
   product_id: number
   item_id: number
   quantity_needed: number
+  unit: string
   is_critical: boolean
   notes: string
 }
@@ -535,6 +539,7 @@ const productMarginPercentage = computed(() => {
 const newItem = ref<NewItemForm>({
   itemId: null as string | number | null,
   quantity: 1,
+  unit: 'pcs',
   isCritical: false
 })
 
@@ -807,9 +812,17 @@ const updateItem = () => {
   const selectedItem = availableItems.value.find(item => item.id === newItem.value.itemId)
   if (!selectedItem) return
 
+  // Get the current item being edited
+  const currentItem = compositionItems.value[editIndex.value]
+  
+  // Check if the item itself has changed (different item_id)
+  const hasItemChanged = currentItem.item?.id !== selectedItem.id
+  
   // Update the item
   compositionItems.value[editIndex.value] = {
     ...compositionItems.value[editIndex.value],
+    // If item has changed, reset id_product_item to force create new record
+    id_product_item: hasItemChanged ? `temp_${Date.now()}` : currentItem.id_product_item,
     item: {
       id: String(selectedItem.id),
       name: selectedItem.name,
@@ -889,6 +902,7 @@ const saveComposition = async () => {
         product_id: productId,
         item_id: parseInt(item.item?.id || '0'),
         quantity_needed: parseFloat(item.quantity_needed.toString()), // Ensure decimal is preserved
+        unit: item.unit || '',
         is_critical: item.is_critical,
         notes: item.notes || ''
       }
