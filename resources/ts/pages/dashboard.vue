@@ -107,6 +107,9 @@ meta:
                 <div class="text-caption text-medium-emphasis">
                   {{ (summaryData.today_sales?.growth ?? 0) >= 0 ? '+' : '' }}{{ summaryData.today_sales?.growth ?? 0 }}% dari kemarin
                 </div>
+                <div class="text-caption text-medium-emphasis mt-1">
+                  {{ (summaryData.today_sales?.weekly_growth ?? 0) >= 0 ? '+' : '' }}{{ summaryData.today_sales?.weekly_growth ?? 0 }}% dari minggu lalu
+                </div>
               </div>
               <VIcon icon="mdi-cash-multiple" size="48" class="text-info" />
             </VCardText>
@@ -353,8 +356,8 @@ const formatCurrency = (value: number) => {
 // Types
 interface DashboardData {
   summary: {
-    today_sales?: { value: number; growth: number }
-    today_orders?: { value: number; growth: number }
+    today_sales?: { value: number; growth: number; weekly_growth: number }
+    today_orders?: { value: number; growth: number; weekly_growth: number }
     inventory_value?: { value: number; low_stock_count: number }
     period_summary?: { avg_order_value: number; total_orders: number }
     payment_methods_today?: {

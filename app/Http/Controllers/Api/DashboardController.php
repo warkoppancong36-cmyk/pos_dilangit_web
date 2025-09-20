@@ -310,6 +310,27 @@ class DashboardController extends Controller
                 ->whereDate('orders.order_date', $yesterday)
                 ->whereNull('orders.deleted_at')
                 ->count() ?: 0;
+
+            // Last week same day sales (7 days ago) - for weekly comparison
+            $lastWeekSameDay = $today->copy()->subDays(7);
+            $lastWeekSales = DB::table('orders')
+                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
+                ->where('orders.status', '!=', 'cancelled')
+                ->where('orders.status', '!=', 'pending')
+                ->where('payments.status', 'paid')
+                ->whereDate('orders.order_date', $lastWeekSameDay)
+                ->whereNull('orders.deleted_at')
+                ->sum('orders.total_amount') ?: 0;
+
+            // Last week same day orders count
+            $lastWeekOrders = DB::table('orders')
+                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
+                ->where('orders.status', '!=', 'cancelled')
+                ->where('orders.status', '!=', 'pending')
+                ->where('payments.status', 'paid')
+                ->whereDate('orders.order_date', $lastWeekSameDay)
+                ->whereNull('orders.deleted_at')
+                ->count() ?: 0;
                 
             // Period totals for summary - only count orders that have been paid
             $periodSales = DB::table('orders')
@@ -354,18 +375,36 @@ class DashboardController extends Controller
         }
 
         // Set default values if no real data exists
-        if ($todaySales == 0 && $yesterdaySales == 0) {
+        if ($todaySales == 0 && $yesterdaySales == 0 && $lastWeekSales == 0) {
             $todaySales = 2500000; // Rp 2.5 juta
             $yesterdaySales = 2200000; // Rp 2.2 juta
+            $lastWeekSales = 2100000; // Rp 2.1 juta (minggu lalu)
         }
 
-        if ($todayOrders == 0 && $yesterdayOrders == 0) {
+        if ($todayOrders == 0 && $yesterdayOrders == 0 && $lastWeekOrders == 0) {
             $todayOrders = 45;
             $yesterdayOrders = 38;
+            $lastWeekOrders = 35; // minggu lalu
         }
 
         $salesGrowth = $yesterdaySales > 0 ? (($todaySales - $yesterdaySales) / $yesterdaySales * 100) : 13.64;
         $ordersGrowth = $yesterdayOrders > 0 ? (($todayOrders - $yesterdayOrders) / $yesterdayOrders * 100) : 18.42;
+        
+        // Calculate weekly growth (vs same day last week)
+        $weeklySalesGrowth = 0;
+        $weeklyOrdersGrowth = 0;
+        
+        if ($lastWeekSales > 0) {
+            $weeklySalesGrowth = (($todaySales - $lastWeekSales) / $lastWeekSales) * 100;
+        } else if ($todaySales > 0) {
+            $weeklySalesGrowth = 100; // If no sales last week but sales today, 100% growth
+        }
+        
+        if ($lastWeekOrders > 0) {
+            $weeklyOrdersGrowth = (($todayOrders - $lastWeekOrders) / $lastWeekOrders) * 100;
+        } else if ($todayOrders > 0) {
+            $weeklyOrdersGrowth = 100; // If no orders last week but orders today, 100% growth
+        }
         
         // Calculate period growth
         $periodGrowth = 0;
@@ -486,12 +525,16 @@ class DashboardController extends Controller
             'today_sales' => [
                 'value' => $todaySales,
                 'growth' => round($salesGrowth, 2),
-                'yesterday' => $yesterdaySales
+                'weekly_growth' => round($weeklySalesGrowth, 2),
+                'yesterday' => $yesterdaySales,
+                'last_week_same_day' => $lastWeekSales
             ],
             'today_orders' => [
                 'value' => $todayOrders,
                 'growth' => round($ordersGrowth, 2),
-                'yesterday' => $yesterdayOrders
+                'weekly_growth' => round($weeklyOrdersGrowth, 2),
+                'yesterday' => $yesterdayOrders,
+                'last_week_same_day' => $lastWeekOrders
             ],
             'inventory_value' => [
                 'value' => $inventoryValue,
