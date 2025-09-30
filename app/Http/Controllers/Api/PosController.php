@@ -694,7 +694,7 @@ class PosController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'payment_method' => 'required|in:cash,card,kartu,credit_card,debit_card,digital_wallet,ewallet,bank_transfer,qris,gopay,grab,ovo,dana,shopee,gojek,other',
+            'payment_method' => 'required|in:cash,card,kartu,credit_card,debit_card,digital_wallet,ewallet,bank_transfer,qris,gopay,grabfood,ovo,dana,shopeefood,gofood,other',
             'amount' => 'required|numeric|min:0',
             'reference_number' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:255',
@@ -986,7 +986,7 @@ class PosController extends Controller
             'status' => 'required|in:pending,preparing,ready,completed,cancelled,paid',
             'discount_amount' => 'nullable|numeric|min:0',
             'tax_amount' => 'nullable|numeric|min:0',
-            'payment_method' => 'nullable|string|in:cash,card,credit_card,debit_card,kartu,qris,digital_wallet,ewallet,gopay,grabpay,ovo,dana,shopeepay,bank_transfer',
+            'payment_method' => 'nullable|string|in:cash,card,credit_card,debit_card,kartu,qris,digital_wallet,ewallet,gopay,grabpay,ovo,dana,shopeepay,bank_transfer,gofood,grabfood,shopeefood,other',
             'paid_amount' => 'nullable|numeric|min:0',
         ]);
 
@@ -1486,7 +1486,7 @@ class PosController extends Controller
             'order_type' => 'required|string|in:dine_in,takeaway,delivery',
             'customer_id' => 'nullable|integer|exists:customers,id_customer',
             'table_number' => 'nullable|max:50', // Accept both string and integer
-            'payment_method' => 'required|string|in:cash,card,kartu,qris,digital_wallet,ewallet,bank_transfer,pending,tunai,gopay,grabpay,shopeepay', // Added online payment methods
+            'payment_method' => 'required|string|in:cash,card,kartu,qris,digital_wallet,ewallet,bank_transfer,pending,tunai,gopay,grabpay,shopeepay,ovo,dana,gofood,grabfood,shopeefood', // Added online payment methods
             'subtotal_amount' => 'required|numeric|min:0',
             'discount_amount' => 'nullable|numeric|min:0',
             'discount_type' => 'nullable|string|in:amount,percentage,none', // Added 'none' for Flutter compatibility
