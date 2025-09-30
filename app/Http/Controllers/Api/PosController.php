@@ -10,10 +10,12 @@ use App\Models\Product;
 use App\Models\ProductItem;
 // use App\Models\Variant; // DISABLED - Variant system removed
 use App\Models\Customer;
+use App\Models\Category;
 use App\Models\Inventory;
 use App\Models\InventoryMovement;
 use App\Models\CashTransaction;
 use App\Models\CashRegister;
+use App\Exports\OrdersExport;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -88,6 +90,12 @@ class PosController extends Controller
     public function getOrders(Request $request): JsonResponse
     {
         try {
+            // Log request parameters for debugging
+            \Log::info('POS getOrders request parameters:', $request->all());
+            
+            // Enable query logging for debugging
+            \DB::enableQueryLog();
+            
             $query = Order::with(['customer', 'user', 'orderItems.product', 'payments'])
                 ->orderBy('created_at', 'desc');
 
@@ -112,36 +120,96 @@ class PosController extends Controller
                 $query->where('table_number', 'like', "%{$request->table_number}%");
             }
 
-            // Date range filter
-            if ($request->has('date_from')) {
+            // Category filter - filter by product category
+            if ($request->filled('category_id')) {
+                $query->whereHas('orderItems.product', function($q) use ($request) {
+                    $q->where('id_category', $request->category_id);
+                });
+            }
+
+            // Payment method filter
+            if ($request->filled('payment_method')) {
+                $query->whereHas('payments', function($q) use ($request) {
+                    $q->where('payment_method', $request->payment_method);
+                });
+            }
+
+            // Payment status filter
+            if ($request->filled('payment_status')) {
+                $paymentStatus = $request->payment_status;
+                if ($paymentStatus === 'paid') {
+                    // Filter orders that are fully paid
+                    $query->whereRaw('(
+                        SELECT COALESCE(SUM(amount), 0) 
+                        FROM payments 
+                        WHERE payments.id_order = orders.id_order 
+                        AND payments.status = "completed"
+                    ) >= orders.total_amount');
+                } elseif ($paymentStatus === 'unpaid') {
+                    // Filter orders that are not fully paid
+                    $query->whereRaw('(
+                        SELECT COALESCE(SUM(amount), 0) 
+                        FROM payments 
+                        WHERE payments.id_order = orders.id_order 
+                        AND payments.status = "completed"
+                    ) < orders.total_amount');
+                } elseif ($paymentStatus === 'pending') {
+                    // Filter orders with pending payments
+                    $query->whereHas('payments', function($q) {
+                        $q->where('status', 'pending');
+                    });
+                }
+            }
+
+            // Date range filter - only apply if not empty
+            if ($request->filled('date_from')) {
+                \Log::info('Filtering date_from:', ['date_from' => $request->date_from]);
                 $query->whereDate('created_at', '>=', $request->date_from);
             }
 
-            if ($request->has('date_to')) {
+
+            if ($request->filled('date_to')) {
+                \Log::info('Filtering date_to:', ['date_to' => $request->date_to]);
                 $query->whereDate('created_at', '<=', $request->date_to);
             }
 
-            // Default to last 30 days if no date filter
-            if (!$request->has('date_from') && !$request->has('date_to')) {
+            // Handle pagination - support 'all' or large numbers to get all records
+            $perPage = $request->get('per_page', 50);
+
+            // Apply default 30 days filter ONLY for regular display (not export)
+            // Export should respect exact user filters, including empty dates
+            $isExport = $perPage === 'all' || (is_numeric($perPage) && $perPage >= 999999);
+
+            if (!$isExport && !$request->has('date_from') && !$request->has('date_to')) {
+                \Log::info('Regular display - No date parameters - applying default 30 days filter');
                 $query->whereDate('created_at', '>=', now()->subDays(30));
+            } elseif ($isExport) {
+                \Log::info('Export mode - respecting exact user date filters (may be empty)');
+            } else {
+                \Log::info('Regular display - Date parameters present - not applying default filter');
             }
 
-            // Handle pagination - support 'all' to get all records
-            $perPage = $request->get('per_page', 50);
-            if ($perPage === 'all') {
+            if ($perPage === 'all' || (is_numeric($perPage) && $perPage >= 999999)) {
+                \Log::info('Getting all records without pagination', ['per_page' => $perPage]);
                 $orders = $query->get();
                 // Convert to paginator-like structure for consistency
+                $totalCount = $orders->count();
                 $orders = new \Illuminate\Pagination\LengthAwarePaginator(
                     $orders,
-                    $orders->count(),
-                    $orders->count(),
+                    $totalCount,
+                    max($totalCount, 1), // Prevent division by zero - minimum 1
                     1,
                     ['path' => request()->url(), 'pageName' => 'page']
                 );
             } else {
+                \Log::info('Using pagination', ['per_page' => $perPage]);
                 $orders = $query->paginate($perPage);
             }
 
+            // Log the SQL queries for debugging
+            $queries = \DB::getQueryLog();
+            \Log::info('SQL queries executed:', $queries);
+            
             // Add daily order sequence to each order and transform order items
             $orders->getCollection()->transform(function ($order) {
                 $order->daily_order_sequence = $order->getDailyOrderSequence();
@@ -626,7 +694,7 @@ class PosController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'payment_method' => 'required|in:cash,card,kartu,credit_card,debit_card,digital_wallet,ewallet,bank_transfer,qris,gopay,ovo,dana,shopeepay,other',
+            'payment_method' => 'required|in:cash,card,kartu,credit_card,debit_card,digital_wallet,ewallet,bank_transfer,qris,gopay,grab,ovo,dana,shopee,gojek,other',
             'amount' => 'required|numeric|min:0',
             'reference_number' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:255',
@@ -918,7 +986,7 @@ class PosController extends Controller
             'status' => 'required|in:pending,preparing,ready,completed,cancelled,paid',
             'discount_amount' => 'nullable|numeric|min:0',
             'tax_amount' => 'nullable|numeric|min:0',
-            'payment_method' => 'nullable|string|in:cash,card,credit_card,debit_card,kartu,qris,digital_wallet,ewallet,gopay,ovo,dana,shopeepay,bank_transfer',
+            'payment_method' => 'nullable|string|in:cash,card,credit_card,debit_card,kartu,qris,digital_wallet,ewallet,gopay,grabpay,ovo,dana,shopeepay,bank_transfer',
             'paid_amount' => 'nullable|numeric|min:0',
         ]);
 
@@ -1418,7 +1486,7 @@ class PosController extends Controller
             'order_type' => 'required|string|in:dine_in,takeaway,delivery',
             'customer_id' => 'nullable|integer|exists:customers,id_customer',
             'table_number' => 'nullable|max:50', // Accept both string and integer
-            'payment_method' => 'required|string|in:cash,card,kartu,qris,digital_wallet,ewallet,bank_transfer,pending,tunai', // Added 'tunai' and 'ewallet'
+            'payment_method' => 'required|string|in:cash,card,kartu,qris,digital_wallet,ewallet,bank_transfer,pending,tunai,gopay,grabpay,shopeepay', // Added online payment methods
             'subtotal_amount' => 'required|numeric|min:0',
             'discount_amount' => 'nullable|numeric|min:0',
             'discount_type' => 'nullable|string|in:amount,percentage,none', // Added 'none' for Flutter compatibility
@@ -2201,6 +2269,7 @@ class PosController extends Controller
             'qris' => 'QRIS',
             'digital_wallet' => 'Dompet Digital',
             'gopay' => 'GoPay',
+            'grabpay' => 'GrabPay',
             'ovo' => 'OVO',
             'dana' => 'DANA',
             'shopeepay' => 'ShopeePay',
@@ -2260,5 +2329,89 @@ class PosController extends Controller
         ];
 
         return $labels[$status] ?? ucfirst($status);
+    }
+
+    /**
+     * Get all categories for filter dropdown
+     */
+    public function getCategories(): JsonResponse
+    {
+        try {
+            $categories = \App\Models\Category::active()->get(['id_category', 'name']);
+            return $this->successResponse($categories, 'Categories retrieved successfully');
+        } catch (\Exception $e) {
+            return $this->serverErrorResponse('Failed to retrieve categories: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Export orders to Excel
+     */
+    public function exportOrders(Request $request)
+    {
+        try {
+            $query = Order::with(['customer', 'user', 'orderItems.product', 'payments'])
+                ->orderBy('created_at', 'desc');
+
+            // Apply same filters as getOrders method
+            if ($request->has('search')) {
+                $search = $request->search;
+                $query->where(function($q) use ($search) {
+                    $q->where('order_number', 'like', "%{$search}%")
+                      ->orWhereHas('customer', function($cq) use ($search) {
+                          $cq->where('name', 'like', "%{$search}%");
+                      });
+                });
+            }
+
+            if ($request->has('status')) {
+                $query->where('status', $request->status);
+            }
+
+            if ($request->filled('table_number')) {
+                $query->where('table_number', 'like', "%{$request->table_number}%");
+            }
+
+            if ($request->filled('category_id')) {
+                $query->whereHas('orderItems.product', function($q) use ($request) {
+                    $q->where('id_category', $request->category_id);
+                });
+            }
+
+            if ($request->filled('payment_method')) {
+                $query->whereHas('payments', function($q) use ($request) {
+                    $q->where('payment_method', $request->payment_method);
+                });
+            }
+
+            if ($request->has('date_from')) {
+                $query->whereDate('created_at', '>=', $request->date_from);
+            }
+
+            if ($request->has('date_to')) {
+                $query->whereDate('created_at', '<=', $request->date_to);
+            }
+
+            if (!$request->has('date_from') && !$request->has('date_to')) {
+                $query->whereDate('created_at', '>=', now()->subDays(30));
+            }
+
+            $orders = $query->get();
+
+            // Generate filename with timestamp
+            $filename = 'riwayat-transaksi-' . now()->format('Y-m-d-H-i-s') . '.xls';
+
+            // Export to Excel using XML format
+            $export = new OrdersExport($orders);
+            $excelContent = $export->generateExcelXML();
+
+            return response($excelContent)
+                ->header('Content-Type', 'application/vnd.ms-excel; charset=UTF-8')
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"')
+                ->header('Cache-Control', 'max-age=0');
+
+        } catch (\Exception $e) {
+            return $this->serverErrorResponse('Failed to export orders: ' . $e->getMessage());
+        }
     }
 }

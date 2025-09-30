@@ -70,7 +70,7 @@ export interface TransactionItem {
 export interface Payment {
   id_payment: number
   id_order: number
-  payment_method: 'cash' | 'card' | 'digital_wallet' | 'bank_transfer' | 'qris' | 'other'
+  payment_method: 'cash' | 'card' | 'digital_wallet' | 'bank_transfer' | 'qris' | 'gopay' | 'gojek' | 'grab' | 'shopee' | 'other'
   amount: number
   reference_number?: string
   status: 'pending' | 'completed' | 'failed' | 'cancelled'
@@ -191,7 +191,7 @@ export interface ApplyTaxData {
 }
 
 export interface ProcessPaymentData {
-  payment_method: 'cash' | 'card' | 'digital_wallet' | 'bank_transfer' | 'qris' | 'other'
+  payment_method: 'cash' | 'card' | 'digital_wallet' | 'bank_transfer' | 'qris' | 'gopay' | 'grabpay' | 'shopeepay' | 'other'
   amount: number
   reference_number?: string
   notes?: string
@@ -398,8 +398,10 @@ export class PosApi {
   static async getOrders(params?: {
     search?: string
     status?: string
-    from_date?: string
-    to_date?: string
+    category_id?: string
+    payment_method?: string
+    date_from?: string
+    date_to?: string
     per_page?: number
     page?: number
   }): Promise<ApiResponse<Order[]>> {
@@ -407,6 +409,232 @@ export class PosApi {
       const response = await axios.get(`${API_BASE_URL}/orders/history`, { params })
       return response.data
     } catch (error: any) {
+      throw error.response?.data || this.handleError(error)
+    }
+  }
+
+  // Get categories for filter dropdown
+  static async getCategories(): Promise<ApiResponse<any[]>> {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/orders/categories`)
+      return response.data
+    } catch (error: any) {
+      throw error.response?.data || this.handleError(error)
+    }
+  }
+
+  // Export orders to Excel
+  // Get all orders for export (not paginated)
+  static async getAllOrdersForExport(params?: {
+    search?: string
+    status?: string
+    category_id?: string
+    payment_status?: string
+    start_date?: string
+    end_date?: string
+  }) {
+    try {
+      const exportParams: any = {
+        per_page: 'all', // Get all data - use string to match backend logic
+        page: 1
+      }
+
+      // Map parameters to match backend API expectations
+      if (params?.search) exportParams.search = params.search
+      if (params?.status) exportParams.status = params.status
+      if (params?.category_id) exportParams.category_id = params.category_id
+      if (params?.payment_status) exportParams.payment_status = params.payment_status
+
+      // Always send date parameters to prevent backend default filter
+      // Map date parameters: start_date/end_date -> date_from/date_to
+      exportParams.date_from = params?.start_date || ''
+      exportParams.date_to = params?.end_date || ''
+
+      console.log('🔍 Export API parameters sent to backend:', exportParams)
+      console.log('🔍 Original params received:', params)
+
+      const response = await axios.get(`${API_BASE_URL}/orders/history`, {
+        params: exportParams
+      })
+
+      return response.data.data || []
+    } catch (error: any) {
+      console.error('Get all orders error:', error)
+      throw error.response?.data || this.handleError(error)
+    }
+  }
+
+  // Export orders to Excel using xlsx library (like inventory-management)
+  static async exportOrdersToExcel(params?: {
+    search?: string
+    status?: string
+    category_id?: string
+    payment_status?: string
+    start_date?: string
+    end_date?: string
+  }) {
+    try {
+      console.log('🚀 Starting POS export to Excel...')
+
+      // Get all orders data
+      const ordersData = await this.getAllOrdersForExport(params)
+      console.log('📊 Exporting', ordersData.length, 'orders to Excel')
+
+      // Dynamic import for better performance
+      const XLSX = await import('xlsx')
+
+      // Calculate summary statistics
+      const totalOrders = ordersData.length
+      const totalAmount = ordersData.reduce((sum: number, order: any) =>
+        sum + (parseFloat(order.total_amount) || 0), 0
+      )
+      const paidOrders = ordersData.filter((order: any) =>
+        order.payment_status === 'paid'
+      ).length
+      const unpaidOrders = ordersData.filter((order: any) =>
+        order.payment_status === 'unpaid' || order.payment_status === 'pending'
+      ).length
+
+      // Prepare clean data for export
+      const exportData = ordersData.map((order: any, index: number) => ({
+        'No': index + 1,
+        'ID Order': order.id,
+        'Tanggal': order.created_at ? new Date(order.created_at).toLocaleDateString('id-ID') : '-',
+        'Waktu': order.created_at ? new Date(order.created_at).toLocaleTimeString('id-ID') : '-',
+        'Customer': order.customer?.name || 'Walk-in Customer',
+        'Kategori': order.order_items?.[0]?.product?.category?.name || '-',
+        'Total Amount': parseFloat(order.total_amount) || 0,
+        'Status Pembayaran': order.payment_status === 'paid' ? 'Lunas' :
+          order.payment_status === 'pending' ? 'Pending' : 'Belum Lunas',
+        'Metode Pembayaran': order.payments?.[0]?.payment_method || '-',
+        'Jumlah Item': order.order_items?.length || 0,
+        'Catatan': order.notes || '-'
+      }))
+
+      // Create workbook and worksheet
+      const workbook = XLSX.utils.book_new()
+
+      // Create title and summary data
+      const filterInfo = []
+      if (params?.search) {
+        filterInfo.push(`Pencarian: "${params.search}"`)
+      }
+      if (params?.category_id) {
+        filterInfo.push(`Kategori: ID ${params.category_id}`)
+      }
+      if (params?.payment_status && params.payment_status !== 'all') {
+        const statusLabels = {
+          paid: 'Lunas',
+          unpaid: 'Belum Lunas',
+          pending: 'Pending'
+        }
+        filterInfo.push(`Status Pembayaran: ${statusLabels[params.payment_status as keyof typeof statusLabels] || params.payment_status}`)
+      }
+      if (params?.start_date || params?.end_date) {
+        const dateRange = []
+        if (params.start_date) dateRange.push(`Dari: ${params.start_date}`)
+        if (params.end_date) dateRange.push(`Sampai: ${params.end_date}`)
+        filterInfo.push(`Periode: ${dateRange.join(' ')}`)
+      }
+
+      const titleData = [
+        ['LAPORAN RIWAYAT TRANSAKSI POS'],
+        ['Tanggal Export:', new Date().toLocaleDateString('id-ID', {
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        })],
+        ['Total Transaksi:', totalOrders],
+        ['Total Amount:', `Rp ${totalAmount.toLocaleString('id-ID')}`],
+        ['Transaksi Lunas:', paidOrders],
+        ['Transaksi Belum Lunas:', unpaidOrders],
+        ['Filter Diterapkan:', filterInfo.length > 0 ? filterInfo.join(', ') : 'Semua Data'],
+        [], // Empty row
+      ]
+
+      // Create worksheet starting with title
+      const worksheet = XLSX.utils.aoa_to_sheet(titleData)
+
+      // Add main data starting from row 9 (after title and summary)
+      XLSX.utils.sheet_add_json(worksheet, exportData, { origin: 'A9' })
+
+      // Set column widths
+      const columnWidths = [
+        { wch: 5 },   // No
+        { wch: 10 },  // ID Order
+        { wch: 12 },  // Tanggal
+        { wch: 10 },  // Waktu
+        { wch: 20 },  // Customer
+        { wch: 15 },  // Kategori
+        { wch: 15 },  // Total Amount
+        { wch: 15 },  // Status Pembayaran
+        { wch: 15 },  // Metode Pembayaran
+        { wch: 10 },  // Jumlah Item
+        { wch: 20 },  // Catatan
+      ]
+      worksheet['!cols'] = columnWidths
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Transaction History')
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+      const filename = `pos-riwayat-transaksi-${timestamp}.xlsx`
+
+      // Download file
+      XLSX.writeFile(workbook, filename)
+
+      console.log('✅ Excel file generated successfully:', filename)
+
+      return {
+        success: true,
+        filename,
+        totalRecords: totalOrders,
+        totalAmount
+      }
+
+    } catch (error: any) {
+      console.error('Export to Excel error:', error)
+      throw error.response?.data || this.handleError(error)
+    }
+  }
+
+  static async exportOrders(params?: {
+    search?: string
+    status?: string
+    category_id?: string
+    payment_method?: string
+    date_from?: string
+    date_to?: string
+  }): Promise<void> {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/orders/export`, {
+        params,
+        responseType: 'blob' // Important for file download
+      })
+
+      // Create blob link to download
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+
+      // Get filename from response headers or use default
+      const contentDisposition = response.headers['content-disposition']
+      let filename = 'riwayat-transaksi.xlsx'
+
+      if (contentDisposition) {
+        const fileNameMatch = contentDisposition.match(/filename="?(.+)"?/)
+        if (fileNameMatch) {
+          filename = fileNameMatch[1]
+        }
+      }
+
+      link.setAttribute('download', filename)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+
+    } catch (error: any) {
+      console.error('Export error:', error)
       throw error.response?.data || this.handleError(error)
     }
   }

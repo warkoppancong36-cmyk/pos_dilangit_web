@@ -619,12 +619,6 @@ const paymentMethods = [
     description: 'Pembayaran dengan uang cash'
   },
   {
-    value: 'card',
-    title: 'Debit/Credit Card',
-    icon: 'mdi-credit-card',
-    description: 'Debit/Credit Card'
-  },
-  {
     value: 'qris',
     title: 'QRIS',
     icon: 'mdi-qrcode-scan',
@@ -637,9 +631,33 @@ const paymentMethods = [
     description: 'GoPay, OVO, DANA, dll'
   },
   {
+    value: 'gojek',
+    title: 'Gojek',
+    icon: 'mdi-wallet',
+    description: 'Pembayaran melalui Gojek/GoFood'
+  },
+  {
+    value: 'Grab',
+    title: 'Grab',
+    icon: 'mdi-wallet',
+    description: 'Pembayaran melalui Grab/GrabFood'
+  },
+  {
+    value: 'Shopee',
+    title: 'Shopee',
+    icon: 'mdi-wallet',
+    description: 'Pembayaran melalui Shopee/ShopeeFood'
+  },
+  {
+    value: 'card',
+    title: 'Debit/Credit Card',
+    icon: 'mdi-credit-card',
+    description: 'Kartu Debit/Credit'
+  },
+  {
     value: 'bank_transfer',
     title: 'Transfer Bank',
-    icon: 'mdi-cash',
+    icon: 'mdi-bank-transfer',
     description: 'Transfer Bank'
   }
 ]

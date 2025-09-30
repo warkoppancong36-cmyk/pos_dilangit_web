@@ -1,7 +1,7 @@
 <template>
   <VDialog
     v-model="localDialog"
-    max-width="1200"
+    max-width="1400"
     scrollable
   >
     <VCard class="coffee-dialog">
@@ -27,7 +27,7 @@
       <!-- Filters -->
       <VCardText class="pb-0 px-6">
         <VRow>
-          <VCol cols="12" md="4">
+          <VCol cols="12" md="3">
             <VTextField
               v-model="searchQuery"
               label="Cari transaksi..."
@@ -49,7 +49,7 @@
               hide-details
             />
           </VCol>
-          <VCol cols="12" md="3">
+          <VCol cols="12" md="2">
             <VTextField
               v-model="dateFrom"
               label="Dari Tanggal"
@@ -59,7 +59,7 @@
               hide-details
             />
           </VCol>
-          <VCol cols="12" md="3">
+          <VCol cols="12" md="2">
             <VTextField
               v-model="dateTo"
               label="Sampai Tanggal"
@@ -68,6 +68,18 @@
               density="compact"
               hide-details
             />
+          </VCol>
+          <VCol cols="12" md="1">
+            <VBtn
+              color="success"
+              variant="tonal"
+              prepend-icon="tabler-download"
+              @click="exportTransactions"
+              :loading="exportLoading"
+              block
+            >
+              Export
+            </VBtn>
           </VCol>
         </VRow>
       </VCardText>
@@ -261,11 +273,13 @@ const loading = ref(false)
 const transactions = ref<any[]>([])
 const searchQuery = ref('')
 const statusFilter = ref('')
-const dateFrom = ref('')
-const dateTo = ref('')
+const categoryFilter = ref('')
+const dateFrom = ref(new Date().toISOString().split('T')[0]) // Default: today
+const dateTo = ref(new Date().toISOString().split('T')[0])   // Default: today
 const detailDialog = ref(false)
 const editDialog = ref(false)
 const selectedOrder = ref<any>(null)
+const exportLoading = ref(false)
 const pagination = ref({
   current_page: 1,
   per_page: 15,
@@ -318,6 +332,9 @@ const loadTransactions = async (page: number = 1, perPage: number = 15) => {
   try {
     loading.value = true
     
+    console.log('📅 LoadTransactions dateFrom:', dateFrom.value)
+    console.log('📅 LoadTransactions dateTo:', dateTo.value)
+    
     // Build query parameters
     const params: any = {
       page,
@@ -331,6 +348,9 @@ const loadTransactions = async (page: number = 1, perPage: number = 15) => {
     if (statusFilter.value) {
       params.status = statusFilter.value
     }
+    if (categoryFilter.value) {
+      params.category_id = categoryFilter.value
+    }
     if (dateFrom.value) {
       params.date_from = dateFrom.value
     }
@@ -342,22 +362,23 @@ const loadTransactions = async (page: number = 1, perPage: number = 15) => {
     
     if (response.success) {
       // Check if response has pagination structure
-      if (response.data.data && Array.isArray(response.data.data)) {
+      const responseData = response.data as any
+      if (responseData?.data && Array.isArray(responseData.data)) {
         // Paginated response
-        transactions.value = response.data.data
+        transactions.value = responseData.data
         pagination.value = {
-          current_page: response.data.current_page || 1,
-          per_page: perPage >= 999999 ? -1 : (response.data.per_page || 15), // Set -1 for "All"
-          total: response.data.total || 0,
-          last_page: response.data.last_page || 1
+          current_page: responseData.current_page || 1,
+          per_page: perPage >= 999999 ? -1 : (responseData.per_page || 15), // Set -1 for "All"
+          total: responseData.total || 0,
+          last_page: responseData.last_page || 1
         }
-      } else if (Array.isArray(response.data)) {
+      } else if (Array.isArray(responseData)) {
         // Direct array response (fallback)
-        transactions.value = response.data
+        transactions.value = responseData
         pagination.value = {
           current_page: 1,
-          per_page: perPage >= 999999 ? -1 : response.data.length,
-          total: response.data.length,
+          per_page: perPage >= 999999 ? -1 : responseData.length,
+          total: responseData.length,
           last_page: 1
         }
       } else {
@@ -526,25 +547,59 @@ const formatTime = (date: string): string => {
   })
 }
 
+
+// Export transactions to Excel
+const exportTransactions = async () => {
+  try {
+    exportLoading.value = true
+    
+    // Build query parameters - same as loadTransactions
+    const params: any = {}
+    
+    if (searchQuery.value) {
+      params.search = searchQuery.value
+    }
+    if (statusFilter.value) {
+      params.payment_status = statusFilter.value  // Map status to payment_status for export API
+    }
+    if (categoryFilter.value) {
+      params.category_id = categoryFilter.value
+    }
+    if (dateFrom.value) {
+      params.start_date = dateFrom.value
+    }
+    if (dateTo.value) {
+      params.end_date = dateTo.value
+    }
+    
+    const result = await PosApi.exportOrdersToExcel(params)
+    
+  } catch (error) {
+  
+  } finally {
+    exportLoading.value = false
+  }
+}
+
 const closeDialog = () => {
   localDialog.value = false
 }
 
-// Set default date range (today)
+// Set default date range (only if empty)
 const setDefaultDates = () => {
   const today = new Date().toISOString().split('T')[0]
   // Set dari awal bulan sampai hari ini untuk menampilkan lebih banyak data
   const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
     .toISOString().split('T')[0]
   
-  dateFrom.value = startOfMonth
-  dateTo.value = today
+  // Only set default if values are empty
+  if (!dateFrom.value) {
+    dateFrom.value = startOfMonth
+  }
+  if (!dateTo.value) {
+    dateTo.value = today
+  }
 }
-
-// Lifecycle
-onMounted(() => {
-  setDefaultDates()
-})
 
 // Watch for dialog changes
 watch(localDialog, (newValue) => {
@@ -554,8 +609,8 @@ watch(localDialog, (newValue) => {
 })
 
 // Watch for filter changes - reload data from backend
-let filterTimeout: number | null = null
-watch([searchQuery, statusFilter, dateFrom, dateTo], () => {
+let filterTimeout: ReturnType<typeof setTimeout> | null = null
+watch([searchQuery, statusFilter, categoryFilter, dateFrom, dateTo], () => {
   // Debounce filter changes
   if (filterTimeout) {
     clearTimeout(filterTimeout)

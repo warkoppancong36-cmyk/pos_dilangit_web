@@ -311,6 +311,8 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
         // Order routes - specific routes first
         Route::get('/orders', [PosController::class, 'getActiveOrders']);
         Route::get('/orders/history', [PosController::class, 'getOrders']);
+        Route::get('/orders/categories', [PosController::class, 'getCategories']);
+        Route::get('/orders/export', [PosController::class, 'exportOrders']);
         Route::post('/orders', [PosController::class, 'createOrder']);
         Route::post('/process-direct-payment', [PosController::class, 'processDirectPayment']);
         

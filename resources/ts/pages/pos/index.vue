@@ -528,15 +528,19 @@ const loadProducts = async () => {
 
 const loadCategories = async () => {
   try {
-    // This would need to be implemented in the API
-    // For now, we'll use a placeholder
+    const response = await PosApi.getCategories()
+    
+    if (response.success && response.data) {
+      categories.value = response.data
+    }
+  } catch (error) {
+    console.error('Error loading categories:', error)
+    // Fallback to hardcoded categories if API fails
     categories.value = [
       { id_category: 1, name: 'Minuman' },
       { id_category: 2, name: 'Makanan' },
       { id_category: 3, name: 'Snack' }
     ]
-  } catch (error) {
-    console.error('Error loading categories:', error)
   }
 }
 
