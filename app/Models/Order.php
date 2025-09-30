@@ -64,6 +64,7 @@ class Order extends Model
         'is_paid',
         'total_paid',
         'remaining_amount',
+        'payment_status',
     ];
 
     // Boot method untuk auto-generate order number
@@ -189,6 +190,25 @@ class Order extends Model
     public function getRemainingAmountAttribute(): float
     {
         return max(0, $this->total_amount - $this->total_paid);
+    }
+
+    public function getPaymentStatusAttribute(): string
+    {
+        $totalPaid = $this->total_paid;
+        $totalAmount = $this->total_amount;
+        
+        // Check if there are pending payments
+        $hasPendingPayments = $this->payments()->where('status', 'pending')->exists();
+        
+        if ($hasPendingPayments) {
+            return 'pending';
+        }
+        
+        if ($totalPaid >= $totalAmount) {
+            return 'paid';
+        }
+        
+        return 'unpaid';
     }
 
     // Scopes
