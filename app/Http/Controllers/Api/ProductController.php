@@ -47,7 +47,7 @@ class ProductController extends Controller
                         $query->lowStock();
                         break;
                     case 'out_of_stock':
-                        $query->where('stock', '<=', 0);
+                        $query->outOfStock();
                         break;
                 }
             }

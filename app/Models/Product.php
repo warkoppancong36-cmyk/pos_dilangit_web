@@ -229,6 +229,16 @@ class Product extends Model
     }
 
     /**
+     * Scope untuk produk dengan stok tersedia
+     */
+    public function scopeInStock($query)
+    {
+        return $query->whereHas('inventory', function ($q) {
+            $q->where('current_stock', '>', 0);
+        });
+    }
+
+    /**
      * Scope untuk produk dengan stok habis
      */
     public function scopeOutOfStock($query)
