@@ -110,105 +110,6 @@ class PosController extends Controller
                     ->orderBy('created_at', 'desc');
             }
 
-    /**
-     * Get transaction history for export using RAW SQL (SUPER FAST)
-     */
-    public function getTransactionHistoryForExport(Request $request): JsonResponse
-    {
-        try {
-            \Log::info('🚀 Fast export - Getting transaction history with raw SQL');
-            
-            $params = [];
-            $whereConditions = [];
-            
-            // Date filters
-            if ($request->filled('start_date')) {
-                $whereConditions[] = "DATE(o.created_at) >= ?";
-                $params[] = $request->start_date;
-            }
-            
-            if ($request->filled('end_date')) {
-                $whereConditions[] = "DATE(o.created_at) <= ?";
-                $params[] = $request->end_date;
-            }
-            
-            // Month filter (format: YYYY-MM)
-            if ($request->filled('month')) {
-                $whereConditions[] = "DATE_FORMAT(o.created_at, '%Y-%m') = ?";
-                $params[] = $request->month;
-            }
-            
-            // Hour filters
-            if ($request->filled('hour_start') && $request->filled('hour_end')) {
-                $whereConditions[] = "HOUR(o.created_at) BETWEEN ? AND ?";
-                $params[] = $request->hour_start;
-                $params[] = $request->hour_end;
-            }
-            
-            // Build WHERE clause
-            $whereClause = '';
-            if (!empty($whereConditions)) {
-                $whereClause = 'WHERE ' . implode(' AND ', $whereConditions);
-            }
-            
-            // Limit to prevent memory issues
-            $limit = min((int)$request->get('per_page', 500), 1000);
-            
-            // Raw SQL query - super fast, single query
-            $sql = "
-                SELECT 
-                    o.id_order,
-                    o.order_number,
-                    o.created_at,
-                    o.order_type,
-                    o.status,
-                    o.total_amount,
-                    c.name as customer_name,
-                    (SELECT COUNT(*) FROM order_items WHERE id_order = o.id_order) as items_count,
-                    (SELECT GROUP_CONCAT(DISTINCT payment_method) 
-                     FROM payments 
-                     WHERE id_order = o.id_order 
-                     LIMIT 1) as payment_methods
-                FROM orders o
-                LEFT JOIN customers c ON o.id_customer = c.id_customer
-                {$whereClause}
-                ORDER BY o.created_at DESC
-                LIMIT {$limit}
-            ";
-            
-            \Log::info('Executing SQL:', ['sql' => $sql, 'params' => $params]);
-            
-            $startTime = microtime(true);
-            $results = DB::select($sql, $params);
-            $executionTime = round((microtime(true) - $startTime) * 1000, 2);
-            
-            \Log::info("✅ Query executed in {$executionTime}ms, fetched " . count($results) . " records");
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Transaction history retrieved successfully',
-                'data' => $results,
-                'meta' => [
-                    'total' => count($results),
-                    'execution_time_ms' => $executionTime,
-                    'limit' => $limit
-                ]
-            ]);
-            
-        } catch (\Exception $e) {
-            \Log::error('❌ Failed to get transaction history:', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to retrieve transaction history: ' . $e->getMessage(),
-                'data' => []
-            ], 500);
-        }
-    }
-
             // Search filter
             if ($request->has('search')) {
                 $search = $request->search;
@@ -337,6 +238,105 @@ class PosController extends Controller
             return $this->paginatedResponse($orders, 'Orders retrieved successfully');
         } catch (\Exception $e) {
             return $this->serverErrorResponse('Failed to retrieve orders: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Get transaction history for export using RAW SQL (SUPER FAST)
+     */
+    public function getTransactionHistoryForExport(Request $request): JsonResponse
+    {
+        try {
+            \Log::info('🚀 Fast export - Getting transaction history with raw SQL');
+            
+            $params = [];
+            $whereConditions = [];
+            
+            // Date filters
+            if ($request->filled('start_date')) {
+                $whereConditions[] = "DATE(o.created_at) >= ?";
+                $params[] = $request->start_date;
+            }
+            
+            if ($request->filled('end_date')) {
+                $whereConditions[] = "DATE(o.created_at) <= ?";
+                $params[] = $request->end_date;
+            }
+            
+            // Month filter (format: YYYY-MM)
+            if ($request->filled('month')) {
+                $whereConditions[] = "DATE_FORMAT(o.created_at, '%Y-%m') = ?";
+                $params[] = $request->month;
+            }
+            
+            // Hour filters
+            if ($request->filled('hour_start') && $request->filled('hour_end')) {
+                $whereConditions[] = "HOUR(o.created_at) BETWEEN ? AND ?";
+                $params[] = $request->hour_start;
+                $params[] = $request->hour_end;
+            }
+            
+            // Build WHERE clause
+            $whereClause = '';
+            if (!empty($whereConditions)) {
+                $whereClause = 'WHERE ' . implode(' AND ', $whereConditions);
+            }
+            
+            // Limit to prevent memory issues
+            $limit = min((int)$request->get('per_page', 500), 1000);
+            
+            // Raw SQL query - super fast, single query
+            $sql = "
+                SELECT 
+                    o.id_order,
+                    o.order_number,
+                    o.created_at,
+                    o.order_type,
+                    o.status,
+                    o.total_amount,
+                    c.name as customer_name,
+                    (SELECT COUNT(*) FROM order_items WHERE id_order = o.id_order) as items_count,
+                    (SELECT GROUP_CONCAT(DISTINCT payment_method) 
+                     FROM payments 
+                     WHERE id_order = o.id_order 
+                     LIMIT 1) as payment_methods
+                FROM orders o
+                LEFT JOIN customers c ON o.id_customer = c.id_customer
+                {$whereClause}
+                ORDER BY o.created_at DESC
+                LIMIT {$limit}
+            ";
+            
+            \Log::info('Executing SQL:', ['sql' => $sql, 'params' => $params]);
+            
+            $startTime = microtime(true);
+            $results = DB::select($sql, $params);
+            $executionTime = round((microtime(true) - $startTime) * 1000, 2);
+            
+            \Log::info("✅ Query executed in {$executionTime}ms, fetched " . count($results) . " records");
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Transaction history retrieved successfully',
+                'data' => $results,
+                'meta' => [
+                    'total' => count($results),
+                    'execution_time_ms' => $executionTime,
+                    'limit' => $limit
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('❌ Failed to get transaction history:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve transaction history: ' . $e->getMessage(),
+                'data' => []
+            ], 500);
         }
     }
 
