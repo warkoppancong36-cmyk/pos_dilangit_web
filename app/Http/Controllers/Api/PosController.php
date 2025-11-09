@@ -96,8 +96,19 @@ class PosController extends Controller
             // Enable query logging for debugging
             \DB::enableQueryLog();
             
-            $query = Order::with(['customer', 'user', 'orderItems.product', 'payments'])
-                ->orderBy('created_at', 'desc');
+            // Check if this is a lightweight export request
+            $isLightExport = $request->boolean('light_export', false);
+            
+            // For lightweight export, only load essential relations
+            if ($isLightExport) {
+                $query = Order::with(['customer:id_customer,name', 'payments:id_payment,id_order,payment_method,amount'])
+                    ->withCount('orderItems as items_count')
+                    ->select('id_order', 'order_number', 'id_customer', 'order_type', 'status', 'total_amount', 'created_at')
+                    ->orderBy('created_at', 'desc');
+            } else {
+                $query = Order::with(['customer', 'user', 'orderItems.product', 'payments'])
+                    ->orderBy('created_at', 'desc');
+            }
 
             // Search filter
             if ($request->has('search')) {
