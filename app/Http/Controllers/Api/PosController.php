@@ -285,7 +285,7 @@ class PosController extends Controller
             // Limit to prevent memory issues
             $limit = min((int)$request->get('per_page', 500), 1000);
             
-            // Raw SQL query - super fast, single query
+            // Simplified raw SQL - no subqueries for speed
             $sql = "
                 SELECT 
                     o.id_order,
@@ -294,12 +294,7 @@ class PosController extends Controller
                     o.order_type,
                     o.status,
                     o.total_amount,
-                    c.name as customer_name,
-                    (SELECT COUNT(*) FROM order_items WHERE id_order = o.id_order) as items_count,
-                    (SELECT GROUP_CONCAT(DISTINCT payment_method) 
-                     FROM payments 
-                     WHERE id_order = o.id_order 
-                     LIMIT 1) as payment_methods
+                    c.name as customer_name
                 FROM orders o
                 LEFT JOIN customers c ON o.id_customer = c.id_customer
                 {$whereClause}
@@ -315,13 +310,57 @@ class PosController extends Controller
             
             \Log::info("✅ Query executed in {$executionTime}ms, fetched " . count($results) . " records");
             
+            // Get order IDs for batch queries
+            $orderIds = array_column($results, 'id_order');
+            
+            // Batch get items count
+            $itemsCounts = [];
+            if (!empty($orderIds)) {
+                $itemsCountQuery = "
+                    SELECT id_order, COUNT(*) as items_count 
+                    FROM order_items 
+                    WHERE id_order IN (" . implode(',', $orderIds) . ")
+                    GROUP BY id_order
+                ";
+                $itemsResults = DB::select($itemsCountQuery);
+                foreach ($itemsResults as $item) {
+                    $itemsCounts[$item->id_order] = $item->items_count;
+                }
+            }
+            
+            // Batch get payment methods
+            $paymentMethods = [];
+            if (!empty($orderIds)) {
+                $paymentsQuery = "
+                    SELECT id_order, payment_method 
+                    FROM payments 
+                    WHERE id_order IN (" . implode(',', $orderIds) . ")
+                    GROUP BY id_order, payment_method
+                ";
+                $paymentsResults = DB::select($paymentsQuery);
+                foreach ($paymentsResults as $payment) {
+                    if (!isset($paymentMethods[$payment->id_order])) {
+                        $paymentMethods[$payment->id_order] = $payment->payment_method;
+                    }
+                }
+            }
+            
+            // Merge data
+            foreach ($results as $order) {
+                $order->items_count = $itemsCounts[$order->id_order] ?? 0;
+                $order->payment_methods = $paymentMethods[$order->id_order] ?? 'cash';
+            }
+            
+            $totalTime = round((microtime(true) - $startTime) * 1000, 2);
+            \Log::info("✅ Total processing time: {$totalTime}ms");
+            
             return response()->json([
                 'success' => true,
                 'message' => 'Transaction history retrieved successfully',
                 'data' => $results,
                 'meta' => [
                     'total' => count($results),
-                    'execution_time_ms' => $executionTime,
+                    'execution_time_ms' => $totalTime,
                     'limit' => $limit
                 ]
             ]);
