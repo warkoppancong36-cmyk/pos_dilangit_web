@@ -82,6 +82,39 @@ meta:
               @update:model-value="loadReportData"
             />
           </VCol>
+
+          <!-- Hour Filter -->
+          <VCol cols="12" md="2">
+            <VTextField
+              v-model="hourStart"
+              type="time"
+              label="Jam Mulai"
+              variant="outlined"
+              density="compact"
+              clearable
+              @update:model-value="onHourChange"
+            >
+              <template #prepend-inner>
+                <VIcon icon="mdi-clock-outline" size="20" />
+              </template>
+            </VTextField>
+          </VCol>
+          
+          <VCol cols="12" md="2">
+            <VTextField
+              v-model="hourEnd"
+              type="time"
+              label="Jam Akhir"
+              variant="outlined"
+              density="compact"
+              clearable
+              @update:model-value="onHourChange"
+            >
+              <template #prepend-inner>
+                <VIcon icon="mdi-clock-outline" size="20" />
+              </template>
+            </VTextField>
+          </VCol>
           
           <VCol cols="12" md="2">
             <VBtn
@@ -580,6 +613,8 @@ const selectedPeriod = ref('month')
 const selectedMonth = ref('')
 const customStartDate = ref('')
 const customEndDate = ref('')
+const hourStart = ref('')
+const hourEnd = ref('')
 
 // Chart reference
 const dailySalesChart = ref<HTMLCanvasElement>()
@@ -825,6 +860,13 @@ const onPeriodChange = () => {
   loadReportData()
 }
 
+const onHourChange = () => {
+  // Reload report when hour filter changes (both must be filled)
+  if ((hourStart.value && hourEnd.value) || (!hourStart.value && !hourEnd.value)) {
+    loadReportData()
+  }
+}
+
 // Load report data
 const loadReportData = async () => {
   if (isLoading.value) return
@@ -849,6 +891,12 @@ const loadReportData = async () => {
         isLoading.value = false
         return
       }
+    }
+    
+    // Add hour filter if provided
+    if (hourStart.value && hourEnd.value) {
+      params.hour_start = hourStart.value
+      params.hour_end = hourEnd.value
     }
     
     const response = await axios.get('/api/reports/sales', { params })

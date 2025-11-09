@@ -419,9 +419,11 @@ import { useHPP } from '@/composables/useHPP'
 
 interface CompositionItem {
   id?: string
-  id_product_item?: string
+  id_product_item?: string | number
+  item_id?: string | number // Add item_id at root level (from backend)
   item?: {
-    id: string
+    id?: string | number
+    id_item?: string | number // Add id_item (from backend)
     name: string
     inventory?: {
       current_stock: number
@@ -568,6 +570,17 @@ const fetchProductComposition = async () => {
       compositionItems.value = response.data.data
       // Store initial data for comparison during save
       initialCompositionItems.value = JSON.parse(JSON.stringify(response.data.data))
+      
+      // Debug: Log data structure
+      console.log('📥 Fetched composition items:', response.data.data)
+      if (response.data.data.length > 0) {
+        console.log('📥 First item structure:', {
+          full: response.data.data[0],
+          item: response.data.data[0].item,
+          item_id: response.data.data[0].item_id,
+          id_product_item: response.data.data[0].id_product_item
+        })
+      }
     }
   } catch (error) {
     console.error('Error fetching product composition:', error)
@@ -728,13 +741,14 @@ const addItem = () => {
   const selectedItem = availableItems.value.find(item => item.id === newItem.value.itemId)
   if (!selectedItem) return
 
-  // Check if item already exists in composition
-  const existingItem = compositionItems.value.find(item => 
-    item.item?.id === selectedItem.id
-  )
+  // Check if item already exists in composition - check multiple ID sources
+  const existingItem = compositionItems.value.find(item => {
+    const itemId = item.item?.id || item.item?.id_item || item.item_id
+    return String(itemId) === String(selectedItem.id)
+  })
   
   if (existingItem) {
-    errorMessage.value = `Item "${selectedItem.name}" sudah ada dalam komposisi produk ini`
+    errorMessage.value = `Item "${selectedItem.name}" sudah ada dalam komposisi produk ini. Silakan edit item yang sudah ada.`
     errorSnackbar.value = true
     return
   }
@@ -773,14 +787,21 @@ const editItem = (item: CompositionItem, index: number) => {
   editMode.value = true
   editIndex.value = index
   
-  // Get item ID - should be in item.item.id based on our data structure
-  let itemId = item.item?.id || null
+  // Get item ID from multiple possible sources
+  // Backend might return item.id_item or item.id or item_id at root level
+  let itemId = item.item?.id || item.item?.id_item || item.item_id || null
   
   // Convert to string to match availableItems format
   if (itemId !== null) {
     itemId = itemId.toString()
   }
   
+  console.log('✏️ Edit Item:', {
+    itemId,
+    item: item,
+    item_item: item.item,
+    item_id_root: item.item_id
+  })
   
   // Fill form with item data
   newItem.value = {
@@ -815,16 +836,46 @@ const updateItem = () => {
   // Get the current item being edited
   const currentItem = compositionItems.value[editIndex.value]
   
-  // Check if the item itself has changed (different item_id)
-  const hasItemChanged = currentItem.item?.id !== selectedItem.id
+  // Get current item ID from multiple possible sources
+  const currentItemId = currentItem.item?.id || currentItem.item?.id_item || currentItem.item_id
+  const selectedItemId = selectedItem.id
+  
+  // Check if the item itself has changed (different item_id) - compare as strings
+  const hasItemChanged = String(currentItemId) !== String(selectedItemId)
+  
+  // If item has changed, check if the new item already exists in composition
+  if (hasItemChanged) {
+    const duplicateItem = compositionItems.value.find((item, index) => {
+      if (index === editIndex.value) return false // Skip current item being edited
+      const itemId = item.item?.id || item.item?.id_item || item.item_id
+      return String(itemId) === String(selectedItemId)
+    })
+    
+    if (duplicateItem) {
+      errorMessage.value = `Item "${selectedItem.name}" sudah ada dalam komposisi produk ini. Silakan edit item yang sudah ada.`
+      errorSnackbar.value = true
+      return
+    }
+  }
+  
+  console.log('🔄 Update Item:', {
+    hasItemChanged,
+    currentItemId: currentItemId,
+    selectedItemId: selectedItemId,
+    currentProductItemId: currentItem.id_product_item,
+    currentItem: currentItem
+  })
   
   // Update the item
   compositionItems.value[editIndex.value] = {
     ...compositionItems.value[editIndex.value],
-    // If item has changed, reset id_product_item to force create new record
+    // ONLY reset id_product_item if the actual item (item_id) has changed
+    // If only quantity/unit/critical changed, keep the same id_product_item for UPDATE
     id_product_item: hasItemChanged ? `temp_${Date.now()}` : currentItem.id_product_item,
+    item_id: parseInt(String(selectedItemId)), // Preserve item_id for backend
     item: {
       id: String(selectedItem.id),
+      id_item: parseInt(String(selectedItem.id)), // Add id_item for compatibility
       name: selectedItem.name,
       inventory: {
         current_stock: selectedItem.current_stock || 0
@@ -869,23 +920,68 @@ const saveComposition = async () => {
     const existingItems = initialCompositionItems.value || []
     const currentItems = compositionItems.value
     
-    // Process each current item (create or update)
+    // STEP 1: Convert DELETE+CREATE scenarios to UPDATE
+    // Check if any temp items are actually re-adds of deleted items
+    for (const item of currentItems) {
+      const isTemp = String(item.id_product_item || '').startsWith('temp_')
+      
+      if (isTemp) {
+        const currentItemId = item.item?.id || item.item?.id_item || item.item_id
+        
+        // Find if this item_id existed before and is not in current list (meaning it was "deleted")
+        const wasDeleted = existingItems.find(existing => {
+          const existingItemId = existing.item?.id || existing.item?.id_item || existing.item_id
+          const stillInList = currentItems.find(c => 
+            c.id_product_item === existing.id_product_item && 
+            !String(c.id_product_item).startsWith('temp_')
+          )
+          
+          return String(existingItemId) === String(currentItemId) && !stillInList
+        })
+        
+        if (wasDeleted) {
+          console.log('🔄 Converting DELETE+CREATE to UPDATE:', {
+            item_name: item.item?.name,
+            old_id: wasDeleted.id_product_item,
+            temp_id: item.id_product_item
+          })
+          // Convert temp to use existing ID
+          item.id_product_item = wasDeleted.id_product_item
+        }
+      }
+    }
+    
+    // STEP 2: Process each current item (create or update)
     for (const item of currentItems) {
       const existingItem = existingItems.find(existing => {
-        // Try multiple matching strategies
-        if (existing.id_product_item === item.id_product_item) {
-          return true // Exact ID match
+        // Match by id_product_item - normalize to number for comparison
+        const existingId = existing.id_product_item
+        const currentId = item.id_product_item
+        
+        // Skip if current is temp
+        if (!currentId || String(currentId).startsWith('temp_')) {
+          return false
         }
         
-        // If item has a valid (non-temp) ID but no direct match, 
-        // try matching by item_id only (since all are for same product)
-        if (item.id_product_item && 
-            !item.id_product_item.toString().startsWith('temp_') &&
-            existing.item?.id === item.item?.id) {
-          return true // Same item
+        // Compare as numbers to handle type mismatch
+        const existingIdNum = parseInt(String(existingId))
+        const currentIdNum = parseInt(String(currentId))
+        
+        if (!isNaN(existingIdNum) && !isNaN(currentIdNum) && existingIdNum === currentIdNum) {
+          console.log('✅ Found existing match:', existingIdNum, '===', currentIdNum)
+          return true
         }
         
         return false
+      })
+      
+      console.log('🔍 Item matching result:', {
+        item_name: item.item?.name,
+        current_id_product_item: item.id_product_item,
+        current_id_type: typeof item.id_product_item,
+        existingItem_found: !!existingItem,
+        existingItem_id: existingItem?.id_product_item,
+        existingItem_id_type: typeof existingItem?.id_product_item
       })
       
       // Skip items with invalid item_id
@@ -907,12 +1003,25 @@ const saveComposition = async () => {
         notes: item.notes || ''
       }
       
+      console.log('🔍 Processing item:', {
+        item_name: item.item?.name,
+        item_id: item.item?.id,
+        id_product_item: item.id_product_item,
+        existingItem: existingItem ? {
+          id: existingItem.id_product_item,
+          item_id: existingItem.item?.id
+        } : null,
+        action: existingItem && existingItem.id_product_item ? 'UPDATE' : 'CREATE'
+      })
+      
       try {
-        if (existingItem && !item.id_product_item?.toString().startsWith('temp_')) {
-          // Update existing item
-          await ProductItemsApi.update(parseInt(existingItem.id_product_item || '0'), apiData)
+        if (existingItem && existingItem.id_product_item && !existingItem.id_product_item.toString().startsWith('temp_')) {
+          // Update existing item - use existingItem.id_product_item instead of item.id_product_item
+          console.log('📝 Updating item:', existingItem.id_product_item)
+          await ProductItemsApi.update(parseInt(existingItem.id_product_item), apiData)
         } else {
           // Create new item
+          console.log('➕ Creating new item')
           await ProductItemsApi.create(apiData)
         }
       } catch (itemError: any) {
@@ -930,15 +1039,16 @@ const saveComposition = async () => {
       }
     }
     
-    // Delete items that were removed
+    // STEP 3: Delete items that were truly removed (not re-added)
     for (const existingItem of existingItems) {
       const stillExists = currentItems.find(current => 
-        current.id_product_item === existingItem.id_product_item
+        String(current.id_product_item) === String(existingItem.id_product_item)
       )
       
       if (!stillExists && existingItem.id_product_item) {
         try {
-          await ProductItemsApi.delete(parseInt(existingItem.id_product_item))
+          console.log('�️ Deleting item:', existingItem.id_product_item, existingItem.item?.name)
+          await ProductItemsApi.delete(parseInt(String(existingItem.id_product_item)))
         } catch (deleteError: any) {
           console.error('❌ Error deleting item:', deleteError)
           errorMessage.value = `Gagal menghapus item: ${deleteError.message}`

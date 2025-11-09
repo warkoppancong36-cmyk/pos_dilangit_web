@@ -37,23 +37,27 @@ class DashboardController extends Controller
                 $endDate = Carbon::now()->endOfDay();
             }
 
+            // Handle hour filter (optional)
+            $hourStart = $request->get('hour_start'); // Format: HH:mm (e.g., 08:00)
+            $hourEnd = $request->get('hour_end'); // Format: HH:mm (e.g., 17:00)
+
             // Sales Analytics
-            $salesData = $this->getSalesAnalytics($startDate, $endDate);
+            $salesData = $this->getSalesAnalytics($startDate, $endDate, $hourStart, $hourEnd);
             
             // Purchase Analytics
-            $purchaseData = $this->getPurchaseAnalytics($startDate, $endDate);
+            $purchaseData = $this->getPurchaseAnalytics($startDate, $endDate, $hourStart, $hourEnd);
             
             // Inventory Analytics
             $inventoryData = $this->getInventoryAnalytics();
             
             // Summary Cards
-            $summaryCards = $this->getSummaryCards($startDate, $endDate);
+            $summaryCards = $this->getSummaryCards($startDate, $endDate, $hourStart, $hourEnd);
             
             // Order Types breakdown
-            $orderTypes = $this->getOrderTypesBreakdown($startDate, $endDate);
+            $orderTypes = $this->getOrderTypesBreakdown($startDate, $endDate, $hourStart, $hourEnd);
             
             // Purchase Status breakdown  
-            $purchaseStatus = $this->getPurchaseStatusBreakdown($startDate, $endDate);
+            $purchaseStatus = $this->getPurchaseStatusBreakdown($startDate, $endDate, $hourStart, $hourEnd);
 
             return $this->successResponse([
                 'sales' => $salesData,
@@ -65,7 +69,9 @@ class DashboardController extends Controller
                 'period' => [
                     'days' => $period,
                     'start_date' => $startDate->format('Y-m-d'),
-                    'end_date' => $endDate->format('Y-m-d')
+                    'end_date' => $endDate->format('Y-m-d'),
+                    'hour_start' => $hourStart,
+                    'hour_end' => $hourEnd
                 ]
             ], 'Dashboard analytics retrieved successfully');
 
@@ -77,10 +83,10 @@ class DashboardController extends Controller
     /**
      * Get sales analytics data
      */
-    private function getSalesAnalytics($startDate, $endDate)
+    private function getSalesAnalytics($startDate, $endDate, $hourStart = null, $hourEnd = null)
     {
         // Daily sales trend (S-curve data)
-        $dailySales = Order::select(
+        $query = Order::select(
                 DB::raw('DATE(order_date) as date'),
                 DB::raw('COUNT(*) as order_count'),
                 DB::raw('SUM(total_amount) as total_revenue'),
@@ -88,25 +94,37 @@ class DashboardController extends Controller
             )
             ->where('status', '!=', 'cancelled')
             ->whereNotNull('order_date')
-            ->whereBetween('order_date', [$startDate, $endDate])
-            ->groupBy(DB::raw('DATE(order_date)'))
+            ->whereBetween('order_date', [$startDate, $endDate]);
+
+        // Apply hour filter if provided
+        if ($hourStart && $hourEnd) {
+            $query->whereRaw('TIME(order_date) >= ?', [$hourStart])
+                  ->whereRaw('TIME(order_date) <= ?', [$hourEnd]);
+        }
+
+        $dailySales = $query->groupBy(DB::raw('DATE(order_date)'))
             ->orderBy('date')
             ->get();
 
         // Sales by order type (pie chart data)
-        $salesByType = Order::select(
+        $typeQuery = Order::select(
                 'order_type',
                 DB::raw('COUNT(*) as count'),
                 DB::raw('SUM(total_amount) as total_amount')
             )
             ->where('status', '!=', 'cancelled')
             ->whereNotNull('order_type')
-            ->whereBetween('order_date', [$startDate, $endDate])
-            ->groupBy('order_type')
-            ->get();
+            ->whereBetween('order_date', [$startDate, $endDate]);
+
+        if ($hourStart && $hourEnd) {
+            $typeQuery->whereRaw('TIME(order_date) >= ?', [$hourStart])
+                      ->whereRaw('TIME(order_date) <= ?', [$hourEnd]);
+        }
+
+        $salesByType = $typeQuery->groupBy('order_type')->get();
 
         // Top selling products
-        $topProducts = DB::table('order_items')
+        $topProductsQuery = DB::table('order_items')
             ->join('orders', 'order_items.id_order', '=', 'orders.id_order')
             ->join('products', 'order_items.id_product', '=', 'products.id_product')
             ->select(
@@ -115,8 +133,14 @@ class DashboardController extends Controller
                 DB::raw('SUM(order_items.total_price) as total_revenue')
             )
             ->where('orders.status', '!=', 'cancelled')
-            ->whereBetween('orders.order_date', [$startDate, $endDate])
-            ->groupBy('products.id_product', 'products.name')
+            ->whereBetween('orders.order_date', [$startDate, $endDate]);
+
+        if ($hourStart && $hourEnd) {
+            $topProductsQuery->whereRaw('TIME(orders.order_date) >= ?', [$hourStart])
+                             ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
+        }
+
+        $topProducts = $topProductsQuery->groupBy('products.id_product', 'products.name')
             ->orderBy('total_revenue', 'desc')
             ->limit(10)
             ->get();
@@ -131,35 +155,46 @@ class DashboardController extends Controller
     /**
      * Get purchase analytics data
      */
-    private function getPurchaseAnalytics($startDate, $endDate)
+    private function getPurchaseAnalytics($startDate, $endDate, $hourStart = null, $hourEnd = null)
     {
         // Daily purchase trend
-        $dailyPurchases = Purchase::select(
+        $query = Purchase::select(
                 DB::raw('DATE(purchase_date) as date'),
                 DB::raw('COUNT(*) as purchase_count'),
                 DB::raw('SUM(total_amount) as total_amount')
             )
             ->where('status', '!=', 'cancelled')
             ->whereNotNull('purchase_date')
-            ->whereBetween('purchase_date', [$startDate, $endDate])
-            ->groupBy(DB::raw('DATE(purchase_date)'))
+            ->whereBetween('purchase_date', [$startDate, $endDate]);
+
+        if ($hourStart && $hourEnd) {
+            $query->whereRaw('TIME(purchase_date) >= ?', [$hourStart])
+                  ->whereRaw('TIME(purchase_date) <= ?', [$hourEnd]);
+        }
+
+        $dailyPurchases = $query->groupBy(DB::raw('DATE(purchase_date)'))
             ->orderBy('date')
             ->get();
 
         // Purchase by status (pie chart)
-        $purchaseByStatus = Purchase::select(
+        $statusQuery = Purchase::select(
                 'status',
                 DB::raw('COUNT(*) as count'),
                 DB::raw('SUM(total_amount) as total_amount')
             )
             ->whereNotNull('status')
             ->whereNotNull('purchase_date')
-            ->whereBetween('purchase_date', [$startDate, $endDate])
-            ->groupBy('status')
-            ->get();
+            ->whereBetween('purchase_date', [$startDate, $endDate]);
+
+        if ($hourStart && $hourEnd) {
+            $statusQuery->whereRaw('TIME(purchase_date) >= ?', [$hourStart])
+                        ->whereRaw('TIME(purchase_date) <= ?', [$hourEnd]);
+        }
+
+        $purchaseByStatus = $statusQuery->groupBy('status')->get();
 
         // Top suppliers
-        $topSuppliers = DB::table('purchases')
+        $suppliersQuery = DB::table('purchases')
             ->join('suppliers', 'purchases.supplier_id', '=', 'suppliers.id_supplier')
             ->select(
                 'suppliers.name as supplier_name',
@@ -169,8 +204,14 @@ class DashboardController extends Controller
             ->where('purchases.status', '!=', 'cancelled')
             ->whereNotNull('purchases.purchase_date')
             ->whereNotNull('suppliers.name')
-            ->whereBetween('purchases.purchase_date', [$startDate, $endDate])
-            ->groupBy('suppliers.id_supplier', 'suppliers.name')
+            ->whereBetween('purchases.purchase_date', [$startDate, $endDate]);
+
+        if ($hourStart && $hourEnd) {
+            $suppliersQuery->whereRaw('TIME(purchases.purchase_date) >= ?', [$hourStart])
+                           ->whereRaw('TIME(purchases.purchase_date) <= ?', [$hourEnd]);
+        }
+
+        $topSuppliers = $suppliersQuery->groupBy('suppliers.id_supplier', 'suppliers.name')
             ->orderBy('total_amount', 'desc')
             ->limit(10)
             ->get();
@@ -258,7 +299,7 @@ class DashboardController extends Controller
     /**
      * Get summary cards data
      */
-    private function getSummaryCards($startDate, $endDate)
+    private function getSummaryCards($startDate, $endDate, $hourStart = null, $hourEnd = null)
     {
         // Today vs Yesterday comparison
         $today = Carbon::today();
@@ -272,34 +313,52 @@ class DashboardController extends Controller
         
         try {
             // Today sales - only count orders that have been paid
-            $todaySales = DB::table('orders')
+            $todayQuery = DB::table('orders')
                 ->join('payments', 'orders.id_order', '=', 'payments.id_order')
                 ->where('orders.status', '!=', 'cancelled')
                 ->where('orders.status', '!=', 'pending')
                 ->where('payments.status', 'paid')
                 ->whereDate('orders.order_date', $today)
-                ->whereNull('orders.deleted_at')
-                ->sum('orders.total_amount') ?: 0;
+                ->whereNull('orders.deleted_at');
+
+            if ($hourStart && $hourEnd) {
+                $todayQuery->whereRaw('TIME(orders.order_date) >= ?', [$hourStart])
+                           ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
+            }
+
+            $todaySales = $todayQuery->sum('orders.total_amount') ?: 0;
                 
             // Yesterday sales - only count orders that have been paid
-            $yesterdaySales = DB::table('orders')
+            $yesterdayQuery = DB::table('orders')
                 ->join('payments', 'orders.id_order', '=', 'payments.id_order')
                 ->where('orders.status', '!=', 'cancelled')
                 ->where('orders.status', '!=', 'pending')
                 ->where('payments.status', 'paid')
                 ->whereDate('orders.order_date', $yesterday)
-                ->whereNull('orders.deleted_at')
-                ->sum('orders.total_amount') ?: 0;
+                ->whereNull('orders.deleted_at');
+
+            if ($hourStart && $hourEnd) {
+                $yesterdayQuery->whereRaw('TIME(orders.order_date) >= ?', [$hourStart])
+                               ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
+            }
+
+            $yesterdaySales = $yesterdayQuery->sum('orders.total_amount') ?: 0;
 
             // Today orders count - only count orders that have been paid
-            $todayOrders = DB::table('orders')
+            $todayOrdersQuery = DB::table('orders')
                 ->join('payments', 'orders.id_order', '=', 'payments.id_order')
                 ->where('orders.status', '!=', 'cancelled')
                 ->where('orders.status', '!=', 'pending')
                 ->where('payments.status', 'paid')
                 ->whereDate('orders.order_date', $today)
-                ->whereNull('orders.deleted_at')
-                ->count() ?: 0;
+                ->whereNull('orders.deleted_at');
+
+            if ($hourStart && $hourEnd) {
+                $todayOrdersQuery->whereRaw('TIME(orders.order_date) >= ?', [$hourStart])
+                                 ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
+            }
+
+            $todayOrders = $todayOrdersQuery->count() ?: 0;
                 
             // Yesterday orders count - only count orders that have been paid
             $yesterdayOrders = DB::table('orders')
@@ -576,13 +635,18 @@ class DashboardController extends Controller
     /**
      * Get order types breakdown for pie chart
      */
-    private function getOrderTypesBreakdown($startDate, $endDate)
+    private function getOrderTypesBreakdown($startDate, $endDate, $hourStart = null, $hourEnd = null)
     {
-        $orderTypes = Order::select('order_type', DB::raw('COUNT(*) as count'))
+        $query = Order::select('order_type', DB::raw('COUNT(*) as count'))
             ->where('status', '!=', 'cancelled')
-            ->whereBetween('order_date', [$startDate, $endDate])
-            ->groupBy('order_type')
-            ->get();
+            ->whereBetween('order_date', [$startDate, $endDate]);
+
+        if ($hourStart && $hourEnd) {
+            $query->whereRaw('TIME(order_date) >= ?', [$hourStart])
+                  ->whereRaw('TIME(order_date) <= ?', [$hourEnd]);
+        }
+
+        $orderTypes = $query->groupBy('order_type')->get();
 
         return $orderTypes;
     }
@@ -590,12 +654,17 @@ class DashboardController extends Controller
     /**
      * Get purchase status breakdown for pie chart
      */
-    private function getPurchaseStatusBreakdown($startDate, $endDate)
+    private function getPurchaseStatusBreakdown($startDate, $endDate, $hourStart = null, $hourEnd = null)
     {
-        $purchaseStatus = Purchase::select('status', DB::raw('COUNT(*) as count'))
-            ->whereBetween('purchase_date', [$startDate, $endDate])
-            ->groupBy('status')
-            ->get();
+        $query = Purchase::select('status', DB::raw('COUNT(*) as count'))
+            ->whereBetween('purchase_date', [$startDate, $endDate]);
+
+        if ($hourStart && $hourEnd) {
+            $query->whereRaw('TIME(purchase_date) >= ?', [$hourStart])
+                  ->whereRaw('TIME(purchase_date) <= ?', [$hourEnd]);
+        }
+
+        $purchaseStatus = $query->groupBy('status')->get();
 
         return $purchaseStatus;
     }

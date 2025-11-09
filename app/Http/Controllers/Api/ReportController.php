@@ -31,11 +31,22 @@ class ReportController extends Controller
             $startDate = $this->getStartDate($request);
             $endDate = $this->getEndDate($request);
             
+            // Get hour filter if provided
+            $hourStart = $request->get('hour_start');
+            $hourEnd = $request->get('hour_end');
+            
             // Quick test to see if any orders exist in date range
-            $orderCount = Order::whereBetween('order_date', [$startDate, $endDate])->count();
+            $orderCountQuery = Order::whereBetween('order_date', [$startDate, $endDate]);
+            
+            if ($hourStart && $hourEnd) {
+                $orderCountQuery->whereRaw('TIME(order_date) >= ?', [$hourStart])
+                               ->whereRaw('TIME(order_date) <= ?', [$hourEnd]);
+            }
+            
+            $orderCount = $orderCountQuery->count();
 
             // Sales summary
-            $salesSummary = Order::select(
+            $summaryQuery = Order::select(
                     DB::raw('COUNT(*) as total_orders'),
                     DB::raw('SUM(total_amount) as total_revenue'),
                     DB::raw('CASE WHEN COUNT(*) > 0 THEN SUM(total_amount)/COUNT(*) ELSE 0 END as average_order'),
@@ -43,40 +54,63 @@ class ReportController extends Controller
                     DB::raw('SUM(CASE WHEN orders.status = "cancelled" THEN 1 ELSE 0 END) as cancelled_orders')
                 )
                 ->where('orders.status', '!=', 'cancelled')
-                ->whereBetween('orders.order_date', [$startDate, $endDate])
-                ->first();
+                ->whereBetween('orders.order_date', [$startDate, $endDate]);
+
+            if ($hourStart && $hourEnd) {
+                $summaryQuery->whereRaw('TIME(orders.order_date) >= ?', [$hourStart])
+                            ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
+            }
+
+            $salesSummary = $summaryQuery->first();
 
             // Total items sold (separate query to avoid JOIN issues)
-            $totalItems = DB::table('order_items')
+            $totalItemsQuery = DB::table('order_items')
                 ->join('orders', 'order_items.id_order', '=', 'orders.id_order')
                 ->where('orders.status', '!=', 'cancelled')
-                ->whereBetween('orders.order_date', [$startDate, $endDate])
-                ->sum('order_items.quantity');
+                ->whereBetween('orders.order_date', [$startDate, $endDate]);
 
-                        // Daily sales trend
-            $dailySales = Order::select(
+            if ($hourStart && $hourEnd) {
+                $totalItemsQuery->whereRaw('TIME(orders.order_date) >= ?', [$hourStart])
+                               ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
+            }
+
+            $totalItems = $totalItemsQuery->sum('order_items.quantity');
+
+            // Daily sales trend
+            $dailySalesQuery = Order::select(
                     DB::raw('DATE(order_date) as date'),
                     DB::raw('SUM(total_amount) as total')
                 )
                 ->whereBetween('order_date', [$startDate, $endDate])
-                ->where('status', '!=', 'cancelled')
-                ->groupBy(DB::raw('DATE(order_date)'))
+                ->where('status', '!=', 'cancelled');
+
+            if ($hourStart && $hourEnd) {
+                $dailySalesQuery->whereRaw('TIME(order_date) >= ?', [$hourStart])
+                               ->whereRaw('TIME(order_date) <= ?', [$hourEnd]);
+            }
+
+            $dailySales = $dailySalesQuery->groupBy(DB::raw('DATE(order_date)'))
                 ->orderBy('date')
                 ->get();
 
             // Sales by order type
-            $salesByType = Order::select(
+            $salesByTypeQuery = Order::select(
                     'order_type',
                     DB::raw('COUNT(*) as order_count'),
                     DB::raw('SUM(total_amount) as total_revenue')
                 )
                 ->where('status', '!=', 'cancelled')
-                ->whereBetween('order_date', [$startDate, $endDate])
-                ->groupBy('order_type')
-                ->get();
+                ->whereBetween('order_date', [$startDate, $endDate]);
+
+            if ($hourStart && $hourEnd) {
+                $salesByTypeQuery->whereRaw('TIME(order_date) >= ?', [$hourStart])
+                                ->whereRaw('TIME(order_date) <= ?', [$hourEnd]);
+            }
+
+            $salesByType = $salesByTypeQuery->groupBy('order_type')->get();
 
             // Top selling products
-            $topProducts = DB::table('order_items')
+            $topProductsQuery = DB::table('order_items')
                 ->join('orders', 'order_items.id_order', '=', 'orders.id_order')
                 ->join('products', 'order_items.id_product', '=', 'products.id_product')
                 ->select(
@@ -87,14 +121,20 @@ class ReportController extends Controller
                     DB::raw('AVG(order_items.unit_price) as avg_price')
                 )
                 ->where('orders.status', '!=', 'cancelled')
-                ->whereBetween('orders.order_date', [$startDate, $endDate])
-                ->groupBy('products.id_product', 'products.name')
+                ->whereBetween('orders.order_date', [$startDate, $endDate]);
+
+            if ($hourStart && $hourEnd) {
+                $topProductsQuery->whereRaw('TIME(orders.order_date) >= ?', [$hourStart])
+                                ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
+            }
+
+            $topProducts = $topProductsQuery->groupBy('products.id_product', 'products.name')
                 ->orderBy('total_revenue', 'desc')
                 ->limit(20)
                 ->get();
 
             // Sales by customer (if customer data exists)
-            $salesByCustomer = Order::join('customers', 'orders.id_customer', '=', 'customers.id_customer')
+            $salesByCustomerQuery = Order::join('customers', 'orders.id_customer', '=', 'customers.id_customer')
                 ->select(
                     'customers.name',
                     'customers.id_customer as id',
@@ -105,27 +145,39 @@ class ReportController extends Controller
                     DB::raw('MAX(orders.order_date) as last_order')
                 )
                 ->where('orders.status', '!=', 'cancelled')
-                ->whereBetween('orders.order_date', [$startDate, $endDate])
-                ->groupBy('customers.id_customer', 'customers.name')
+                ->whereBetween('orders.order_date', [$startDate, $endDate]);
+
+            if ($hourStart && $hourEnd) {
+                $salesByCustomerQuery->whereRaw('TIME(orders.order_date) >= ?', [$hourStart])
+                                    ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
+            }
+
+            $salesByCustomer = $salesByCustomerQuery->groupBy('customers.id_customer', 'customers.name')
                 ->orderBy('total_spent', 'desc')
                 ->limit(10)
                 ->get();
 
             // Sales by hour (peak hours analysis)
-            $salesByHour = Order::select(
+            $salesByHourQuery = Order::select(
                     DB::raw('HOUR(order_date) as hour'),
                     DB::raw('COUNT(*) as order_count'),
                     DB::raw('SUM(total_amount) as total_revenue'),
                     DB::raw('AVG(total_amount) as avg_order_value')
                 )
                 ->where('status', '!=', 'cancelled')
-                ->whereBetween('order_date', [$startDate, $endDate])
-                ->groupBy(DB::raw('HOUR(order_date)'))
+                ->whereBetween('order_date', [$startDate, $endDate]);
+
+            if ($hourStart && $hourEnd) {
+                $salesByHourQuery->whereRaw('TIME(order_date) >= ?', [$hourStart])
+                                ->whereRaw('TIME(order_date) <= ?', [$hourEnd]);
+            }
+
+            $salesByHour = $salesByHourQuery->groupBy(DB::raw('HOUR(order_date)'))
                 ->orderBy('hour')
                 ->get();
 
             // Sales by day of week
-            $salesByDayOfWeek = Order::select(
+            $salesByDayOfWeekQuery = Order::select(
                     DB::raw('DAYOFWEEK(order_date) as day_of_week'),
                     DB::raw('CASE DAYOFWEEK(order_date)
                         WHEN 1 THEN "Minggu"
@@ -141,8 +193,14 @@ class ReportController extends Controller
                     DB::raw('AVG(total_amount) as avg_order_value')
                 )
                 ->where('status', '!=', 'cancelled')
-                ->whereBetween('order_date', [$startDate, $endDate])
-                ->groupBy(DB::raw('DAYOFWEEK(order_date)'), DB::raw('CASE DAYOFWEEK(order_date)
+                ->whereBetween('order_date', [$startDate, $endDate]);
+
+            if ($hourStart && $hourEnd) {
+                $salesByDayOfWeekQuery->whereRaw('TIME(order_date) >= ?', [$hourStart])
+                                     ->whereRaw('TIME(order_date) <= ?', [$hourEnd]);
+            }
+
+            $salesByDayOfWeek = $salesByDayOfWeekQuery->groupBy(DB::raw('DAYOFWEEK(order_date)'), DB::raw('CASE DAYOFWEEK(order_date)
                         WHEN 1 THEN "Minggu"
                         WHEN 2 THEN "Senin" 
                         WHEN 3 THEN "Selasa"
@@ -155,29 +213,41 @@ class ReportController extends Controller
                 ->get();
 
             // Payment method analysis - Join dengan table payments
-            $totalOrdersForPercentage = Order::where('status', '!=', 'cancelled')
-                ->whereBetween('order_date', [$startDate, $endDate])
-                ->count();
+            $totalOrdersForPercentageQuery = Order::where('status', '!=', 'cancelled')
+                ->whereBetween('order_date', [$startDate, $endDate]);
 
-            $paymentMethods = DB::table('payments')
+            if ($hourStart && $hourEnd) {
+                $totalOrdersForPercentageQuery->whereRaw('TIME(order_date) >= ?', [$hourStart])
+                                              ->whereRaw('TIME(order_date) <= ?', [$hourEnd]);
+            }
+
+            $totalOrdersForPercentage = $totalOrdersForPercentageQuery->count();
+
+            $paymentMethodsQuery = DB::table('payments')
                 ->join('orders', 'payments.id_order', '=', 'orders.id_order')
                 ->select(
                     'payments.payment_method',
                     DB::raw('COUNT(payments.id_payment) as order_count'),
                     DB::raw('SUM(payments.amount) as total_revenue'),
                     DB::raw('AVG(payments.amount) as avg_order_value'),
-                    DB::raw('ROUND((COUNT(payments.id_payment) * 100.0 / ' . $totalOrdersForPercentage . '), 2) as percentage')
+                    DB::raw('ROUND((COUNT(payments.id_payment) * 100.0 / ' . max(1, $totalOrdersForPercentage) . '), 2) as percentage')
                 )
                 ->where('orders.status', '!=', 'cancelled')
                 ->where('payments.status', 'paid')
                 ->whereBetween('orders.order_date', [$startDate, $endDate])
-                ->whereNull('orders.deleted_at')
-                ->groupBy('payments.payment_method')
+                ->whereNull('orders.deleted_at');
+
+            if ($hourStart && $hourEnd) {
+                $paymentMethodsQuery->whereRaw('TIME(orders.order_date) >= ?', [$hourStart])
+                                   ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
+            }
+
+            $paymentMethods = $paymentMethodsQuery->groupBy('payments.payment_method')
                 ->orderBy('total_revenue', 'desc')
                 ->get();
 
             // Category performance
-            $categoryPerformance = DB::table('order_items')
+            $categoryPerformanceQuery = DB::table('order_items')
                 ->join('orders', 'order_items.id_order', '=', 'orders.id_order')
                 ->join('products', 'order_items.id_product', '=', 'products.id_product')
                 ->join('categories', 'products.category_id', '=', 'categories.id_category')
