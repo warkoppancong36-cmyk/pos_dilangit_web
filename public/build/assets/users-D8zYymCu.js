@@ -1,1 +1,0 @@
-import r from"./users-main-CDncFC02.js";import{d as e,g as t,o as s}from"./main-BSot2PSW.js";import{b as o}from"./route-block-B_A1xBdJ.js";import"./api-CN_hM2E8.js";import"./index-D-EbNoF1.js";const n=e({__name:"users",setup(p){return(a,m)=>(s(),t(r))}});typeof o=="function"&&o(n);export{n as default};

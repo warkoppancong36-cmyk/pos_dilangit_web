@@ -1091,6 +1091,46 @@ const exportToExcel = async () => {
     // Dynamic import for better performance
     const XLSX = await import('xlsx')
     
+    // Fetch transaction history data
+    let transactionHistory: any[] = []
+    try {
+      let params: any = {
+        per_page: 1000, // Get all transactions for export
+        status: 'all' // Include all statuses
+      }
+      
+      if (selectedPeriod.value === 'custom') {
+        if (customStartDate.value && customEndDate.value) {
+          params.start_date = customStartDate.value
+          params.end_date = customEndDate.value
+        }
+      } else {
+        if (selectedMonth.value) {
+          params.month = selectedMonth.value
+        }
+      }
+      
+      // Add hour filter if provided
+      if (hourStart.value && hourEnd.value) {
+        params.hour_start = hourStart.value
+        params.hour_end = hourEnd.value
+      }
+      
+      console.log('Fetching transaction history with params:', params)
+      const transactionResponse = await axios.get('/api/pos/orders/history', { params })
+      console.log('Transaction response:', transactionResponse.data)
+      
+      if (transactionResponse.data && transactionResponse.data.data) {
+        transactionHistory = Array.isArray(transactionResponse.data.data) 
+          ? transactionResponse.data.data 
+          : (transactionResponse.data.data.data || []) // Handle paginated response
+      }
+      
+      console.log(`✅ Fetched ${transactionHistory.length} transactions for export`)
+    } catch (error) {
+      console.warn('Failed to fetch transaction history:', error)
+    }
+    
     // Get current period info
     const periodInfo = selectedPeriod.value === 'custom' 
       ? `${customStartDate.value} s/d ${customEndDate.value}`
@@ -1271,7 +1311,88 @@ const exportToExcel = async () => {
       XLSX.utils.book_append_sheet(workbook, categorySheet, 'Category Performance')
     }
 
-    // 9. Business Insights Sheet
+    // 9. Transaction History Sheet - ALWAYS ADD THIS SHEET
+    console.log('📊 Creating Transaction History Sheet with', transactionHistory.length, 'transactions')
+    
+    const transactionData = [
+      ['RIWAYAT TRANSAKSI'],
+      ['Periode:', periodInfo],
+      [],
+      ['No', 'Order ID', 'Tanggal', 'Jam', 'Customer', 'Tipe Order', 'Items', 'Total', 'Pembayaran', 'Status']
+    ]
+    
+    if (transactionHistory && transactionHistory.length > 0) {
+      transactionHistory.forEach((order: any, index: number) => {
+        try {
+          const orderDate = new Date(order.created_at)
+          const dateStr = orderDate.toLocaleDateString('id-ID')
+          const timeStr = orderDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+          
+          // Get customer name
+          const customerName = order.customer?.name || order.customer_name || 'Guest'
+          
+          // Get order type
+          let orderType = 'Dine In'
+          if (order.order_type === 'takeaway') orderType = 'Takeaway'
+          else if (order.order_type === 'delivery') orderType = 'Delivery'
+          
+          // Count total items
+          const totalItems = order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0
+          
+          // Get payment method
+          let paymentMethod = 'Cash'
+          if (order.payment) {
+            if (order.payment.method === 'qris') paymentMethod = 'QRIS'
+            else if (order.payment.method === 'debit') paymentMethod = 'Debit Card'
+            else if (order.payment.method === 'credit') paymentMethod = 'Credit Card'
+            else if (order.payment.method === 'transfer') paymentMethod = 'Transfer Bank'
+          }
+          
+          // Get status
+          let status = order.status || 'pending'
+          if (status === 'completed') status = 'Selesai'
+          else if (status === 'cancelled') status = 'Dibatalkan'
+          else if (status === 'pending') status = 'Pending'
+          else if (status === 'processing') status = 'Diproses'
+          
+          transactionData.push([
+            index + 1,
+            order.order_number || order.id,
+            dateStr,
+            timeStr,
+            customerName,
+            orderType,
+            `${totalItems} item`,
+            formatExcelCurrency(order.total_amount || order.total),
+            paymentMethod,
+            status
+          ])
+        } catch (error) {
+          console.error('Error processing order:', order, error)
+        }
+      })
+    } else {
+      // Add empty row with message if no data
+      transactionData.push(['', 'Tidak ada data transaksi untuk periode ini'])
+    }
+    
+    const transactionSheet = XLSX.utils.aoa_to_sheet(transactionData)
+    transactionSheet['!cols'] = [
+      { wch: 5 },  // No
+      { wch: 12 }, // Order ID
+      { wch: 12 }, // Tanggal
+      { wch: 8 },  // Jam
+      { wch: 20 }, // Customer
+      { wch: 12 }, // Tipe Order
+      { wch: 10 }, // Items
+      { wch: 18 }, // Total
+      { wch: 15 }, // Pembayaran
+      { wch: 12 }  // Status
+    ]
+    XLSX.utils.book_append_sheet(workbook, transactionSheet, 'Riwayat Transaksi')
+    console.log('✅ Transaction History Sheet added to workbook')
+
+    // 10. Business Insights Sheet
     const insightsData = [
       ['BUSINESS INSIGHTS & RECOMMENDATIONS'],
       ['Periode:', periodInfo],
