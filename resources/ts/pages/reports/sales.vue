@@ -1329,11 +1329,31 @@ const exportToExcel = async () => {
     // 9. Transaction History Sheet - ALWAYS ADD THIS SHEET
     console.log('📊 Creating Transaction History Sheet with', transactionHistory.length, 'transactions')
     
+    // Prepare header - base columns + dynamic item columns
+    const baseHeaders = ['No', 'Order ID', 'Tanggal', 'Jam', 'Customer', 'Table', 'Tipe Order', 'Total', 'Pembayaran', 'Status']
+    
+    // Find max number of items in any order to determine columns needed
+    let maxItems = 0
+    if (transactionHistory && transactionHistory.length > 0) {
+      transactionHistory.forEach((order: any) => {
+        const itemCount = order.items?.length || 0
+        if (itemCount > maxItems) maxItems = itemCount
+      })
+    }
+    
+    // Add item columns (Item 1, Item 2, Item 3, ...)
+    const itemHeaders = []
+    for (let i = 1; i <= maxItems; i++) {
+      itemHeaders.push(`Item ${i}`)
+    }
+    
+    const fullHeaders = [...baseHeaders, ...itemHeaders]
+    
     const transactionData = [
       ['RIWAYAT TRANSAKSI'],
       ['Periode:', periodInfo],
       [],
-      ['No', 'Order ID', 'Tanggal', 'Jam', 'Customer', 'Tipe Order', 'Items', 'Total', 'Pembayaran', 'Status']
+      fullHeaders
     ]
     
     if (transactionHistory && transactionHistory.length > 0) {
@@ -1346,13 +1366,13 @@ const exportToExcel = async () => {
           // Get customer name (from raw SQL)
           const customerName = order.customer_name || 'Guest'
           
+          // Get table number
+          const tableNumber = order.table_number || '-'
+          
           // Get order type
           let orderType = 'Dine In'
           if (order.order_type === 'takeaway') orderType = 'Takeaway'
           else if (order.order_type === 'delivery') orderType = 'Delivery'
-          
-          // Get items count (from raw SQL)
-          const totalItems = order.items_count || 0
           
           // Get payment method (from raw SQL - comes as comma-separated string)
           let paymentMethod = 'Cash'
@@ -1372,18 +1392,33 @@ const exportToExcel = async () => {
           else if (status === 'pending') status = 'Pending'
           else if (status === 'processing') status = 'Diproses'
           
-          transactionData.push([
+          // Build base row
+          const rowData = [
             index + 1,
             order.order_number || order.id_order || order.id,
             dateStr,
             timeStr,
             customerName,
+            tableNumber,
             orderType,
-            `${totalItems} item`,
             formatExcelCurrency(order.total_amount || order.total),
             paymentMethod,
             status
-          ])
+          ]
+          
+          // Add items (spread horizontally)
+          const items = order.items || []
+          for (let i = 0; i < maxItems; i++) {
+            if (i < items.length) {
+              const item = items[i]
+              const itemText = `${item.name} (${item.quantity}x)`
+              rowData.push(itemText)
+            } else {
+              rowData.push('') // Empty cell if no item
+            }
+          }
+          
+          transactionData.push(rowData)
         } catch (error) {
           console.error('Error processing order:', order, error)
         }
@@ -1394,18 +1429,27 @@ const exportToExcel = async () => {
     }
     
     const transactionSheet = XLSX.utils.aoa_to_sheet(transactionData)
-    transactionSheet['!cols'] = [
+    
+    // Set column widths
+    const colWidths = [
       { wch: 5 },  // No
       { wch: 12 }, // Order ID
       { wch: 12 }, // Tanggal
       { wch: 8 },  // Jam
       { wch: 20 }, // Customer
+      { wch: 10 }, // Table
       { wch: 12 }, // Tipe Order
-      { wch: 10 }, // Items
       { wch: 18 }, // Total
       { wch: 15 }, // Pembayaran
       { wch: 12 }  // Status
     ]
+    
+    // Add width for item columns
+    for (let i = 0; i < maxItems; i++) {
+      colWidths.push({ wch: 30 }) // 30 characters wide for each item
+    }
+    
+    transactionSheet['!cols'] = colWidths
     XLSX.utils.book_append_sheet(workbook, transactionSheet, 'Riwayat Transaksi')
     console.log('✅ Transaction History Sheet added to workbook')
 
