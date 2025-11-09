@@ -1091,16 +1091,10 @@ const exportToExcel = async () => {
     // Dynamic import for better performance
     const XLSX = await import('xlsx')
     
-    // Fetch transaction history data with timeout and limit
+    // Fetch transaction history data using FAST RAW SQL endpoint
     let transactionHistory: any[] = []
     try {
-      let params: any = {
-        per_page: 500, // Reduced limit to prevent timeout
-        status: 'all', // Include all statuses
-        sort_by: 'created_at',
-        sort_order: 'desc',
-        light_export: true // Use lightweight query for faster export
-      }
+      let params: any = {}
       
       if (selectedPeriod.value === 'custom') {
         if (customStartDate.value && customEndDate.value) {
@@ -1119,27 +1113,34 @@ const exportToExcel = async () => {
         params.hour_end = hourEnd.value
       }
       
-      console.log('Fetching transaction history with params:', params)
+      // Set reasonable limit
+      params.per_page = 500
       
-      // Add timeout to prevent hanging
-      const transactionResponse = await axios.get('/api/pos/orders/history', { 
+      console.log('🚀 Fetching transaction history (FAST MODE) with params:', params)
+      
+      const startTime = performance.now()
+      
+      // Use new fast endpoint with raw SQL
+      const transactionResponse = await axios.get('/api/pos/orders/history/export', { 
         params,
-        timeout: 25000 // 25 seconds timeout
+        timeout: 15000 // 15 seconds should be enough now
       })
       
+      const loadTime = Math.round(performance.now() - startTime)
+      console.log(`⚡ Transaction data loaded in ${loadTime}ms`)
       console.log('Transaction response:', transactionResponse.data)
       
       if (transactionResponse.data && transactionResponse.data.data) {
         transactionHistory = Array.isArray(transactionResponse.data.data) 
           ? transactionResponse.data.data 
-          : (transactionResponse.data.data.data || []) // Handle paginated response
+          : []
       }
       
       console.log(`✅ Fetched ${transactionHistory.length} transactions for export`)
     } catch (error: any) {
       console.error('❌ Failed to fetch transaction history:', error)
       if (error.code === 'ECONNABORTED') {
-        console.warn('⏱️ Request timeout - too many transactions')
+        console.warn('⏱️ Request timeout')
       }
       // Continue with empty data instead of failing the entire export
       transactionHistory = []
@@ -1342,30 +1343,22 @@ const exportToExcel = async () => {
           const dateStr = orderDate.toLocaleDateString('id-ID')
           const timeStr = orderDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
           
-          // Get customer name (lightweight export returns limited fields)
-          const customerName = order.customer?.name || order.customer_name || 'Guest'
+          // Get customer name (from raw SQL)
+          const customerName = order.customer_name || 'Guest'
           
           // Get order type
           let orderType = 'Dine In'
           if (order.order_type === 'takeaway') orderType = 'Takeaway'
           else if (order.order_type === 'delivery') orderType = 'Delivery'
           
-          // Count total items - for lightweight export, this might not be available
-          const totalItems = order.items_count || 
-                           order.order_items_count || 
-                           order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 
-                           '-'
+          // Get items count (from raw SQL)
+          const totalItems = order.items_count || 0
           
-          // Get payment method from payments array
+          // Get payment method (from raw SQL - comes as comma-separated string)
           let paymentMethod = 'Cash'
-          if (order.payments && order.payments.length > 0) {
-            const method = order.payments[0].payment_method
-            if (method === 'qris') paymentMethod = 'QRIS'
-            else if (method === 'debit') paymentMethod = 'Debit Card'
-            else if (method === 'credit') paymentMethod = 'Credit Card'
-            else if (method === 'transfer') paymentMethod = 'Transfer Bank'
-          } else if (order.payment_method) {
-            const method = order.payment_method
+          if (order.payment_methods) {
+            const methods = order.payment_methods.split(',')
+            const method = methods[0] // Use first payment method
             if (method === 'qris') paymentMethod = 'QRIS'
             else if (method === 'debit') paymentMethod = 'Debit Card'
             else if (method === 'credit') paymentMethod = 'Credit Card'
@@ -1386,7 +1379,7 @@ const exportToExcel = async () => {
             timeStr,
             customerName,
             orderType,
-            typeof totalItems === 'number' ? `${totalItems} item` : totalItems,
+            `${totalItems} item`,
             formatExcelCurrency(order.total_amount || order.total),
             paymentMethod,
             status
