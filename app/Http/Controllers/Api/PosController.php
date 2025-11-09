@@ -294,6 +294,7 @@ class PosController extends Controller
                     o.order_type,
                     o.status,
                     o.total_amount,
+                    o.table_number,
                     c.name as customer_name
                 FROM orders o
                 LEFT JOIN customers c ON o.id_customer = c.id_customer
@@ -345,10 +346,36 @@ class PosController extends Controller
                 }
             }
             
+            // Batch get order items with product names
+            $orderItems = [];
+            if (!empty($orderIds)) {
+                $itemsQuery = "
+                    SELECT 
+                        oi.id_order,
+                        p.name as product_name,
+                        oi.quantity
+                    FROM order_items oi
+                    LEFT JOIN products p ON oi.id_product = p.id_product
+                    WHERE oi.id_order IN (" . implode(',', $orderIds) . ")
+                    ORDER BY oi.id_order, oi.id_order_item
+                ";
+                $itemsResults = DB::select($itemsQuery);
+                foreach ($itemsResults as $item) {
+                    if (!isset($orderItems[$item->id_order])) {
+                        $orderItems[$item->id_order] = [];
+                    }
+                    $orderItems[$item->id_order][] = [
+                        'name' => $item->product_name ?? 'Unknown',
+                        'quantity' => $item->quantity
+                    ];
+                }
+            }
+            
             // Merge data
             foreach ($results as $order) {
                 $order->items_count = $itemsCounts[$order->id_order] ?? 0;
                 $order->payment_methods = $paymentMethods[$order->id_order] ?? 'cash';
+                $order->items = $orderItems[$order->id_order] ?? [];
             }
             
             $totalTime = round((microtime(true) - $startTime) * 1000, 2);
