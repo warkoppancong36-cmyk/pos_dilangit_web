@@ -242,158 +242,78 @@ class PosController extends Controller
     }
 
     /**
-     * Get transaction history for export using RAW SQL (SUPER FAST)
+     * Get transaction history for export using CACHED DATA (SUPER FAST)
      */
     public function getTransactionHistoryForExport(Request $request): JsonResponse
     {
         try {
-            \Log::info('🚀 Fast export - Getting transaction history with raw SQL');
+            \Log::info('🚀 Fast export - Getting transaction history from CACHE');
             
-            $params = [];
             $whereConditions = [];
             
             // Date filters
             if ($request->filled('start_date')) {
-                $whereConditions[] = "DATE(o.created_at) >= ?";
-                $params[] = $request->start_date;
+                $whereConditions[] = ['order_date', '>=', $request->start_date];
             }
             
             if ($request->filled('end_date')) {
-                $whereConditions[] = "DATE(o.created_at) <= ?";
-                $params[] = $request->end_date;
+                $whereConditions[] = ['order_date', '<=', $request->end_date];
             }
             
             // Month filter (format: YYYY-MM)
             if ($request->filled('month')) {
-                $whereConditions[] = "DATE_FORMAT(o.created_at, '%Y-%m') = ?";
-                $params[] = $request->month;
+                $whereConditions[] = [DB::raw('DATE_FORMAT(order_date, "%Y-%m")'), '=', $request->month];
             }
             
-            // Hour filters
+            // Hour filters - need to parse from order_time
+            $query = DB::table('report_transaction_cache');
+            
+            foreach ($whereConditions as $condition) {
+                $query->where($condition[0], $condition[1], $condition[2] ?? null);
+            }
+            
             if ($request->filled('hour_start') && $request->filled('hour_end')) {
-                $whereConditions[] = "HOUR(o.created_at) BETWEEN ? AND ?";
-                $params[] = $request->hour_start;
-                $params[] = $request->hour_end;
+                $query->whereRaw('HOUR(order_time) BETWEEN ? AND ?', [
+                    $request->hour_start,
+                    $request->hour_end
+                ]);
             }
             
-            // Build WHERE clause
-            $whereClause = '';
-            if (!empty($whereConditions)) {
-                $whereClause = 'WHERE ' . implode(' AND ', $whereConditions);
-            }
-            
-            // Limit to prevent memory issues
+            // Limit
             $limit = min((int)$request->get('per_page', 500), 1000);
             
-            // Simplified raw SQL - no subqueries for speed
-            $sql = "
-                SELECT 
-                    o.id_order,
-                    o.order_number,
-                    o.created_at,
-                    o.order_type,
-                    o.status,
-                    o.total_amount,
-                    o.table_number,
-                    c.name as customer_name
-                FROM orders o
-                LEFT JOIN customers c ON o.id_customer = c.id_customer
-                {$whereClause}
-                ORDER BY o.created_at DESC
-                LIMIT {$limit}
-            ";
-            
-            \Log::info('Executing SQL:', ['sql' => $sql, 'params' => $params]);
-            
             $startTime = microtime(true);
-            $results = DB::select($sql, $params);
+            
+            $results = $query
+                ->orderBy('order_date', 'desc')
+                ->orderBy('order_time', 'desc')
+                ->limit($limit)
+                ->get();
+            
+            // Parse items_detail JSON
+            foreach ($results as $result) {
+                $result->items = json_decode($result->items_detail, true) ?? [];
+                unset($result->items_detail); // Remove raw JSON
+            }
+            
             $executionTime = round((microtime(true) - $startTime) * 1000, 2);
             
-            \Log::info("✅ Query executed in {$executionTime}ms, fetched " . count($results) . " records");
-            
-            // Get order IDs for batch queries
-            $orderIds = array_column($results, 'id_order');
-            
-            // Batch get items count
-            $itemsCounts = [];
-            if (!empty($orderIds)) {
-                $itemsCountQuery = "
-                    SELECT id_order, COUNT(*) as items_count 
-                    FROM order_items 
-                    WHERE id_order IN (" . implode(',', $orderIds) . ")
-                    GROUP BY id_order
-                ";
-                $itemsResults = DB::select($itemsCountQuery);
-                foreach ($itemsResults as $item) {
-                    $itemsCounts[$item->id_order] = $item->items_count;
-                }
-            }
-            
-            // Batch get payment methods
-            $paymentMethods = [];
-            if (!empty($orderIds)) {
-                $paymentsQuery = "
-                    SELECT id_order, payment_method 
-                    FROM payments 
-                    WHERE id_order IN (" . implode(',', $orderIds) . ")
-                    GROUP BY id_order, payment_method
-                ";
-                $paymentsResults = DB::select($paymentsQuery);
-                foreach ($paymentsResults as $payment) {
-                    if (!isset($paymentMethods[$payment->id_order])) {
-                        $paymentMethods[$payment->id_order] = $payment->payment_method;
-                    }
-                }
-            }
-            
-            // Batch get order items with product names
-            $orderItems = [];
-            if (!empty($orderIds)) {
-                $itemsQuery = "
-                    SELECT 
-                        oi.id_order,
-                        p.name as product_name,
-                        oi.quantity
-                    FROM order_items oi
-                    LEFT JOIN products p ON oi.id_product = p.id_product
-                    WHERE oi.id_order IN (" . implode(',', $orderIds) . ")
-                    ORDER BY oi.id_order, oi.id_order_item
-                ";
-                $itemsResults = DB::select($itemsQuery);
-                foreach ($itemsResults as $item) {
-                    if (!isset($orderItems[$item->id_order])) {
-                        $orderItems[$item->id_order] = [];
-                    }
-                    $orderItems[$item->id_order][] = [
-                        'name' => $item->product_name ?? 'Unknown',
-                        'quantity' => $item->quantity
-                    ];
-                }
-            }
-            
-            // Merge data
-            foreach ($results as $order) {
-                $order->items_count = $itemsCounts[$order->id_order] ?? 0;
-                $order->payment_methods = $paymentMethods[$order->id_order] ?? 'cash';
-                $order->items = $orderItems[$order->id_order] ?? [];
-            }
-            
-            $totalTime = round((microtime(true) - $startTime) * 1000, 2);
-            \Log::info("✅ Total processing time: {$totalTime}ms");
+            \Log::info("✅ Cache query executed in {$executionTime}ms, fetched " . count($results) . " records");
             
             return response()->json([
                 'success' => true,
-                'message' => 'Transaction history retrieved successfully',
+                'message' => 'Transaction history retrieved successfully from cache',
                 'data' => $results,
                 'meta' => [
                     'total' => count($results),
-                    'execution_time_ms' => $totalTime,
-                    'limit' => $limit
+                    'execution_time_ms' => $executionTime,
+                    'limit' => $limit,
+                    'source' => 'cache'
                 ]
             ]);
             
         } catch (\Exception $e) {
-            \Log::error('❌ Failed to get transaction history:', [
+            \Log::error('❌ Failed to get transaction history from cache:', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
