@@ -147,18 +147,9 @@ class ProductItemController extends Controller
 
             $validated = $validator->validated();
 
-            // Check for existing relationship
-            $existingProductItem = ProductItem::where('product_id', $validated['product_id'])
-                ->where('item_id', $validated['item_id'])
-                ->first();
-
-            if ($existingProductItem) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'This item is already assigned to this product',
-                    'error_code' => 'duplicate_relationship'
-                ], 409);
-            }
+            // REMOVED: Duplicate check removed because same item CAN be added multiple times
+            // with different quantities to the same product
+            // Each product_item record is unique by its id_product_item primary key
 
             $productItem = ProductItem::create([
                 ...$validated,

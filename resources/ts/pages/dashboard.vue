@@ -41,6 +41,38 @@ meta:
             @change="onCustomDateChange"
           />
         </div>
+
+        <!-- Hour Range Filter -->
+        <div class="d-flex flex-column flex-sm-row gap-2 align-stretch">
+          <VTextField
+            v-model="hourStart"
+            type="time"
+            label="Jam Mulai"
+            density="comfortable"
+            variant="outlined"
+            hide-details
+            class="flex-grow-1"
+            @change="onHourChange"
+          >
+            <template #prepend-inner>
+              <VIcon icon="mdi-clock-outline" size="20" />
+            </template>
+          </VTextField>
+          <VTextField
+            v-model="hourEnd"
+            type="time"
+            label="Jam Akhir"
+            density="comfortable"
+            variant="outlined"
+            hide-details
+            class="flex-grow-1"
+            @change="onHourChange"
+          >
+            <template #prepend-inner>
+              <VIcon icon="mdi-clock-outline" size="20" />
+            </template>
+          </VTextField>
+        </div>
         
         <!-- Period Quick Select -->
         <VSelect
@@ -342,6 +374,11 @@ meta:
 import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import axios from 'axios'
 import Chart from 'chart.js/auto'
+import { useTheme } from 'vuetify'
+
+// Theme detection
+const theme = useTheme()
+const isDark = computed(() => theme.global.current.value.dark)
 
 // Utils
 const formatCurrency = (value: number) => {
@@ -412,6 +449,8 @@ const loading = ref(false)
 const selectedPeriod = ref('30')
 const customStartDate = ref('')
 const customEndDate = ref('')
+const hourStart = ref('')
+const hourEnd = ref('')
 const dashboardData = ref<DashboardData | null>(null)
 
 // Chart refs
@@ -485,6 +524,12 @@ const loadDashboard = async () => {
       params.period = selectedPeriod.value
     }
     
+    // Add hour filter if provided
+    if (hourStart.value && hourEnd.value) {
+      params.hour_start = hourStart.value
+      params.hour_end = hourEnd.value
+    }
+    
     const response = await axios.get('/api/dashboard/analytics', { params })
     
     if (response.data.success) {
@@ -518,6 +563,16 @@ const onCustomDateChange = () => {
   }
 }
 
+const onHourChange = () => {
+  // Reload dashboard when hour filter changes
+  if (hourStart.value && hourEnd.value) {
+    loadDashboard()
+  } else if (!hourStart.value && !hourEnd.value) {
+    // Clear hour filter - reload to show all hours
+    loadDashboard()
+  }
+}
+
 // Initialize custom dates with default 30 days range
 const initializeDates = () => {
   const endDate = new Date()
@@ -530,14 +585,23 @@ const initializeDates = () => {
 
 // Get display text for date range
 const getDateRangeDisplay = () => {
+  let dateRange = ''
+  
   if (selectedPeriod.value === 'custom' && customStartDate.value && customEndDate.value) {
     const startDate = new Date(customStartDate.value).toLocaleDateString('id-ID')
     const endDate = new Date(customEndDate.value).toLocaleDateString('id-ID')
-    return `(${startDate} - ${endDate})`
+    dateRange = `(${startDate} - ${endDate})`
   } else {
     const periodLabel = periodOptions.find(p => p.value === selectedPeriod.value)?.label || '30 Hari Terakhir'
-    return `(${periodLabel})`
+    dateRange = `(${periodLabel})`
   }
+  
+  // Add hour range if provided
+  if (hourStart.value && hourEnd.value) {
+    dateRange += ` Jam ${hourStart.value} - ${hourEnd.value}`
+  }
+  
+  return dateRange
 }
 
 // Color mapping for payment methods
@@ -621,6 +685,9 @@ const createSalesChart = () => {
   const data = salesData.value.daily_trend
   
   try {
+    const textColor = isDark.value ? '#FFFFFF' : '#333333'
+    const gridColor = isDark.value ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)'
+    
     salesChartInstance = new Chart(ctx, {
       type: 'line',
       data: {
@@ -639,16 +706,41 @@ const createSalesChart = () => {
         maintainAspectRatio: false,
         plugins: {
           legend: {
-            display: false
+            display: false,
+            labels: {
+              color: textColor
+            }
+          },
+          tooltip: {
+            titleColor: textColor,
+            bodyColor: textColor
           }
         },
         scales: {
+          x: {
+            ticks: {
+              color: textColor,
+              font: {
+                size: 11
+              }
+            },
+            grid: {
+              color: gridColor
+            }
+          },
           y: {
             beginAtZero: true,
             ticks: {
+              color: textColor,
+              font: {
+                size: 11
+              },
               callback: function(value: any) {
                 return formatCurrency(Number(value))
               }
+            },
+            grid: {
+              color: gridColor
             }
           }
         }
@@ -679,13 +771,28 @@ const createSalesPieChart = () => {
   }
 
   try {
+    const legendColor = isDark.value ? '#FFFFFF' : '#333333'
+    
     salesPieChartInstance = new Chart(ctx, {
       type: 'pie',
       data: {
         labels: data.map((item: any) => item.product_name || 'Unknown'),
         datasets: [{
           data: data.map((item: any) => item.total_quantity || 0),
-          backgroundColor: ['#D4A574', '#E6B887', '#F2D099', '#B8956A', '#9A7F5A', '#C69C6C', '#E4C29F', '#A08660', '#BD9B73', '#F0D8B5']
+          backgroundColor: [
+            '#FFD700', // Gold
+            '#FFA500', // Orange
+            '#FF8C00', // Dark Orange
+            '#FFB347', // Pastel Orange
+            '#FFCC99', // Peach
+            '#FFE4B5', // Moccasin
+            '#F0E68C', // Khaki
+            '#FFD966', // Light Gold
+            '#FFDB58', // Mustard
+            '#FFE5B4', // Peach Puff
+            '#FFC04C', // Yellow Orange
+            '#FFDB99'  // Light Peach
+          ]
         }]
       },
       options: {
@@ -693,7 +800,25 @@ const createSalesPieChart = () => {
         maintainAspectRatio: false,
         plugins: {
           legend: {
-            position: 'bottom'
+            position: 'bottom',
+            labels: {
+              color: legendColor,
+              padding: 15,
+              font: {
+                size: 12,
+                weight: '500'
+              }
+            }
+          },
+          tooltip: {
+            backgroundColor: isDark.value ? 'rgba(33, 33, 33, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            titleColor: isDark.value ? '#FFFFFF' : '#000000',
+            bodyColor: isDark.value ? '#FFFFFF' : '#333333',
+            borderColor: isDark.value ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+            borderWidth: 1,
+            titleFont: {
+              weight: 'bold'
+            }
           }
         }
       }
@@ -715,6 +840,9 @@ const createPurchaseChart = () => {
 
   const data = purchaseData.value.daily_trend
   
+  const textColor = isDark.value ? '#FFFFFF' : '#333333'
+  const gridColor = isDark.value ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)'
+  
   purchaseChartInstance = new Chart(ctx, {
     type: 'line',
     data: {
@@ -733,16 +861,41 @@ const createPurchaseChart = () => {
       maintainAspectRatio: false,
       plugins: {
         legend: {
-          display: false
+          display: false,
+          labels: {
+            color: textColor
+          }
+        },
+        tooltip: {
+          titleColor: textColor,
+          bodyColor: textColor
         }
       },
       scales: {
+        x: {
+          ticks: {
+            color: textColor,
+            font: {
+              size: 11
+            }
+          },
+          grid: {
+            color: gridColor
+          }
+        },
         y: {
           beginAtZero: true,
           ticks: {
+            color: textColor,
+            font: {
+              size: 11
+            },
             callback: function(value: any) {
               return formatCurrency(Number(value))
             }
+          },
+          grid: {
+            color: gridColor
           }
         }
       }
@@ -771,13 +924,28 @@ const createPurchasePieChart = () => {
 
 
   
+  const legendColor = isDark.value ? '#FFFFFF' : '#333333'
+  
   purchasePieChartInstance = new Chart(ctx, {
     type: 'doughnut',
     data: {
       labels: data.map((item: any) => item.item_name || 'Unknown'),
       datasets: [{
         data: data.map((item: any) => item.total_quantity || 0),
-        backgroundColor: ['#4CAF50', '#FF9800', '#F44336', '#9C27B0', '#607D8B', '#2196F3', '#FF5722', '#795548', '#E91E63', '#3F51B5']
+        backgroundColor: [
+          '#4CAF50', // Green
+          '#66BB6A', // Light Green
+          '#81C784', // Lighter Green
+          '#FF9800', // Orange
+          '#FFB74D', // Light Orange
+          '#FFA726', // Medium Orange
+          '#2196F3', // Blue
+          '#42A5F5', // Light Blue
+          '#64B5F6', // Lighter Blue
+          '#9C27B0', // Purple
+          '#AB47BC', // Light Purple
+          '#BA68C8'  // Lighter Purple
+        ]
       }]
     },
     options: {
@@ -785,7 +953,25 @@ const createPurchasePieChart = () => {
       maintainAspectRatio: false,
       plugins: {
         legend: {
-          position: 'bottom'
+          position: 'bottom',
+          labels: {
+            color: legendColor,
+            padding: 15,
+            font: {
+              size: 12,
+              weight: '500'
+            }
+          }
+        },
+        tooltip: {
+          backgroundColor: isDark.value ? 'rgba(33, 33, 33, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+          titleColor: isDark.value ? '#FFFFFF' : '#000000',
+          bodyColor: isDark.value ? '#FFFFFF' : '#333333',
+          borderColor: isDark.value ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+          borderWidth: 1,
+          titleFont: {
+            weight: 'bold'
+          }
         }
       }
     }
@@ -813,13 +999,28 @@ const createInventoryChart = () => {
 
 
   
+  const legendColor = isDark.value ? '#FFFFFF' : '#333333'
+  
   inventoryChartInstance = new Chart(ctx, {
     type: 'doughnut',
     data: {
       labels: data.map((item: any) => item.item_name || 'Unknown'),
       datasets: [{
         data: data.map((item: any) => item.total_stock || 0),
-        backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#E6B887', '#D4A574', '#F2D099', '#B8956A']
+        backgroundColor: [
+          '#FF6B9D', // Pink
+          '#FFA8C5', // Light Pink
+          '#FFD1DC', // Lighter Pink
+          '#36A2EB', // Blue
+          '#5CB3F0', // Light Blue
+          '#82C4F5', // Lighter Blue
+          '#FFCE56', // Yellow
+          '#FFD97D', // Light Yellow
+          '#FFE5A4', // Lighter Yellow
+          '#4BC0C0', // Teal
+          '#6DD0D0', // Light Teal
+          '#90E0E0'  // Lighter Teal
+        ]
       }]
     },
     options: {
@@ -827,7 +1028,25 @@ const createInventoryChart = () => {
       maintainAspectRatio: false,
       plugins: {
         legend: {
-          position: 'bottom'
+          position: 'bottom',
+          labels: {
+            color: legendColor,
+            padding: 15,
+            font: {
+              size: 12,
+              weight: '500'
+            }
+          }
+        },
+        tooltip: {
+          backgroundColor: isDark.value ? 'rgba(33, 33, 33, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+          titleColor: isDark.value ? '#FFFFFF' : '#000000',
+          bodyColor: isDark.value ? '#FFFFFF' : '#333333',
+          borderColor: isDark.value ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+          borderWidth: 1,
+          titleFont: {
+            weight: 'bold'
+          }
         }
       }
     }
@@ -841,6 +1060,14 @@ watch(dashboardData, () => {
       createCharts()
     })
   }
+})
+
+// Watch for theme changes
+watch(isDark, () => {
+  // Recreate charts when theme changes
+  nextTick(() => {
+    createCharts()
+  })
 })
 
 // Lifecycle
@@ -877,9 +1104,9 @@ onMounted(() => {
     border-radius: 12px;
     
     .v-card-title {
-      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
       border-radius: 12px 12px 0 0;
       padding: 16px 24px;
+      font-weight: 600;
       
       .v-icon {
         color: rgb(var(--v-theme-primary));
@@ -889,6 +1116,18 @@ onMounted(() => {
     .v-card-text {
       padding: 24px;
     }
+  }
+  
+  // Light mode card title
+  .v-theme--light .chart-card .v-card-title {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    color: #333333;
+  }
+  
+  // Dark mode card title
+  .v-theme--dark .chart-card .v-card-title {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+    color: #FFFFFF;
   }
 }
 
