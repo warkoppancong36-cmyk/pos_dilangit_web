@@ -247,7 +247,7 @@ class ReportController extends Controller
                 ->get();
 
             // Category performance
-            $categoryPerformanceQuery = DB::table('order_items')
+            $categoryPerformance = DB::table('order_items')
                 ->join('orders', 'order_items.id_order', '=', 'orders.id_order')
                 ->join('products', 'order_items.id_product', '=', 'products.id_product')
                 ->join('categories', 'products.category_id', '=', 'categories.id_category')
