@@ -43,6 +43,8 @@ meta:
             <VSelect
               v-model="selectedPeriod"
               :items="periodOptions"
+              item-title="title"
+              item-value="value"
               label="Pilih Periode"
               variant="outlined"
               density="compact"
@@ -72,10 +74,12 @@ meta:
             />
           </VCol>
           
-          <VCol cols="12" md="3" v-else>
+          <VCol cols="12" md="3" v-else-if="selectedPeriod === 'month'">
             <VSelect
               v-model="selectedMonth"
               :items="monthOptions"
+              item-title="title"
+              item-value="value"
               label="Pilih Bulan"
               variant="outlined"
               density="compact"
@@ -609,7 +613,7 @@ const todaySalesData = ref({
 })
 const paymentMethodData = ref<any[]>([])
 const orderTypeData = ref<any[]>([])
-const selectedPeriod = ref('month')
+const selectedPeriod = ref('today')
 const selectedMonth = ref('')
 const customStartDate = ref('')
 const customEndDate = ref('')
@@ -622,6 +626,7 @@ let chartInstance: Chart | null = null
 
 // Options
 const periodOptions = [
+  { title: 'Hari Ini', value: 'today' },
   { title: 'Filter per Bulan', value: 'month' },
   { title: 'Custom Range', value: 'custom' }
 ]
@@ -666,11 +671,49 @@ const categoryHeaders = [
 
 // Utility functions
 const formatCurrency = (value: number | string) => {
-  // If value is already formatted string, return as is
+  // If value is a formatted string with Rp, return as-is
   if (typeof value === 'string') {
-    return value.startsWith('Rp') ? value : `Rp ${value}`
+    if (value.trim().startsWith('Rp')) {
+      return value
+    }
+
+    const s = value.trim()
+    // Smart numeric parsing that handles multiple formats (ID/EN)
+    const commaCount = (s.match(/,/g) || []).length
+    const dotCount = (s.match(/\./g) || []).length
+    let parsed = 0
+
+    if (commaCount > 0 && dotCount > 0) {
+      // Mixed separators - determine decimal by the last separator
+      if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+        // Format like 1.234.567,89 -> remove dots as thousand separators, replace comma as decimal
+        parsed = parseFloat(s.replace(/\./g, '').replace(/,/g, '.')) || 0
+      } else {
+        // Format like 1,234,567.89 -> remove commas
+        parsed = parseFloat(s.replace(/,/g, '')) || 0
+      }
+    } else if (dotCount > 1) {
+      // Many dots - assume they are thousands separators
+      parsed = parseFloat(s.replace(/\./g, '')) || 0
+    } else if (commaCount > 1) {
+      // Many commas - assume they are thousands separators
+      parsed = parseFloat(s.replace(/,/g, '')) || 0
+    } else if (commaCount === 1 && dotCount === 0) {
+      // single comma -> could be decimal (ID uses comma as decimal) or thousands if small numbers - treat as decimal
+      parsed = parseFloat(s.replace(/,/g, '.')) || 0
+    } else {
+      parsed = parseFloat(s) || 0
+    }
+
+    const numeric = Math.round(parsed)
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(numeric)
   }
-  
+
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
@@ -839,6 +882,10 @@ const getTotalDaysInPeriod = () => {
 const getSelectedPeriodLabel = () => {
   if (selectedPeriod.value === 'custom' && customStartDate.value && customEndDate.value) {
     return `${formatDate(customStartDate.value)} - ${formatDate(customEndDate.value)}`
+  } else if (selectedPeriod.value === 'today') {
+    // Single day label
+    const today = new Date().toISOString().slice(0, 10)
+    return `${formatDate(today)}`
   } else if (selectedPeriod.value === 'month' && selectedMonth.value) {
     const [year, month] = selectedMonth.value.split('-')
     const monthNames = [
@@ -856,6 +903,10 @@ const onPeriodChange = () => {
     // Set default to current month
     const currentMonth = new Date().toISOString().slice(0, 7)
     selectedMonth.value = currentMonth
+  } else if (selectedPeriod.value === 'today') {
+    const today = new Date().toISOString().slice(0, 10)
+    customStartDate.value = today
+    customEndDate.value = today
   }
   loadReportData()
 }
@@ -875,16 +926,48 @@ const getReportParams = () => {
       params.start_date = customStartDate.value
       params.end_date = customEndDate.value
     }
-  } else {
+  } else if (selectedPeriod.value === 'month') {
     if (selectedMonth.value) {
       params.month = selectedMonth.value
     }
+  } else if (selectedPeriod.value === 'today') {
+    // Set start_date and end_date both to today
+    const today = new Date().toISOString().slice(0, 10)
+    params.start_date = today
+    params.end_date = today
   }
 
   if (hourStart.value && hourEnd.value) {
     params.hour_start = hourStart.value
     params.hour_end = hourEnd.value
   }
+  return params
+}
+
+// Returns params mapped for the dashboard analytics endpoint
+const getDashboardParams = () => {
+  const params: any = {}
+
+  // When using custom range, pass start_date and end_date
+  if (selectedPeriod.value === 'custom') {
+    if (customStartDate.value && customEndDate.value) {
+      params.start_date = customStartDate.value
+      params.end_date = customEndDate.value
+    }
+  } else if (selectedMonth.value) {
+    // For a specific month (YYYY-MM), compute first and last day
+    const [year, month] = selectedMonth.value.split('-')
+    const start = new Date(Number(year), Number(month) - 1, 1)
+    const end = new Date(Number(year), Number(month), 0) // Last day of month
+    params.start_date = start.toISOString().slice(0, 10)
+    params.end_date = end.toISOString().slice(0, 10)
+  }
+
+  if (hourStart.value && hourEnd.value) {
+    params.hour_start = hourStart.value
+    params.hour_end = hourEnd.value
+  }
+
   return params
 }
 
@@ -914,7 +997,7 @@ const loadReportData = async () => {
       // Ensure the 'Penjualan Hari Ini' card reflects currently selected filters (date + hour)
       // Always call loadTodaySales with the current report params so the card will display totals
       // for the selected range/time instead of the default calendar day.
-      const filteredParams = getReportParams()
+  const filteredParams = getDashboardParams()
       // If reportData returned a summary, set it first for a quick render.
       if (reportData.value && reportData.value.summary) {
         todaySalesData.value = {
@@ -945,28 +1028,23 @@ const loadReportData = async () => {
   }
 }
 
-  // Load today's sales data
+  // Load today's sales data (keep behavior aligned with Dashboard 'today_sales')
   const loadTodaySales = async (params: any = {}) => {
   try {
-    // If params provided, call general sales report endpoint to compute summary for that range;
-    // otherwise fallback to today-sales endpoint for actual calendar day.
-    if (params && Object.keys(params).length > 0) {
-      const response = await axios.get('/api/reports/sales', { params })
-      if (response.data.success) {
-        const summary = response.data.data.summary || {}
-        todaySalesData.value = {
-          total_sales: summary.total_revenue || 0,
-          total_orders: summary.total_orders || 0,
-          avg_order_value: summary.average_order || 0
-        }
-        return
-      }
-    }
-
-    const response = await axios.get('/api/reports/today-sales')
-    
+    // For better parity with the Dashboard behavior, call the dashboard endpoint
+    // which returns a dedicated `today_sales` and `today_orders` in summary.
+    const response = await axios.get('/api/dashboard/analytics', { params })
     if (response.data.success) {
-      todaySalesData.value = response.data.data
+      const summary = response.data.data.summary || {}
+      // dashboard summary contains today_sales.value and today_orders.value
+      const today = summary.today_sales || {}
+      const todayOrders = summary.today_orders || {}
+      todaySalesData.value = {
+        total_sales: today.value || 0,
+        total_orders: todayOrders.value || 0,
+        avg_order_value: (today.value && todayOrders.value) ? Math.round(today.value / Math.max(1, todayOrders.value)) : 0
+      }
+      return
     }
   } catch (error) {
     console.error('Error loading today sales:', error)
@@ -1185,7 +1263,9 @@ const exportToExcel = async () => {
     // Get current period info
     const periodInfo = selectedPeriod.value === 'custom' 
       ? `${customStartDate.value} s/d ${customEndDate.value}`
-      : `Bulan ${selectedMonth.value}`
+      : selectedPeriod.value === 'month' 
+        ? `Bulan ${selectedMonth.value}`
+        : `Hari Ini (${new Date().toLocaleDateString('id-ID')})`
     
     // Prepare Summary Data with Enhanced Analytics
     const summaryData = [
@@ -1536,10 +1616,16 @@ const exportToExcel = async () => {
 
 // Lifecycle
 onMounted(() => {
-  // Set default month to current month
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  selectedMonth.value = currentMonth
+  // If default period is today, set customStartDate/customEndDate to today to reflect that
+  if (selectedPeriod.value === 'today') {
+    const today = now.toISOString().slice(0, 10)
+    customStartDate.value = today
+    customEndDate.value = today
+  } else if (selectedPeriod.value === 'month') {
+    selectedMonth.value = currentMonth
+  }
   loadReportData()
 })
 </script>
