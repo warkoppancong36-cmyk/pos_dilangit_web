@@ -894,30 +894,16 @@ const loadReportData = async () => {
   
   isLoading.value = true
   
-  try {
-    let params: any = {}
-    
-    if (selectedPeriod.value === 'custom') {
-      if (customStartDate.value && customEndDate.value) {
-        params.start_date = customStartDate.value
-        params.end_date = customEndDate.value
-      } else {
-        isLoading.value = false
-        return
-      }
-    } else {
-      if (selectedMonth.value) {
-        params.month = selectedMonth.value
-      } else {
-        isLoading.value = false
-        return
-      }
+    try {
+    const params: any = getReportParams()
+    // Validate filter inputs: if custom, ensure both dates are provided; if month, ensure month is selected
+    if (selectedPeriod.value === 'custom' && (!customStartDate.value || !customEndDate.value)) {
+      isLoading.value = false
+      return
     }
-    
-    // Add hour filter if provided
-    if (hourStart.value && hourEnd.value) {
-      params.hour_start = hourStart.value
-      params.hour_end = hourEnd.value
+    if (selectedPeriod.value === 'month' && !selectedMonth.value) {
+      isLoading.value = false
+      return
     }
     
     const response = await axios.get('/api/reports/sales', { params })
@@ -925,18 +911,21 @@ const loadReportData = async () => {
       if (response.data.success) {
       reportData.value = response.data.data
 
-      // Set 'today sales' to reflect currently selected filters (report summary)
-      // This makes the card reflect the filtered range/time instead of always using calendar today.
+      // Ensure the 'Penjualan Hari Ini' card reflects currently selected filters (date + hour)
+      // Always call loadTodaySales with the current report params so the card will display totals
+      // for the selected range/time instead of the default calendar day.
+      const filteredParams = getReportParams()
+      // If reportData returned a summary, set it first for a quick render.
       if (reportData.value && reportData.value.summary) {
         todaySalesData.value = {
           total_sales: reportData.value.summary.total_revenue || 0,
           total_orders: reportData.value.summary.total_orders || 0,
           avg_order_value: reportData.value.summary.average_order || 0
         }
-      } else {
-        // Fallback to current day's sales if summary not available
-        await loadTodaySales()
       }
+      // Always re-query the sales endpoint with the same params to ensure the today's sales card
+      // is correctly calculated and consistent with filters (especially for time-of-day filter)
+      await loadTodaySales(filteredParams)
       
   // Load analytics data (use same filter params)
   const analyticsParams = getReportParams()
@@ -1552,7 +1541,6 @@ onMounted(() => {
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   selectedMonth.value = currentMonth
   loadReportData()
-  loadTodaySales() // Load today's sales independently
 })
 </script>
 
