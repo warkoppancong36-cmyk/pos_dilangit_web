@@ -81,6 +81,11 @@ class ProductController extends Controller
                 }
             }
 
+            // Filter by status (draft|published|archived) - no validation as requested
+            if ($request->filled('status')) {
+                $query->byStatus($request->status);
+            }
+
             $sortBy = $request->get('sort_by', 'created_at');
             $sortOrder = $request->get('sort_order', 'desc');
             $allowedSorts = ['name', 'price', 'cost', 'stock', 'created_at', 'updated_at'];

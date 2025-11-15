@@ -83,6 +83,8 @@ export interface Payment {
   formatted_amount?: string
   payment_method_text?: string
   status_text?: string
+  payment_bank?: string
+  bank?: any
 }
 
 export interface ProductForPos {
@@ -195,6 +197,8 @@ export interface ProcessPaymentData {
   amount: number
   reference_number?: string
   notes?: string
+  bank_id?: number
+  bank?: string
 }
 
 export interface UpdateOrderStatusData {
@@ -455,7 +459,7 @@ export class PosApi {
 
       const response = await axios.get(`${API_BASE_URL}/orders/history`, {
         params: exportParams
-      })
+      });
 
       return response.data.data || []
     } catch (error: any) {
@@ -496,20 +500,30 @@ export class PosApi {
       ).length
 
       // Prepare clean data for export
-      const exportData = ordersData.map((order: any, index: number) => ({
-        'No': index + 1,
-        'ID Order': order.id,
-        'Tanggal': order.created_at ? new Date(order.created_at).toLocaleDateString('id-ID') : '-',
-        'Waktu': order.created_at ? new Date(order.created_at).toLocaleTimeString('id-ID') : '-',
-        'Customer': order.customer?.name || 'Walk-in Customer',
-        'Kategori': order.order_items?.[0]?.product?.category?.name || '-',
-        'Total Amount': parseFloat(order.total_amount) || 0,
-        'Status Pembayaran': order.payment_status === 'paid' ? 'Lunas' :
-          order.payment_status === 'pending' ? 'Pending' : 'Belum Lunas',
-        'Metode Pembayaran': order.payments?.[0]?.payment_method || '-',
-        'Jumlah Item': order.order_items?.length || 0,
-        'Catatan': order.notes || '-'
-      }))
+      const exportData: any[] = [];
+      for (let index = 0; index < ordersData.length; index++) {
+        const order: any = ordersData[index];
+        const itemArray = (order.order_items || order.orderItems || []);
+        const itemsList = (itemArray)
+          .map((it: any) => `${it.quantity}x ${it.product?.name || it.product_name || ''}`)
+          .join(', ');
+
+        exportData.push({
+          'No': index + 1,
+          'ID Order': order.id,
+          'Tanggal': order.created_at ? new Date(order.created_at).toLocaleDateString('id-ID') : '-',
+          'Waktu': order.created_at ? new Date(order.created_at).toLocaleTimeString('id-ID') : '-',
+          'Customer': order.customer?.name || 'Walk-in Customer',
+          'Kategori': (itemArray?.[0]?.product?.category?.name) || '-',
+          'List Barang': itemsList,
+          'Total Amount': parseFloat(order.total_amount) || 0,
+          'Status Pembayaran': order.payment_status === 'paid' ? 'Lunas' :
+            order.payment_status === 'pending' ? 'Pending' : 'Belum Lunas',
+          'Metode Pembayaran': order.payments?.[0]?.payment_method || '-',
+          'Jumlah Item': (itemArray?.length) || 0,
+          'Catatan': order.notes || '-'
+        });
+      }
 
       // Create workbook and worksheet
       const workbook = XLSX.utils.book_new()
@@ -564,6 +578,7 @@ export class PosApi {
         { wch: 10 },  // Waktu
         { wch: 20 },  // Customer
         { wch: 15 },  // Kategori
+        { wch: 30 },  // List Barang
         { wch: 15 },  // Total Amount
         { wch: 15 },  // Status Pembayaran
         { wch: 15 },  // Metode Pembayaran

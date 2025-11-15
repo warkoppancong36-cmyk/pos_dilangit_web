@@ -110,6 +110,16 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
         Route::post('/{category}/toggle-active', [CategoryController::class, 'toggleActive']);
     });
 
+    // Banks master data
+    Route::prefix('banks')->group(function () {
+        Route::get('/', [App\Http\Controllers\Api\BankController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\Api\BankController::class, 'store']);
+        Route::get('/{id}', [App\Http\Controllers\Api\BankController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\Api\BankController::class, 'update']);
+        Route::delete('/{id}', [App\Http\Controllers\Api\BankController::class, 'destroy']);
+        Route::post('/{id}/toggle-active', [App\Http\Controllers\Api\BankController::class, 'toggleActive']);
+    });
+
     Route::prefix('products')->group(function () {
         Route::get('/test-log', [ProductController::class, 'testLog']);
         Route::get('/', [ProductController::class, 'index']);

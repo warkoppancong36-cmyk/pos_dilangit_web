@@ -19,6 +19,7 @@ class OrdersExport
             'No. Pesanan',
             'Pelanggan', 
             'Status',
+            'List Barang',
             'Total',
             'Pembayaran',
             'Tanggal',
@@ -38,10 +39,19 @@ class OrdersExport
                 $paymentMethods = $order->status === 'completed' ? 'Tunai' : 'Belum Dibayar';
             }
 
+            // Build list items string: "{qty}x Product Name"
+            $itemsList = '';
+            if ($order->orderItems && $order->orderItems->count() > 0) {
+                $itemsList = $order->orderItems->map(function ($item) {
+                    return (int)$item->quantity . 'x ' . ($item->item_name ?? ($item->product ? $item->product->name : '')); 
+                })->join(', ');
+            }
+
             $data[] = [
                 $order->order_number,
                 $customerName,
                 $order->order_status_text,
+                $itemsList,
                 'Rp ' . number_format($order->total_amount, 0, ',', '.'),
                 $paymentMethods,
                 $order->created_at->format('d/m/Y H:i'),
@@ -87,8 +97,9 @@ class OrdersExport
         foreach ($customerData as $rowIndex => $row) {
             $xml .= '<Row>' . "\n";
             foreach ($row as $colIndex => $cell) {
+                // Column index 4 (0-based) is the Total column now that we've added a List Barang column
                 $styleId = ($rowIndex === 0) ? 'HeaderStyle' : 
-                          ($colIndex === 3 && $rowIndex > 0 ? 'NumberStyle' : '');
+                          ($colIndex === 4 && $rowIndex > 0 ? 'NumberStyle' : '');
                 $cellValue = htmlspecialchars($cell, ENT_QUOTES, 'UTF-8');
                 
                 if ($styleId) {

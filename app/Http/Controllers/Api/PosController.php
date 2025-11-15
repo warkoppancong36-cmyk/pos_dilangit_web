@@ -12,6 +12,7 @@ use App\Models\ProductItem;
 use App\Models\Customer;
 use App\Models\Category;
 use App\Models\Inventory;
+use App\Models\Bank;
 use App\Models\InventoryMovement;
 use App\Models\CashTransaction;
 use App\Models\CashRegister;
@@ -347,6 +348,17 @@ class PosController extends Controller
         }
 
         try {
+            // If this request is a split (contains original_order_id), ensure the original order is not already paid
+            if ($request->filled('original_order_id')) {
+                $orig = Order::with('payments')->find($request->original_order_id);
+                if ($orig) {
+                    $paidAmount = (float) $orig->payments()->whereIn('status', ['paid', 'completed'])->sum('amount');
+                    if ($paidAmount > 0 || ($orig->is_paid ?? false)) {
+                        return $this->errorResponse('Split bill only allowed for orders that are not yet paid', 422);
+                    }
+                }
+            }
+
             DB::beginTransaction();
 
             $order = Order::create([
@@ -794,6 +806,8 @@ class PosController extends Controller
             'amount' => 'required|numeric|min:0',
             'reference_number' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:255',
+            'bank' => 'nullable|string|max:50', // optional bank/biller info (legacy/free-text)
+            'bank_id' => 'nullable|exists:banks,id_bank', // prefer master bank reference
         ]);
 
         if ($validator->fails()) {
@@ -837,6 +851,44 @@ class PosController extends Controller
             }
             // Create payment record
             $paymentNumber = $this->generatePaymentNumber();
+            // Resolve bank information. Support either bank_id (preferred) or free-text 'bank'.
+            $paymentBank = null;
+            $paymentDetailsBank = null;
+
+            if ($request->filled('bank_id')) {
+                try {
+                    $bankRecord = Bank::find($request->bank_id);
+                    if ($bankRecord) {
+                        $paymentBank = $bankRecord->code;
+                        $paymentDetailsBank = [
+                            'id' => $bankRecord->id_bank,
+                            'code' => $bankRecord->code,
+                            'name' => $bankRecord->name,
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    // ignore lookup failure
+                }
+            } else {
+                // Normalize bank free-text value for consistent reporting
+                $paymentBank = $this->normalizeBank($request->bank ?? null);
+                // Try to resolve to master bank by code or normalized name
+                try {
+                    $bankRecord = Bank::where('code', $paymentBank)
+                        ->orWhereRaw('LOWER(REPLACE(name, " ", "")) = ?', [$paymentBank])
+                        ->first();
+                    if ($bankRecord) {
+                        $paymentBank = $bankRecord->code;
+                        $paymentDetailsBank = [
+                            'id' => $bankRecord->id_bank,
+                            'code' => $bankRecord->code,
+                            'name' => $bankRecord->name,
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    // ignore - bank master may not exist or query failed
+                }
+            }
             $payment = Payment::create([
                 'id_order' => $order->id_order,
                 'payment_number' => $paymentNumber,
@@ -844,6 +896,8 @@ class PosController extends Controller
                 'amount' => $actualPaymentAmount,
                 'reference_number' => $request->reference_number,
                 'change_amount' => $changeAmount,
+                'payment_details' => ['bank' => $paymentDetailsBank ?? ($request->bank ?? null)],
+                'payment_bank' => $paymentBank,
                 'status' => 'paid',
                 'notes' => $request->notes,
                 'processed_by' => Auth::id(),
@@ -972,6 +1026,8 @@ class PosController extends Controller
                     'formatted_cash_received' => $payment->cash_received ? 'Rp ' . number_format($payment->cash_received, 0, ',', '.') : null,
                     'formatted_change_amount' => $payment->change_amount ? 'Rp ' . number_format($payment->change_amount, 0, ',', '.') : null,
                     'reference_number' => $payment->reference_number,
+                    'payment_bank' => $payment->payment_bank,
+                    'bank' => $payment->payment_details['bank'] ?? null,
                     'status' => $payment->status,
                     'status_label' => $this->getPaymentStatusLabel($payment->status),
                     'notes' => $payment->notes,
@@ -1598,6 +1654,8 @@ class PosController extends Controller
             'notes' => 'nullable|string|max:500',
             'cashier_id' => 'required|integer',
             'transaction_date' => 'nullable|string', // Added for Flutter compatibility
+            'bank' => 'nullable|string|max:50', // optional bank/biller info for qris/card/bank_transfer
+            'bank_id' => 'nullable|integer|exists:banks,id_bank', // optional master bank reference from mobile
         ]);
 
         if ($validator->fails()) {
@@ -1683,8 +1741,183 @@ class PosController extends Controller
                 $this->consumeRecipeItems($product, $item['quantity'], $request->cashier_id, $order->id_order, $order->order_type);
             }
 
+            // If this payment is a split from an existing order, adjust the original order
+            if ($request->filled('original_order_id') && $request->filled('selected_items')) {
+                try {
+                    $originalOrder = Order::with('orderItems')->find($request->original_order_id);
+                    if ($originalOrder) {
+                        \Log::info("Processing split bill: reducing items on original order {$originalOrder->id_order}", [
+                            'selected_items' => $request->selected_items
+                        ]);
+
+                        foreach ($request->selected_items as $sel) {
+                            $selId = $sel['id'] ?? null; // could be order item id
+                            $selProductId = $sel['product_id'] ?? ($sel['id_product'] ?? null);
+                            $selQty = (int) ($sel['quantity'] ?? ($sel['qty'] ?? 0));
+
+                            if ($selQty <= 0) continue;
+
+                            // Find matching order item on original order
+                            $foundItem = null;
+                            if ($selId) {
+                                $foundItem = $originalOrder->orderItems->firstWhere('id_order_item', $selId);
+                            }
+                            if (!$foundItem && $selProductId) {
+                                $foundItem = $originalOrder->orderItems->firstWhere('id_product', $selProductId);
+                            }
+
+                            // Fallback: match by item name or SKU or price if still not found
+                            if (!$foundItem) {
+                                $possibleName = trim($sel['menu_name'] ?? $sel['item_name'] ?? ($sel['name'] ?? ''));
+                                $possiblePrice = isset($sel['price']) ? floatval($sel['price']) : null;
+                                $foundItem = $originalOrder->orderItems->first(function($it) use ($possibleName, $possiblePrice) {
+                                    if ($possibleName && strcasecmp(trim($it->item_name), $possibleName) === 0) return true;
+                                    if ($possiblePrice !== null && floatval($it->unit_price) == $possiblePrice) return true;
+                                    return false;
+                                });
+                            }
+
+                            if (!$foundItem) {
+                                // As last resort try to find any item with enough quantity
+                                $foundItem = $originalOrder->orderItems->firstWhere('quantity', '>=', $selQty);
+                            }
+
+                            if (!$foundItem) {
+                                \Log::warning('Selected split item not found on original order', ['sel' => $sel, 'original_order' => $originalOrder->id_order]);
+                                continue;
+                            }
+
+                            $origQty = (int) $foundItem->quantity;
+                            $qtyToRemove = min($origQty, $selQty);
+
+                                // Adjust inventory reserved quantities for the items moved in the split
+                                try {
+                                    $productForReserve = \App\Models\Product::with(['productItems.item.inventory'])->find($foundItem->id_product);
+                                    if ($productForReserve) {
+                                        if ($productForReserve->productItems->isEmpty()) {
+                                            // Direct inventory on product itself
+                                            $directInv = Inventory::where('id_item', $productForReserve->id_product)->first();
+                                            if ($directInv) {
+                                                $newReserved = max(0, ($directInv->reserved_stock ?? 0) - $qtyToRemove);
+                                                $directInv->update(['reserved_stock' => $newReserved]);
+                                                \Log::info('Adjusted reserved_stock for direct product inventory during split', [
+                                                    'inventory_id' => $directInv->id_inventory,
+                                                    'before' => ($directInv->reserved_stock + $qtyToRemove) ?? null,
+                                                    'after' => $newReserved,
+                                                    'qty_removed' => $qtyToRemove
+                                                ]);
+                                            }
+                                        } else {
+                                            // Product has recipe items -> reduce reserved_stock of ingredient inventories
+                                            foreach ($productForReserve->productItems as $pItem) {
+                                                $inv = Inventory::where('id_item', $pItem->item_id)->first();
+                                                if ($inv) {
+                                                    $reserveReduce = ($pItem->quantity_needed ?? 1) * $qtyToRemove;
+                                                    $newReserved = max(0, ($inv->reserved_stock ?? 0) - $reserveReduce);
+                                                    $inv->update(['reserved_stock' => $newReserved]);
+                                                    \Log::info('Adjusted reserved_stock for recipe item during split', [
+                                                        'inventory_id' => $inv->id_inventory,
+                                                        'item_id' => $pItem->item_id,
+                                                        'before' => ($inv->reserved_stock + $reserveReduce) ?? null,
+                                                        'after' => $newReserved,
+                                                        'qty_removed' => $reserveReduce
+                                                    ]);
+                                                }
+                                            }
+                                        }
+                                    }
+                                } catch (\Exception $e) {
+                                    \Log::error('Failed to adjust inventory reserved_stock during split: ' . $e->getMessage());
+                                }
+
+                            // Determine per-unit price
+                            $unitPrice = $foundItem->unit_price ?? ($foundItem->total_price / max(1, $foundItem->quantity));
+                            $removedTotalPrice = $unitPrice * $qtyToRemove;
+
+                            // Pro-rate discount from the order item if present
+                            $removedDiscount = 0;
+                            if (!empty($foundItem->discount_amount) && $foundItem->quantity > 0) {
+                                $removedDiscount = ($foundItem->discount_amount / $foundItem->quantity) * $qtyToRemove;
+                            }
+
+                            // Reduce or delete the original order item
+                            if ($qtyToRemove >= $origQty) {
+                                $foundItem->delete();
+                            } else {
+                                $foundItem->quantity = $origQty - $qtyToRemove;
+                                $foundItem->total_price = max(0, $foundItem->total_price - $removedTotalPrice);
+                                $foundItem->discount_amount = max(0, ($foundItem->discount_amount ?? 0) - $removedDiscount);
+                                $foundItem->save();
+                            }
+                        }
+
+                        // Recalculate original order totals
+                        $origSubtotal = $originalOrder->orderItems()->sum('total_price');
+                        $origDiscount = $originalOrder->orderItems()->sum('discount_amount');
+                        $origTotal = $origSubtotal - $origDiscount;
+
+                        $originalOrder->update([
+                            'subtotal' => $origSubtotal,
+                            'discount_amount' => $origDiscount,
+                            'total_amount' => $origTotal,
+                        ]);
+
+                        \Log::info('Original order updated after split', [
+                            'original_order_id' => $originalOrder->id_order,
+                            'subtotal' => $origSubtotal,
+                            'discount_amount' => $origDiscount,
+                            'total_amount' => $origTotal
+                        ]);
+                    } else {
+                        \Log::warning('Original order not found for split bill', ['original_order_id' => $request->original_order_id]);
+                    }
+                } catch (\Exception $e) {
+                    // Log but do not abort the whole transaction; best-effort update
+                    \Log::error('Failed to adjust original order for split bill: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+                }
+            }
+
             // Create payment record
             $paymentNumber = $this->generatePaymentNumber();
+            // Resolve bank information. Support either bank_id (preferred) or free-text 'bank'.
+            $paymentBank = null;
+            $paymentDetailsBank = null;
+
+            if ($request->filled('bank_id')) {
+                try {
+                    $bankRecord = Bank::find($request->bank_id);
+                    if ($bankRecord) {
+                        $paymentBank = $bankRecord->code;
+                        $paymentDetailsBank = [
+                            'id' => $bankRecord->id_bank,
+                            'code' => $bankRecord->code,
+                            'name' => $bankRecord->name,
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    // ignore lookup failure
+                }
+            } else {
+                // Normalize bank free-text value for consistent reporting
+                $paymentBank = $this->normalizeBank($request->bank ?? null);
+                // Try to resolve to master bank by code or normalized name
+                try {
+                    $bankRecord = Bank::where('code', $paymentBank)
+                        ->orWhereRaw('LOWER(REPLACE(name, " ", "")) = ?', [$paymentBank])
+                        ->first();
+                    if ($bankRecord) {
+                        $paymentBank = $bankRecord->code;
+                        $paymentDetailsBank = [
+                            'id' => $bankRecord->id_bank,
+                            'code' => $bankRecord->code,
+                            'name' => $bankRecord->name,
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    // ignore - bank master may not exist or query failed
+                }
+            }
+
             $payment = Payment::create([
                 'id_order' => $order->id_order,
                 'payment_number' => $paymentNumber,
@@ -1692,6 +1925,8 @@ class PosController extends Controller
                 'amount' => $request->paid_amount,
                 'cash_received' => $request->payment_method === 'cash' ? $request->paid_amount : null,
                 'change_amount' => $request->payment_method === 'cash' ? $request->change_amount : null,
+                'payment_details' => ['bank' => $paymentDetailsBank ?? ($request->bank ?? null)],
+                'payment_bank' => $paymentBank,
                 'reference_number' => $request->reference_number,
                 'status' => 'paid',
                 'notes' => $request->notes,
@@ -1806,6 +2041,46 @@ class PosController extends Controller
         }
         
         return $paymentNumber;
+    }
+
+    /**
+     * Normalize bank input into canonical bank code for reporting
+     */
+    private function normalizeBank(?string $bank): ?string
+    {
+        if (empty($bank)) return null;
+
+        $b = strtolower(trim($bank));
+        // Remove non-alphanumeric characters to make matching easier
+        $b = preg_replace('/[^a-z0-9]/', '', $b);
+
+        $map = [
+            // Mandiri
+            'mandiri' => 'mandiri',
+            'bankmandiri' => 'mandiri',
+            'mandiribank' => 'mandiri',
+            'mnd' => 'mandiri',
+            // BNI
+            'bni' => 'bni',
+            'bankbni' => 'bni',
+            // BCA
+            'bca' => 'bca',
+            'bankbca' => 'bca',
+            // BRI
+            'bri' => 'bri',
+            'bankbri' => 'bri',
+            // BTN
+            'btn' => 'btn',
+            'bankbtn' => 'btn',
+            // Other common banks - add as needed
+            'cimb' => 'cimb',
+            'permata' => 'permata',
+            'panin' => 'panin',
+            'mega' => 'mega',
+            'danamon' => 'danamon',
+        ];
+
+        return $map[$b] ?? $b;
     }
 
     /**
