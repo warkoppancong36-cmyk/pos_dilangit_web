@@ -26,8 +26,11 @@ class BankController extends Controller
                 });
             }
 
-            if ($request->filled('active')) {
+            // By default, only return active banks unless the 'active' filter is explicitly provided
+            if ($request->has('active')) {
                 $query->where('is_active', $request->boolean('active'));
+            } else {
+                $query->where('is_active', true);
             }
 
             $perPage = $request->get('per_page', 15);
