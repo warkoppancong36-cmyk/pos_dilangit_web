@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             PpnSeeder::class,
             CategorySeeder::class,
             ProductSeeder::class,
+            BankSeeder::class,
         ]);
     }
 }

@@ -18,6 +18,7 @@ class Payment extends Model
         'payment_number',
         'payment_method',
         'amount',
+        'payment_bank',
         'cash_received',
         'change_amount',
         'reference_number',
