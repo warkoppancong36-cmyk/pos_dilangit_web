@@ -151,7 +151,7 @@ meta:
               </div>
               <div class="text-body-2 text-medium-emphasis">Penjualan Hari Ini</div>
               <div class="text-caption text-medium-emphasis mt-1">
-                {{ todaySalesData.total_orders }} order | {{ formatDate(new Date()) }}
+                {{ todaySalesData.total_orders }} order | {{ getSelectedPeriodLabel() }}
               </div>
             </VCardText>
           </VCard>
@@ -867,6 +867,27 @@ const onHourChange = () => {
   }
 }
 
+// Returns report params based on selected filters (used by all report-related API calls)
+const getReportParams = () => {
+  let params: any = {}
+  if (selectedPeriod.value === 'custom') {
+    if (customStartDate.value && customEndDate.value) {
+      params.start_date = customStartDate.value
+      params.end_date = customEndDate.value
+    }
+  } else {
+    if (selectedMonth.value) {
+      params.month = selectedMonth.value
+    }
+  }
+
+  if (hourStart.value && hourEnd.value) {
+    params.hour_start = hourStart.value
+    params.hour_end = hourEnd.value
+  }
+  return params
+}
+
 // Load report data
 const loadReportData = async () => {
   if (isLoading.value) return
@@ -901,15 +922,26 @@ const loadReportData = async () => {
     
     const response = await axios.get('/api/reports/sales', { params })
     
-    if (response.data.success) {
+      if (response.data.success) {
       reportData.value = response.data.data
+
+      // Set 'today sales' to reflect currently selected filters (report summary)
+      // This makes the card reflect the filtered range/time instead of always using calendar today.
+      if (reportData.value && reportData.value.summary) {
+        todaySalesData.value = {
+          total_sales: reportData.value.summary.total_revenue || 0,
+          total_orders: reportData.value.summary.total_orders || 0,
+          avg_order_value: reportData.value.summary.average_order || 0
+        }
+      } else {
+        // Fallback to current day's sales if summary not available
+        await loadTodaySales()
+      }
       
-      // Load today's sales data
-      await loadTodaySales()
-      
-      // Load analytics data
-      await loadPaymentMethodAnalytics()
-      await loadOrderTypeAnalytics()
+  // Load analytics data (use same filter params)
+  const analyticsParams = getReportParams()
+  await loadPaymentMethodAnalytics(analyticsParams)
+  await loadOrderTypeAnalytics(analyticsParams)
       
       await nextTick()
       // Add delay to ensure DOM is ready
@@ -924,9 +956,24 @@ const loadReportData = async () => {
   }
 }
 
-// Load today's sales data
-const loadTodaySales = async () => {
+  // Load today's sales data
+  const loadTodaySales = async (params: any = {}) => {
   try {
+    // If params provided, call general sales report endpoint to compute summary for that range;
+    // otherwise fallback to today-sales endpoint for actual calendar day.
+    if (params && Object.keys(params).length > 0) {
+      const response = await axios.get('/api/reports/sales', { params })
+      if (response.data.success) {
+        const summary = response.data.data.summary || {}
+        todaySalesData.value = {
+          total_sales: summary.total_revenue || 0,
+          total_orders: summary.total_orders || 0,
+          avg_order_value: summary.average_order || 0
+        }
+        return
+      }
+    }
+
     const response = await axios.get('/api/reports/today-sales')
     
     if (response.data.success) {
@@ -944,9 +991,9 @@ const loadTodaySales = async () => {
 }
 
 // Load payment method analytics
-const loadPaymentMethodAnalytics = async () => {
+const loadPaymentMethodAnalytics = async (params: any = {}) => {
   try {
-    const response = await axios.get('/api/reports/payment-methods')
+    const response = await axios.get('/api/reports/payment-methods', { params })
     console.log('Payment Methods Response:', response.data)
     
     if (response.data.success) {
@@ -961,9 +1008,9 @@ const loadPaymentMethodAnalytics = async () => {
 }
 
 // Load order type analytics  
-const loadOrderTypeAnalytics = async () => {
+const loadOrderTypeAnalytics = async (params: any = {}) => {
   try {
-    const response = await axios.get('/api/reports/order-types')
+    const response = await axios.get('/api/reports/order-types', { params })
     console.log('Order Types Response:', response.data)
     
     if (response.data.success) {
