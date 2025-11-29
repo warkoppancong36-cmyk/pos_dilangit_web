@@ -58,6 +58,12 @@ export default [
         icon: { icon: 'tabler-box' },
         role: ['admin', 'manager'], // Only admin and manager can access
       },
+      {
+        title: 'Paket',
+        to: { name: 'packages-management' },
+        icon: { icon: 'tabler-package' },
+        role: ['admin', 'manager'], // Only admin and manager can access
+      },
       // {
       //   title: 'Base Product',
       //   to: { name: 'base-products' },
@@ -105,7 +111,7 @@ export default [
       {
         title: 'Inventory',
         to: { name: 'inventory-management' },
-        icon: { icon: 'tabler-package' },
+        icon: { icon: 'tabler-archive' },
         role: ['admin', 'manager'], // Only admin and manager can access
       },
       // {

@@ -41,6 +41,7 @@ declare module 'vue-router/auto-routes' {
     'login': RouteRecordInfo<'login', '/login', Record<never, never>, Record<never, never>>,
     'management-bluetooth-devices-management': RouteRecordInfo<'management-bluetooth-devices-management', '/management/bluetooth-devices-management', Record<never, never>, Record<never, never>>,
     'manager-dashboard': RouteRecordInfo<'manager-dashboard', '/manager/dashboard', Record<never, never>, Record<never, never>>,
+    'packages-management': RouteRecordInfo<'packages-management', '/packages-management', Record<never, never>, Record<never, never>>,
     'pos': RouteRecordInfo<'pos', '/pos', Record<never, never>, Record<never, never>>,
     'pos-components-cash-drawer-dialog': RouteRecordInfo<'pos-components-cash-drawer-dialog', '/pos/components/CashDrawerDialog', Record<never, never>, Record<never, never>>,
     'pos-components-discount-code-input': RouteRecordInfo<'pos-components-discount-code-input', '/pos/components/DiscountCodeInput', Record<never, never>, Record<never, never>>,
