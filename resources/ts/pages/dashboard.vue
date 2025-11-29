@@ -135,9 +135,9 @@ meta:
             <VCardText class="d-flex align-center">
               <div class="flex-grow-1">
                 <div class="text-h6 font-weight-bold">Penjualan Hari Ini</div>
-                <div class="text-h4 text-info mt-2">{{ formatCurrency(summaryData.today_sales?.value || 0) }}</div>
+                <div class="text-h4 text-info mt-2">{{ formatCurrency(displayTodaySalesValue) }}</div>
                 <div class="text-caption text-medium-emphasis">
-                  {{ (summaryData.today_sales?.growth ?? 0) >= 0 ? '+' : '' }}{{ summaryData.today_sales?.growth ?? 0 }}% dari kemarin
+                  {{ (displayTodaySalesGrowth ?? 0) >= 0 ? '+' : '' }}{{ displayTodaySalesGrowth ?? 0 }}% dari kemarin
                 </div>
                 <div class="text-caption text-medium-emphasis mt-1">
                   {{ (summaryData.today_sales?.weekly_growth ?? 0) >= 0 ? '+' : '' }}{{ summaryData.today_sales?.weekly_growth ?? 0 }}% dari minggu lalu
@@ -210,7 +210,7 @@ meta:
             <VCardText class="d-flex align-center">
               <div class="flex-grow-1">
                 <div class="text-h6 font-weight-bold">Total Order Hari Ini</div>
-                <div class="text-h4 text-secondary mt-2">{{ summaryData.today_orders?.value || 0 }}</div>
+                <div class="text-h4 text-secondary mt-2">{{ displayTodayOrdersValue || 0 }}</div>
                 <div class="text-caption text-medium-emphasis">
                   {{ (summaryData.today_orders?.growth ?? 0) >= 0 ? '+' : '' }}{{ summaryData.today_orders?.growth ?? 0 }}% dari kemarin
                 </div>
@@ -500,6 +500,83 @@ const summaryData = computed(() => dashboardData.value?.summary || {} as Dashboa
 const salesData = computed(() => dashboardData.value?.sales || {} as DashboardData['sales'])
 const purchaseData = computed(() => dashboardData.value?.purchases || {} as DashboardData['purchases'])
 const inventoryData = computed(() => dashboardData.value?.inventory || {} as DashboardData['inventory'])
+
+// Determine whether a filter is applied (non-calendar-day selection)
+const isFiltered = computed(() => {
+  if (!dashboardData.value || !dashboardData.value.period) return false
+  const start = dashboardData.value.period.start_date
+  const end = dashboardData.value.period.end_date
+  const today = new Date().toISOString().slice(0, 10)
+  return (start && end && (start !== today || end !== today)) || selectedPeriod.value === 'custom'
+})
+
+// Convert various numeric string formats to number safely
+const parseNumeric = (input: any): number => {
+  if (input === null || input === undefined) return 0
+  if (typeof input === 'number') return input
+  const s = String(input).trim()
+  if (s === '') return 0
+
+  // Remove currency symbols and spaces
+  let t = s.replace(/[^0-9.,\-]/g, '')
+  const commaCount = (t.match(/,/g) || []).length
+  const dotCount = (t.match(/\./g) || []).length
+  let parsed = 0
+
+  try {
+    if (commaCount > 0 && dotCount > 0) {
+      if (t.lastIndexOf(',') > t.lastIndexOf('.')) {
+        // Format like 1.234.567,89 -> remove dots and replace comma
+        parsed = parseFloat(t.replace(/\./g, '').replace(/,/g, '.')) || 0
+      } else {
+        // Format like 1,234,567.89 -> remove commas
+        parsed = parseFloat(t.replace(/,/g, '')) || 0
+      }
+    } else if (dotCount > 1) {
+      // Many dots -> assume thousand separators
+      parsed = parseFloat(t.replace(/\./g, '')) || 0
+    } else if (commaCount > 1) {
+      // Many commas -> assume thousand separators
+      parsed = parseFloat(t.replace(/,/g, '')) || 0
+    } else if (commaCount === 1 && dotCount === 0) {
+      // Single comma likely decimal (ID format)
+      parsed = parseFloat(t.replace(/,/g, '.')) || 0
+    } else {
+      parsed = parseFloat(t) || 0
+    }
+  } catch (e) {
+    parsed = 0
+  }
+
+  // If parsed is tiny float, round to integer (Rp uses no decimals in UI here)
+  return Math.round(parsed)
+}
+
+const displayTodaySalesValue = computed(() => {
+  if (!summaryData.value) return 0
+  if (isFiltered.value) {
+    // Use period summary total revenue if filtered
+    const v = summaryData.value.period_summary?.total_revenue || summaryData.value.period_summary?.total_sales || 0
+    return parseNumeric(v) || 0
+  }
+  return parseNumeric(summaryData.value.today_sales?.value) || 0
+})
+
+const displayTodaySalesGrowth = computed(() => {
+  if (isFiltered.value) {
+    return summaryData.value.period_summary?.growth ?? 0
+  }
+  return summaryData.value.today_sales?.growth ?? 0
+})
+
+const displayTodayOrdersValue = computed(() => {
+  if (!summaryData.value) return 0
+  if (isFiltered.value) {
+    return parseNumeric(summaryData.value.period_summary?.total_orders) || 0
+  }
+  return parseNumeric(summaryData.value.today_orders?.value) || 0
+})
+
 
 // Load dashboard data
 const loadDashboard = async () => {
