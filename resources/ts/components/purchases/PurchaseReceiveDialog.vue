@@ -72,12 +72,14 @@ const getItemsToReceiveCount = () => {
 }
 
 const validateReceiveQuantity = (item: any) => {
-  const remaining = getRemainingQuantity(item)
-  if (item.receive_quantity > remaining)
-    item.receive_quantity = remaining
-
+  // Allow re-receiving or additional receiving beyond original order
+  // No max limit - user can receive more than ordered if needed
+  
   if (item.receive_quantity < 0)
     item.receive_quantity = 0
+    
+  // Round to integer
+  item.receive_quantity = Math.floor(item.receive_quantity)
 }
 
 const getStatusColor = (status: string) => {
@@ -212,6 +214,9 @@ const submitReceive = async () => {
     if (response.data.success) {
       emit('success', response.data)
       closeDialog()
+      
+      // Refresh the page after successful receipt
+      window.location.reload()
     }
   }
   catch (error: any) {
@@ -340,14 +345,14 @@ watch(isOpen, newValue => {
           <!-- Quantity Ordered -->
           <template #item.quantity_ordered="{ item }">
             <span class="font-weight-medium">
-              {{ parseInt(item.quantity_ordered) }} {{ item.item?.unit }}
+              {{ Math.floor(item.quantity_ordered) }} {{ item.item?.unit }}
             </span>
           </template>
 
           <!-- Already Received -->
           <template #item.quantity_received="{ item }">
             <span :class="item.quantity_received > 0 ? 'text-success' : ''">
-              {{ item.quantity_received || 0 }} {{ item.item?.unit }}
+              {{ Math.floor(item.quantity_received || 0) }} {{ item.item?.unit }}
             </span>
           </template>
 
@@ -357,7 +362,7 @@ watch(isOpen, newValue => {
               class="font-weight-medium"
               :class="getRemainingClass(item)"
             >
-              {{ getRemainingQuantity(item) }} {{ item.item?.unit }}
+              {{ Math.floor(getRemainingQuantity(item)) }} {{ item.item?.unit }}
             </span>
           </template>
 
@@ -367,12 +372,11 @@ watch(isOpen, newValue => {
               v-model.number="item.receive_quantity"
               type="number"
               :min="0"
-              :max="getRemainingQuantity(item)"
-              step="0.001"
+              step="1"
               density="compact"
               variant="outlined"
               style="inline-size: 140px;"
-              :disabled="getRemainingQuantity(item) <= 0"
+              placeholder="Qty to receive"
               @input="validateReceiveQuantity(item)"
             />
           </template>

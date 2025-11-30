@@ -108,11 +108,11 @@
                 </td>
                 <td class="text-center">
                   <VChip size="small" variant="outlined">
-                    {{ parseInt(item.quantity_ordered) }} {{ item.unit || 'pcs' }}
+                    {{ Math.floor(item.quantity_ordered) }} {{ item.unit || 'pcs' }}
                   </VChip>
                   <br v-if="item.quantity_received > 0">
                   <VChip v-if="item.quantity_received > 0" size="x-small" variant="tonal" color="success" class="mt-1">
-                    Received: {{ parseInt(item.quantity_received) }}
+                    Received: {{ Math.floor(item.quantity_received) }}
                   </VChip>
                 </td>
                 <td class="text-right font-weight-medium">
