@@ -554,26 +554,18 @@ const parseNumeric = (input: any): number => {
 
 const displayTodaySalesValue = computed(() => {
   if (!summaryData.value) return 0
-  if (isFiltered.value) {
-    // Use period summary total revenue if filtered
-    const v = summaryData.value.period_summary?.total_revenue || summaryData.value.period_summary?.total_sales || 0
-    return parseNumeric(v) || 0
-  }
+  // ALWAYS show today's actual sales, regardless of period filter
   return parseNumeric(summaryData.value.today_sales?.value) || 0
 })
 
 const displayTodaySalesGrowth = computed(() => {
-  if (isFiltered.value) {
-    return summaryData.value.period_summary?.growth ?? 0
-  }
+  // ALWAYS show today's growth vs yesterday
   return summaryData.value.today_sales?.growth ?? 0
 })
 
 const displayTodayOrdersValue = computed(() => {
   if (!summaryData.value) return 0
-  if (isFiltered.value) {
-    return parseNumeric(summaryData.value.period_summary?.total_orders) || 0
-  }
+  // ALWAYS show today's actual orders count
   return parseNumeric(summaryData.value.today_orders?.value) || 0
 })
 
