@@ -1054,6 +1054,11 @@ class PosController extends Controller
 
             // Format payments for mobile
             $formattedPayments = $order->payments->map(function ($payment) {
+                // Extract bank info from payment_details JSON
+                $paymentDetails = is_string($payment->payment_details) 
+                    ? json_decode($payment->payment_details, true) 
+                    : $payment->payment_details;
+                
                 return [
                     'id' => $payment->id_payment,
                     'payment_number' => $payment->payment_number,
@@ -1066,8 +1071,15 @@ class PosController extends Controller
                     'formatted_cash_received' => $payment->cash_received ? 'Rp ' . number_format($payment->cash_received, 0, ',', '.') : null,
                     'formatted_change_amount' => $payment->change_amount ? 'Rp ' . number_format($payment->change_amount, 0, ',', '.') : null,
                     'reference_number' => $payment->reference_number,
+                    
+                    // Bank information
                     'payment_bank' => $payment->payment_bank,
-                    'bank' => $payment->payment_details['bank'] ?? null,
+                    'bank' => $paymentDetails['bank'] ?? $payment->payment_bank ?? null,
+                    'bank_id' => $paymentDetails['bank_id'] ?? null,
+                    'bank_name' => $paymentDetails['bank_name'] ?? $payment->payment_bank ?? null,
+                    'account_number' => $paymentDetails['account_number'] ?? null,
+                    'account_holder' => $paymentDetails['account_holder'] ?? null,
+                    
                     'status' => $payment->status,
                     'status_label' => $this->getPaymentStatusLabel($payment->status),
                     'notes' => $payment->notes,

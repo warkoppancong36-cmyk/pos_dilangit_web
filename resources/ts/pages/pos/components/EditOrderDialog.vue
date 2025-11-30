@@ -452,6 +452,7 @@ const initializeForm = () => {
       discount_value: props.order.discount_amount || 0,
       items: orderItems.map((item: any) => ({
         id_product: item.id_product,
+        item_type: 'product',
         quantity: item.quantity,
         unit_price: item.unit_price,
         notes: item.notes || ''
@@ -463,6 +464,7 @@ const initializeForm = () => {
 const addNewItem = () => {
   formData.value.items.push({
     id_product: null,
+    item_type: 'product',
     quantity: 1,
     unit_price: 0,
     notes: ''

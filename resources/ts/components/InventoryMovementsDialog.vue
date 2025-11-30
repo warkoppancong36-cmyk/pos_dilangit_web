@@ -133,7 +133,7 @@ watch(dialog, (newValue) => {
 <template>
   <VDialog
     v-model="dialog"
-    max-width="900px"
+    max-width="1400px"
     scrollable
   >
     <VCard>
