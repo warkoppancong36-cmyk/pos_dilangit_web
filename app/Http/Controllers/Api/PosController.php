@@ -2749,7 +2749,9 @@ class PosController extends Controller
         if (!$isEmptyOpenBill) {
             $validationRules = array_merge($validationRules, [
                 'cart_items' => 'required|array|min:1',
-                'cart_items.*.product_id' => 'required|integer',
+                'cart_items.*.item_type' => 'required|string|in:product,package',
+                'cart_items.*.product_id' => 'nullable|integer',
+                'cart_items.*.package_id' => 'nullable|integer',
                 'cart_items.*.quantity' => 'required|integer|min:1',
                 'cart_items.*.unit_price' => 'required|numeric|min:0',
                 'cart_items.*.subtotal' => 'nullable|numeric|min:0',
@@ -2807,40 +2809,107 @@ class PosController extends Controller
                         continue;
                     }
 
-                    // First, verify product exists
-                    $product = Product::with(['productItems.item.inventory'])->find($item['product_id']);
-                    if (!$product) {
-                        throw new \Exception("Product not found for product ID: {$item['product_id']}");
-                    }
-
-                    // Check stock availability based on recipe/items
-                    $canProduce = $this->calculateProductAvailability($product, $item['quantity']);
+                    $itemType = $item['item_type'] ?? 'product';
                     
-                    if (!$canProduce['available']) {
-                        throw new \Exception("Stock tidak mencukupi untuk produk: {$product->name}. {$canProduce['message']}");
-                    }
-
                     // Determine subtotal - check both field names
                     $subtotal = $item['subtotal'] ?? $item['total_price'] ?? ($item['unit_price'] * $item['quantity']);
 
-                    // Create order item
-                    OrderItem::create([
-                        'id_order' => $order->id_order,
-                        'id_product' => $item['product_id'],
-                        'item_name' => $product->name,
-                        'item_sku' => $product->sku ?? 'NO-SKU',
-                        'quantity' => $item['quantity'],
-                        'unit_price' => $item['unit_price'],
-                        'total_price' => $subtotal,
-                        'notes' => $item['notes'] ?? null,
-                        'discount_amount' => $item['discount_amount'] ?? 0,
-                        'discount_type' => $item['discount_type'] ?? null,
-                        'discount_percentage' => $item['discount_percentage'] ?? null,
-                        'subtotal_before_discount' => $item['quantity'] * $item['unit_price'],
-                    ]);
+                    if ($itemType === 'package') {
+                        // Handle package item
+                        $package = \App\Models\Package::with(['items.product.productItems.item.inventory'])
+                            ->find($item['package_id']);
+                        
+                        if (!$package) {
+                            throw new \Exception("Package not found for package ID: {$item['package_id']}");
+                        }
 
-                    // Reserve stock (don't consume yet since it's pending payment)
-                    $this->reserveRecipeItems($product, $item['quantity'], $order->id_order);
+                        // Check if package is active
+                        if (!$package->is_active) {
+                            throw new \Exception("Paket '{$package->name}' tidak aktif");
+                        }
+
+                        // Check stock availability for all products in package
+                        if ($package->items && $package->items->count() > 0) {
+                            foreach ($package->items as $packageItem) {
+                                if (!$packageItem->id_product || !$packageItem->product) {
+                                    continue;
+                                }
+                                
+                                $product = $packageItem->product;
+                                $requiredQuantity = $item['quantity'] * $packageItem->quantity;
+                                
+                                $canProduce = $this->calculateProductAvailability($product, $requiredQuantity);
+                                
+                                if (!$canProduce['available']) {
+                                    throw new \Exception("Stock tidak mencukupi untuk produk dalam paket: {$product->name}. {$canProduce['message']}");
+                                }
+                            }
+                        }
+
+                        // Create order item for package
+                        OrderItem::create([
+                            'id_order' => $order->id_order,
+                            'id_package' => $item['package_id'],
+                            'package_name' => $package->name,
+                            'item_type' => 'package',
+                            'item_name' => $package->name,
+                            'item_sku' => $package->sku ?? 'PKG-' . $package->id_package,
+                            'quantity' => $item['quantity'],
+                            'unit_price' => $item['unit_price'],
+                            'total_price' => $subtotal,
+                            'notes' => $item['notes'] ?? null,
+                            'discount_amount' => $item['discount_amount'] ?? 0,
+                            'discount_type' => $item['discount_type'] ?? null,
+                            'discount_percentage' => $item['discount_percentage'] ?? null,
+                            'subtotal_before_discount' => $item['quantity'] * $item['unit_price'],
+                        ]);
+
+                        // Reserve stock for all products in package
+                        if ($package->items && $package->items->count() > 0) {
+                            foreach ($package->items as $packageItem) {
+                                if (!$packageItem->id_product || !$packageItem->product) {
+                                    continue;
+                                }
+                                
+                                $product = $packageItem->product;
+                                $requiredQuantity = $item['quantity'] * $packageItem->quantity;
+                                $this->reserveRecipeItems($product, $requiredQuantity, $order->id_order);
+                            }
+                        }
+                    } else {
+                        // Handle regular product item
+                        $product = Product::with(['productItems.item.inventory'])->find($item['product_id']);
+                        if (!$product) {
+                            throw new \Exception("Product not found for product ID: {$item['product_id']}");
+                        }
+
+                        // Check stock availability based on recipe/items
+                        $canProduce = $this->calculateProductAvailability($product, $item['quantity']);
+                        
+                        if (!$canProduce['available']) {
+                            throw new \Exception("Stock tidak mencukupi untuk produk: {$product->name}. {$canProduce['message']}");
+                        }
+
+                        // Create order item
+                        OrderItem::create([
+                            'id_order' => $order->id_order,
+                            'id_product' => $item['product_id'],
+                            'item_type' => 'product',
+                            'item_name' => $product->name,
+                            'item_sku' => $product->sku ?? 'NO-SKU',
+                            'quantity' => $item['quantity'],
+                            'unit_price' => $item['unit_price'],
+                            'total_price' => $subtotal,
+                            'notes' => $item['notes'] ?? null,
+                            'discount_amount' => $item['discount_amount'] ?? 0,
+                            'discount_type' => $item['discount_type'] ?? null,
+                            'discount_percentage' => $item['discount_percentage'] ?? null,
+                            'subtotal_before_discount' => $item['quantity'] * $item['unit_price'],
+                        ]);
+
+                        // Reserve stock (don't consume yet since it's pending payment)
+                        $this->reserveRecipeItems($product, $item['quantity'], $order->id_order);
+                    }
                 }
             }
 
@@ -2869,17 +2938,26 @@ class PosController extends Controller
                 'notes' => $order->notes,
                 'created_at' => $order->created_at,
                 'order_items' => $order->orderItems->map(function($item) {
-                    return [
+                    $response = [
                         'id' => $item->id_order_item,
-                        'product_id' => $item->id_product,
-                        'product_name' => $item->item_name,
+                        'item_type' => $item->item_type ?? 'product',
                         'quantity' => $item->quantity,
                         'unit_price' => $item->unit_price,
                         'total_price' => $item->total_price,
                         'notes' => $item->notes,
-                        'available_kitchen' => $item->product ? $item->product->available_in_kitchen : null,
-                        'available_bar' => $item->product ? $item->product->available_in_bar : null,
                     ];
+                    
+                    if ($item->item_type === 'package') {
+                        $response['package_id'] = $item->id_package;
+                        $response['package_name'] = $item->package_name;
+                    } else {
+                        $response['product_id'] = $item->id_product;
+                        $response['product_name'] = $item->item_name;
+                        $response['available_kitchen'] = $item->product ? $item->product->available_in_kitchen : null;
+                        $response['available_bar'] = $item->product ? $item->product->available_in_bar : null;
+                    }
+                    
+                    return $response;
                 }),
                 'cashier' => $order->user ? [
                     'name' => $order->user->name,
