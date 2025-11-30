@@ -88,19 +88,31 @@ export interface Payment {
 }
 
 export interface ProductForPos {
+  // Common fields
   id_product: number
+  id_package?: number
   name: string
   slug: string
   description?: string
   sku: string
   barcode?: string
+  item_type?: 'product' | 'package'
+
+  // Product fields
   price: string
+  selling_price?: string
   cost: string
   stock: number
   min_stock: number
   unit: string
   weight?: string
   dimensions?: string
+
+  // Package fields
+  package_price?: number
+  unit_price?: number
+  total_price?: number
+
   image?: string
   category_id: number
   brand?: string
@@ -120,6 +132,7 @@ export interface ProductForPos {
   deleted_at?: string
   image_url?: string
   stock_status: string
+  is_disabled?: boolean
   formatted_price: string
   formatted_cost: string
   profit_margin: number
@@ -170,10 +183,14 @@ export interface CreateOrderData {
 }
 
 export interface AddItemData {
-  id_product: number
+  id_product?: number
+  id_package?: number
+  item_type: 'product' | 'package'
   id_variant?: number
   quantity: number
   price?: number
+  unit_price?: number
+  total_price?: number
   notes?: string
 }
 
@@ -255,6 +272,19 @@ export class PosApi {
   }): Promise<ApiResponse<ProductForPos[]>> {
     try {
       const response = await axios.get(`${API_BASE_URL}/products`, { params })
+      return response.data
+    } catch (error: any) {
+      throw error.response?.data || this.handleError(error)
+    }
+  }
+
+  // Get packages for POS
+  static async getPackages(params?: {
+    search?: string
+    category_id?: number
+  }): Promise<ApiResponse<ProductForPos[]>> {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/packages`, { params })
       return response.data
     } catch (error: any) {
       throw error.response?.data || this.handleError(error)

@@ -2,17 +2,29 @@ import { PosApi } from '@/utils/api/PosApi'
 import { computed, readonly, ref, watch } from 'vue'
 
 export interface Product {
-  id_product: number
+  id_product?: number
+  id_package?: number
+  item_type?: 'product' | 'package'
   name: string
   sku: string
   barcode?: string
-  selling_price: number
-  stock: number
+  selling_price?: number
+  package_price?: number
+  stock?: number
   image?: string
   id_category?: number
   id_variant?: number
   available_in_kitchen?: boolean
   available_in_bar?: boolean
+  is_disabled?: boolean
+  stock_status?: string
+  stock_info?: {
+    current_stock: number
+    available_stock: number
+    is_available: boolean
+  }
+  unit_price?: number
+  total_price?: number
 }
 
 export interface Customer {
@@ -47,7 +59,10 @@ const usePOS = () => {
   // Computed properties
   const subtotal = computed(() => {
     return cartItems.value.reduce((total, item) => {
-      return total + (item.selling_price * item.quantity)
+      const price = item.item_type === 'package'
+        ? (item.package_price || item.unit_price || 0)
+        : (item.selling_price || item.unit_price || 0)
+      return total + (price * item.quantity)
     }, 0)
   })
 
@@ -87,23 +102,37 @@ const usePOS = () => {
   // Cart operations
   const addToCart = (product: Product, quantity: number = 1) => {
     try {
-      const existingItem = cartItems.value.find(item => item.id_product === product.id_product)
+      // For packages, use id_package; for products, use id_product
+      const itemId = product.item_type === 'package' ? product.id_package : product.id_product
+      const existingItem = cartItems.value.find(item => {
+        if (product.item_type === 'package') {
+          return item.id_package === itemId && item.item_type === 'package'
+        }
+        return item.id_product === itemId && item.item_type !== 'package'
+      })
+
+      // Get available stock - for packages, use stock directly
+      const availableStock = product.item_type === 'package'
+        ? (product.stock || 0)
+        : (product.stock || 0)
 
       if (existingItem) {
         const newQuantity = existingItem.quantity + quantity
-        if (newQuantity <= product.stock) {
+        if (newQuantity <= availableStock) {
           existingItem.quantity = newQuantity
         } else {
-          throw new Error(`Stok tidak mencukupi. Tersedia: ${product.stock}`)
+          throw new Error(`Stok tidak mencukupi. Tersedia: ${availableStock}`)
         }
       } else {
-        if (quantity <= product.stock) {
+        if (quantity <= availableStock) {
           cartItems.value.push({
             ...product,
-            quantity
+            quantity,
+            // Ensure proper stock value for display
+            stock: availableStock
           })
         } else {
-          throw new Error(`Stok tidak mencukupi. Tersedia: ${product.stock}`)
+          throw new Error(`Stok tidak mencukupi. Tersedia: ${availableStock}`)
         }
       }
 
@@ -115,23 +144,40 @@ const usePOS = () => {
     }
   }
 
-  const removeFromCart = (productId: number) => {
-    const index = cartItems.value.findIndex(item => item.id_product === productId)
+  const removeFromCart = (productId: number, isPackage: boolean = false) => {
+    const index = cartItems.value.findIndex(item => {
+      if (isPackage) {
+        return item.id_package === productId && item.item_type === 'package'
+      }
+      return item.id_product === productId && item.item_type !== 'package'
+    })
     if (index > -1) {
       cartItems.value.splice(index, 1)
     }
   }
 
-  const updateQuantity = (productId: number, newQuantity: number) => {
-    const item = cartItems.value.find(item => item.id_product === productId)
+  const updateQuantity = (productId: number, newQuantity: number, isPackage: boolean = false) => {
+    const item = cartItems.value.find(item => {
+      if (isPackage) {
+        return item.id_package === productId && item.item_type === 'package'
+      }
+      return item.id_product === productId && item.item_type !== 'package'
+    })
+
     if (item) {
       if (newQuantity <= 0) {
-        removeFromCart(productId)
-      } else if (newQuantity <= item.stock) {
-        item.quantity = newQuantity
+        removeFromCart(productId, isPackage)
       } else {
-        error.value = `Stok tidak mencukupi. Tersedia: ${item.stock}`
-        return false
+        const availableStock = item.item_type === 'package'
+          ? (item.stock_info?.available_stock || item.stock || 0)
+          : (item.stock || 0)
+
+        if (newQuantity <= availableStock) {
+          item.quantity = newQuantity
+        } else {
+          error.value = `Stok tidak mencukupi. Tersedia: ${availableStock}`
+          return false
+        }
       }
     }
     return true
@@ -201,13 +247,24 @@ const usePOS = () => {
 
       // Add items to the order
       for (const item of cartItems.value) {
-        await PosApi.addItem(order.id_order, {
-          id_product: item.id_product,
-          id_variant: item.id_variant || undefined,
+        const itemData: any = {
+          item_type: item.item_type || 'product',
           quantity: item.quantity,
-          price: item.selling_price,
           notes: ''
-        })
+        }
+
+        if (item.item_type === 'package') {
+          itemData.id_package = item.id_package
+          itemData.unit_price = item.package_price || item.unit_price
+          itemData.total_price = (item.package_price || item.unit_price || 0) * item.quantity
+        } else {
+          itemData.id_product = item.id_product
+          itemData.id_variant = item.id_variant || undefined
+          itemData.unit_price = item.selling_price || item.unit_price
+          itemData.total_price = (item.selling_price || item.unit_price || 0) * item.quantity
+        }
+
+        await PosApi.addItem(order.id_order, itemData)
       }
 
       // Apply discount if any

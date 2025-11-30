@@ -259,9 +259,9 @@ const loadAvailablePromotions = async () => {
       items: props.cartItems.map(item => ({
         product_id: item.id_product,
         category_id: item.category_id || null,
-        price: item.selling_price,
+        price: item.item_type === 'package' ? (item.package_price || 0) : (item.selling_price || 0),
         quantity: item.quantity,
-        subtotal: item.selling_price * item.quantity
+        subtotal: (item.item_type === 'package' ? (item.package_price || 0) : (item.selling_price || 0)) * item.quantity
       })),
       subtotal: props.subtotal,
       current_time: new Date().toISOString()
