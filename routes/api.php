@@ -327,6 +327,7 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
         Route::get('/stats', [PosController::class, 'getStats']);
         Route::get('/products', [PosController::class, 'getProducts']);
         Route::get('/product_mobile', [PosController::class, 'getProductsNonOnline']);
+        Route::get('/packages', [PosController::class, 'getPackages']); // New dedicated packages endpoint
         
         // Order routes - specific routes first
         Route::get('/orders', [PosController::class, 'getActiveOrders']);

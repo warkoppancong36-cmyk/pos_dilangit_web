@@ -49,7 +49,7 @@
           <div class="search-section">
             <VTextField
               v-model="productSearch"
-              placeholder="Cari produk, SKU, atau barcode..."
+              :placeholder="viewMode === 'packages' ? 'Cari paket, SKU...' : 'Cari produk, SKU, atau barcode...'"
               density="comfortable"
               variant="solo"
               prepend-inner-icon="tabler-search"
@@ -61,6 +61,29 @@
           </div>
           
           <div class="filter-section">
+            <!-- View Mode Toggle -->
+            <div class="view-mode-toggle">
+              <VBtn
+                :variant="viewMode === 'products' ? 'flat' : 'outlined'"
+                :color="viewMode === 'products' ? 'primary' : 'default'"
+                size="default"
+                class="toggle-btn"
+                @click="viewMode = 'products'"
+              >
+                <VIcon icon="tabler-package" start size="20" />
+                Produk
+              </VBtn>
+              <VBtn
+                :variant="viewMode === 'packages' ? 'flat' : 'outlined'"
+                :color="viewMode === 'packages' ? 'success' : 'default'"
+                size="default"
+                class="toggle-btn"
+                @click="viewMode = 'packages'"
+              >
+                <VIcon icon="tabler-gift" start size="20" />
+                Paket
+              </VBtn>
+            </div>
             <VSelect
               v-model="selectedCategory"
               :items="categories"
@@ -107,42 +130,68 @@
           <div v-if="!loading && filteredProducts.length > 0" class="products-grid">
             <div
               v-for="product in filteredProducts"
-              :key="product.id_product"
+              :key="product.id_product || product.id_package"
               class="product-item"
               :class="{ 
-                'out-of-stock': product.stock === 0,
-                'no-price': !product.selling_price || product.selling_price <= 0,
-                'disabled': product.stock === 0 || !product.selling_price || product.selling_price <= 0
+                'out-of-stock': product.is_disabled === true || (product.stock || 0) <= 0,
+                'no-price': product.item_type === 'package' 
+                  ? !(product.package_price || product.unit_price)
+                  : !(product.selling_price),
+                'disabled': !canAddToCart(product),
+                'package-item': product.item_type === 'package'
               }"
               @click="canAddToCart(product) ? addToCart(product) : null"
             >
               <div class="product-image">
                 <div class="product-image-wrapper">
                   <VImg
-                    v-if="product.image && !imageErrors[product.id_product]"
+                    v-if="product.image && !imageErrors[(product.id_product || product.id_package || 0)]"
                     :src="product.image"
                     class="product-image-content"
                     cover
-                    @error="handleImageError(product.id_product)"
+                    @error="handleImageError(product.id_product || product.id_package || 0)"
                   />
                   <div v-else class="product-image-placeholder">
-                    <VIcon size="32" color="grey-400">tabler-package</VIcon>
+                    <VIcon 
+                      size="32" 
+                      color="grey-400"
+                      :icon="product.item_type === 'package' ? 'tabler-packages' : 'tabler-package'"
+                    />
                     <span class="placeholder-text">{{ getProductInitials(product.name) }}</span>
                   </div>
                 </div>
                 
+                <!-- Package Badge -->
+                <div 
+                  v-if="product.item_type === 'package'" 
+                  class="package-badge"
+                  title="Paket Bundle"
+                >
+                  <VIcon icon="tabler-gift" size="12" class="mr-1" />
+                  PAKET
+                </div>
+                
                 <!-- Stock Badge -->
-                <div class="stock-badge" :class="getStockBadgeClass(product.stock)">
+                <div 
+                  class="stock-badge" 
+                  :class="getStockBadgeClass(product.stock || 0)"
+                  :style="product.item_type === 'package' ? 'top: 32px' : ''"
+                >
                   <VIcon 
-                    :icon="product.stock > 0 ? 'tabler-package' : 'tabler-package-off'" 
+                    :icon="(product.stock || 0) > 0 ? 'tabler-package' : 'tabler-package-off'" 
                     size="12" 
                     class="mr-1"
                   />
-                  Stock: {{ product.stock }}
+                  <span v-if="product.stock_status && product.stock_status !== 'available'">
+                    {{ product.stock_status }}
+                  </span>
+                  <span v-else>
+                    Stock: {{ product.stock || 0 }}
+                  </span>
                 </div>
                 
                 <!-- Station Availability Badges -->
-                <div class="station-badges">
+                <div v-if="product.item_type !== 'package'" class="station-badges">
                   <div 
                     v-if="product.available_in_kitchen"
                     class="station-badge kitchen-badge"
@@ -162,11 +211,16 @@
                 </div>
                 
                 <!-- Status Indicators -->
-                <div v-if="product.stock === 0" class="status-indicator out-of-stock-indicator">
+                <div v-if="(product.stock || 0) === 0" class="status-indicator out-of-stock-indicator">
                   <VIcon icon="tabler-alert-circle" size="14" />
                   Stok Habis
                 </div>
-                <div v-else-if="!product.selling_price || product.selling_price <= 0" class="status-indicator no-price-indicator">
+                <div 
+                  v-else-if="product.item_type === 'package' 
+                    ? !(product.package_price)
+                    : !(product.selling_price)" 
+                  class="status-indicator no-price-indicator"
+                >
                   <VIcon icon="tabler-alert-triangle" size="14" />
                   Harga Kosong
                 </div>
@@ -182,8 +236,24 @@
                 <p class="product-sku">{{ product.sku }}</p>
                 
                 <div class="product-footer">
-                  <span class="product-price" :class="{ 'price-missing': !product.selling_price || product.selling_price <= 0 }">
-                    {{ product.selling_price && product.selling_price > 0 ? formatCurrency(product.selling_price) : 'Harga tidak tersedia' }}
+                  <span 
+                    class="product-price" 
+                    :class="{ 
+                      'price-missing': product.item_type === 'package'
+                        ? !(product.package_price)
+                        : !(product.selling_price)
+                    }"
+                  >
+                    <template v-if="product.item_type === 'package'">
+                      {{ (product.package_price) 
+                        ? formatCurrency(product.package_price || 0) 
+                        : 'Harga tidak tersedia' }}
+                    </template>
+                    <template v-else>
+                      {{ product.selling_price 
+                        ? formatCurrency(product.selling_price) 
+                        : 'Harga tidak tersedia' }}
+                    </template>
                   </span>
                   <VBtn
                     size="small"
@@ -262,12 +332,25 @@
           <div v-if="cartItems.length > 0" class="cart-items">
             <div
               v-for="item in cartItems"
-              :key="item.id_product"
+              :key="item.item_type === 'package' ? `pkg-${item.id_package}` : `prd-${item.id_product}`"
               class="cart-item"
             >
               <div class="item-info">
-                <h6 class="item-name">{{ item.name }}</h6>
-                <p class="item-price">{{ formatCurrency(item.selling_price) }} / item</p>
+                <h6 class="item-name">
+                  {{ item.name }}
+                  <VChip
+                    v-if="item.item_type === 'package'"
+                    size="x-small"
+                    color="success"
+                    variant="tonal"
+                    class="ml-1"
+                  >
+                    Paket
+                  </VChip>
+                </h6>
+                <p class="item-price">
+                  {{ formatCurrency(item.item_type === 'package' ? (item.package_price || 0) : (item.selling_price || 0)) }} / item
+                </p>
               </div>
               
               <div class="item-controls">
@@ -278,7 +361,11 @@
                     color="error"
                     icon="tabler-minus"
                     :disabled="item.quantity <= 1"
-                    @click="updateQuantity(item.id_product, item.quantity - 1)"
+                    @click="updateQuantity(
+                      item.item_type === 'package' ? item.id_package : item.id_product, 
+                      item.quantity - 1,
+                      item.item_type === 'package'
+                    )"
                   />
                   <span class="quantity">{{ item.quantity }}</span>
                   <VBtn
@@ -287,12 +374,16 @@
                     color="success"
                     icon="tabler-plus"
                     :disabled="item.quantity >= item.stock"
-                    @click="updateQuantity(item.id_product, item.quantity + 1)"
+                    @click="updateQuantity(
+                      item.item_type === 'package' ? item.id_package : item.id_product, 
+                      item.quantity + 1,
+                      item.item_type === 'package'
+                    )"
                   />
                 </div>
                 
                 <div class="item-total">
-                  {{ formatCurrency(item.selling_price * item.quantity) }}
+                  {{ formatCurrency((item.item_type === 'package' ? (item.package_price || 0) : (item.selling_price || 0)) * item.quantity) }}
                 </div>
                 
                 <VBtn
@@ -300,7 +391,10 @@
                   variant="text"
                   color="error"
                   icon="tabler-x"
-                  @click="removeFromCart(item.id_product)"
+                  @click="removeFromCart(
+                    item.item_type === 'package' ? item.id_package : item.id_product,
+                    item.item_type === 'package'
+                  )"
                 />
               </div>
             </div>
@@ -422,6 +516,7 @@ const customers = ref<Customer[]>([])
 const productSearch = ref('')
 const selectedCategory = ref<number | null>(null)
 const selectedStation = ref<'kitchen' | 'bar' | null>(null)
+const viewMode = ref<'products' | 'packages'>('products')
 const paymentDialog = ref(false)
 const transactionHistoryDialog = ref(false)
 const cashDrawerDialog = ref(false)
@@ -471,6 +566,13 @@ const stationOptions = [
 const filteredProducts = computed(() => {
   let filtered = products.value
 
+  // Filter by view mode (products or packages)
+  if (viewMode.value === 'products') {
+    filtered = filtered.filter(product => product.item_type !== 'package')
+  } else {
+    filtered = filtered.filter(product => product.item_type === 'package')
+  }
+
   // Filter by search
   if (productSearch.value) {
     const search = productSearch.value.toLowerCase()
@@ -486,8 +588,8 @@ const filteredProducts = computed(() => {
     filtered = filtered.filter(product => product.id_category === selectedCategory.value)
   }
 
-  // Filter by station availability
-  if (selectedStation.value) {
+  // Filter by station availability (only for products, not packages)
+  if (selectedStation.value && viewMode.value === 'products') {
     filtered = filtered.filter(product => {
       if (selectedStation.value === 'kitchen') {
         return product.available_in_kitchen !== false
@@ -505,22 +607,80 @@ const filteredProducts = computed(() => {
 const loadProducts = async () => {
   try {
     loading.value = true
-    const response = await PosApi.getProducts()
-    // Transform ProductForPos to Product interface
-    products.value = response.data.map(p => ({
+    
+    // Load products and packages in parallel
+    const [productsResponse, packagesResponse] = await Promise.all([
+      PosApi.getProducts(),
+      PosApi.getPackages()
+    ])
+    
+    console.log('📦 Products Response:', productsResponse)
+    console.log('🎁 Packages Response:', packagesResponse)
+    
+    // Transform products
+    const transformedProducts = (productsResponse?.data || []).map(p => ({
       id_product: p.id_product,
       name: p.name,
       sku: p.sku,
-      selling_price: parseFloat(p.price),
-      // Get stock from stock_info, fallback to 0 if not available
-      stock: p.stock_info?.available_stock || p.stock_info?.current_stock || p.stock || 0,
+      item_type: 'product',
       image: p.image_url || p.image,
       id_category: p.category?.id_category,
+      selling_price: parseFloat(p.price || p.selling_price || 0),
       available_in_kitchen: p.available_in_kitchen ?? true,
-      available_in_bar: p.available_in_bar ?? true
+      available_in_bar: p.available_in_bar ?? true,
+      stock: p.stock_info?.available_stock || p.stock_info?.current_stock || p.stock || 0,
+      stock_info: p.stock_info
     }))
+    
+    // Transform packages
+    const transformedPackages = (packagesResponse?.data || []).map(p => ({
+      id_package: p.id_package || p.id,  // Try id_package first, fallback to id
+      name: p.name,
+      sku: p.sku,
+      item_type: 'package',
+      image: p.image,
+      id_category: p.category?.id_category,
+      package_price: parseFloat(p.package_price || 0),
+      unit_price: p.unit_price,
+      total_price: p.total_price,
+      stock: p.stock || 0,
+      stock_info: p.stock_info,
+      available_in_kitchen: true,
+      available_in_bar: true
+    }))
+    
+    // Merge products and packages
+    products.value = [...transformedProducts, ...transformedPackages]
+    
+    console.log('✅ Total items:', products.value.length, {
+      products: transformedProducts.length,
+      packages: transformedPackages.length
+    })
   } catch (error) {
-    console.error('Error loading products:', error)
+    console.error('❌ Error loading products:', error)
+    // Still load products even if packages fail
+    try {
+      const productsResponse = await PosApi.getProducts()
+      products.value = (productsResponse?.data || []).map(p => ({
+        id_product: p.id_product,
+        id_package: p.id_package,
+        name: p.name,
+        sku: p.sku,
+        item_type: p.item_type || 'product',
+        image: p.image_url || p.image,
+        id_category: p.category?.id_category,
+        selling_price: p.item_type === 'product' ? parseFloat(p.price || p.selling_price || 0) : undefined,
+        available_in_kitchen: p.available_in_kitchen ?? true,
+        available_in_bar: p.available_in_bar ?? true,
+        package_price: p.item_type === 'package' ? parseFloat(p.package_price || 0) : undefined,
+        unit_price: p.unit_price,
+        total_price: p.total_price,
+        stock: p.stock_info?.available_stock || p.stock_info?.current_stock || p.stock || 0,
+        stock_info: p.stock_info
+      }))
+    } catch (fallbackError) {
+      console.error('❌ Fallback also failed:', fallbackError)
+    }
   } finally {
     loading.value = false
   }
@@ -560,39 +720,73 @@ const loadCustomers = async () => {
 
 // Enhanced methods for UI
 const addToCart = (product: Product) => {
+  console.log('addToCart called with:', {
+    name: product.name,
+    item_type: product.item_type,
+    canAdd: canAddToCart(product),
+    stock: product.stock,
+    price: product.package_price || product.selling_price,
+    is_disabled: product.is_disabled
+  })
+  
   if (!canAddToCart(product)) {
     // Show toast notification
-    if (product.stock <= 0) {
+    if ((product.stock || 0) <= 0) {
       console.warn('Stok tidak tersedia untuk produk:', product.name)
-    } else if (!product.selling_price || product.selling_price <= 0) {
+    } else if (!(product.selling_price || product.package_price || 0)) {
       console.warn('Harga tidak tersedia untuk produk:', product.name)
     }
     return
   }
   
-  const success = addToCartComposable(product)
+  // Create cart item with proper type
+  const cartProduct = {
+    ...product,
+    item_type: product.item_type || 'product',
+    id_product: product.id_product || 0,
+    id_package: product.id_package || 0,
+  }
+  
+  console.log('Adding to cart:', cartProduct)
+  const success = addToCartComposable(cartProduct)
+  console.log('Add to cart result:', success)
+  
   if (success) {
     // Show success feedback if needed
   }
 }
 
 const canAddToCart = (product: Product): boolean => {
-  return product.stock > 0 && product.selling_price > 0
+  // Check if product is disabled from API (check for true explicitly)
+  if (product.is_disabled === true) {
+    return false
+  }
+  
+  // For packages, check stock and price
+  if (product.item_type === 'package') {
+    const hasStock = (product.stock || 0) > 0
+    const hasPrice = (product.package_price || product.unit_price || 0) > 0
+    return hasStock && hasPrice
+  }
+  
+  // For regular products
+  return (product.stock || 0) > 0 && (product.selling_price || 0) > 0
 }
 
 const getStockColor = (stock: number) => {
-  if (stock === 0) return 'error'
+  if (stock <= 0) return 'error'
   if (stock < 10) return 'warning'
   return 'success'
 }
 
 const getStockBadgeClass = (stock: number) => {
-  if (stock === 0) return 'stock-low'
+  if (stock <= 0) return 'stock-low'
   if (stock < 10) return 'stock-medium'
   return 'stock-high'
 }
 
-const getCartQuantity = (productId: number) => {
+const getCartQuantity = (productId: number | undefined) => {
+  if (!productId) return 0
   const item = cartItems.value.find(item => item.id_product === productId)
   return item ? item.quantity : 0
 }
@@ -975,6 +1169,35 @@ onMounted(async () => {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 20%);
 }
 
+.package-badge {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  inset-block-start: 4px;
+  inset-inline-end: 8px;
+  padding-block: 0.3rem;
+  padding-inline: 0.6rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 30%);
+  box-shadow: 0 2px 4px rgba(139, 92, 246, 40%);
+  letter-spacing: 0.03em;
+  z-index: 2;
+}
+
+.product-item.package-item {
+  border: 2px solid #8b5cf6;
+  background: linear-gradient(to bottom, #faf5ff 0%, #ffffff 100%);
+}
+
+.product-item.package-item:hover {
+  border-color: #6d28d9;
+  box-shadow: 0 8px 30px rgba(139, 92, 246, 30%);
+}
+
 .stock-badge.stock-good {
   background: #10b981;
 }
@@ -1030,12 +1253,18 @@ onMounted(async () => {
   cursor: not-allowed;
   filter: grayscale(20%);
   opacity: 0.5;
+  pointer-events: none;
 }
 
 .product-item.disabled:hover {
   border-color: #e5e7eb;
   box-shadow: none;
   transform: none;
+}
+
+.product-item:not(.disabled) {
+  cursor: pointer;
+  pointer-events: auto;
 }
 
 .product-item.no-price .product-price {
@@ -1564,5 +1793,40 @@ onMounted(async () => {
 .customer-select :deep(.v-list-item-title) {
   color: #000 !important;
   font-weight: 600 !important;
+}
+
+/* View Mode Toggle Styles */
+.view-mode-toggle {
+  display: flex;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 4px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.view-mode-toggle .toggle-btn {
+  border-radius: 8px !important;
+  padding: 0 20px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0.3px !important;
+  min-width: 110px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.view-mode-toggle .toggle-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.view-mode-toggle .v-btn--variant-flat {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
+}
+
+.view-mode-toggle .v-btn--variant-outlined {
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  background: transparent !important;
+  color: rgba(0, 0, 0, 0.6) !important;
 }
 </style>

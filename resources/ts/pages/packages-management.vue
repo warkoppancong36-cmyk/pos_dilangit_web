@@ -11,8 +11,21 @@ interface Product {
   name: string
   price: number
   stock: number
+  real_stock?: number
   active: boolean
   unit: string
+  productItems?: Array<{
+    item_id: number
+    quantity_needed: number
+    item?: {
+      id_item: number
+      name: string
+      inventory?: {
+        quantity: number
+        available_stock: number
+      }
+    }
+  }>
 }
 
 interface PackageItem {
@@ -132,6 +145,9 @@ const productDialog = ref(false)
 // Package price display (formatted)
 const packagePriceDisplay = ref('')
 
+// Validation errors
+const validationErrors = ref<Record<string, string>>({})
+
 // ==================== Computed ====================
 const headers = [
   { title: 'Nama Paket', key: 'name', sortable: true },
@@ -222,13 +238,18 @@ const fetchPackages = async () => {
 
 const fetchProducts = async () => {
   try {
-    const response = await axios.get('/api/products', { 
-      params: { 
-        paginate: false,
-        is_active: true 
-      } 
-    })
-    productsList.value = response.data.data
+    // Use POS endpoint that already calculates stock properly
+    const response = await axios.get('/api/pos/products')
+    productsList.value = response.data.data.map((p: any) => ({
+      id_product: p.id_product,
+      name: p.name,
+      price: parseFloat(p.price || p.selling_price || 0),
+      stock: p.stock || 0,
+      real_stock: p.stock_info?.available_stock || p.stock_info?.current_stock || p.stock || 0,
+      active: p.active,
+      unit: p.unit,
+      productItems: p.productItems
+    }))
   } catch (error: any) {
     console.error('Gagal memuat produk:', error)
   }
@@ -289,6 +310,7 @@ const openEditDialog = (pkg: Package) => {
 const closeDialog = () => {
   dialog.value = false
   modalErrorMessage.value = ''
+  validationErrors.value = {}
   setTimeout(resetForm, 300)
 }
 
@@ -312,11 +334,41 @@ const resetForm = () => {
     items: [],
   }
   packagePriceDisplay.value = ''
+  validationErrors.value = {}
   selectedPackage.value = null
 }
 
 const savePackage = async () => {
-  if (!canCreateEdit.value) return
+  // Clear previous errors
+  validationErrors.value = {}
+  
+  // Validate form
+  let hasError = false
+  
+  if (!formData.value.name || formData.value.name.trim() === '') {
+    validationErrors.value.name = 'Nama paket wajib diisi'
+    hasError = true
+  }
+  
+  if (!formData.value.category_id) {
+    validationErrors.value.category_id = 'Kategori wajib dipilih'
+    hasError = true
+  }
+  
+  if (!formData.value.package_price || formData.value.package_price <= 0) {
+    validationErrors.value.package_price = 'Harga paket wajib diisi'
+    hasError = true
+  }
+  
+  if (formData.value.items.length === 0) {
+    validationErrors.value.items = 'Minimal harus ada 1 produk dalam paket'
+    hasError = true
+  }
+  
+  if (hasError) {
+    modalErrorMessage.value = 'Mohon lengkapi semua field yang wajib diisi'
+    return
+  }
   
   saveLoading.value = true
   modalErrorMessage.value = ''
@@ -349,6 +401,13 @@ const savePackage = async () => {
       successMessage.value = ''
     }, 3000)
   } catch (error: any) {
+    if (error.response?.data?.errors) {
+      // Laravel validation errors
+      const errors = error.response.data.errors
+      Object.keys(errors).forEach(key => {
+        validationErrors.value[key] = errors[key][0]
+      })
+    }
     modalErrorMessage.value = error.response?.data?.message || 'Gagal menyimpan paket'
   } finally {
     saveLoading.value = false
@@ -804,10 +863,16 @@ onMounted(() => {
               >
                 <VTextField
                   v-model="formData.name"
-                  label="Nama Paket *"
+                  label="Nama Paket"
                   placeholder="Contoh: Paket Hemat A"
                   variant="outlined"
-                />
+                  :error="!!validationErrors.name"
+                  :error-messages="validationErrors.name"
+                >
+                  <template #label>
+                    Nama Paket <span class="text-error">*</span>
+                  </template>
+                </VTextField>
               </VCol>
 
               <VCol
@@ -867,9 +932,14 @@ onMounted(() => {
                   :items="categories"
                   item-title="name"
                   item-value="id_category"
-                  label="Kategori *"
                   variant="outlined"
-                />
+                  :error="!!validationErrors.category_id"
+                  :error-messages="validationErrors.category_id"
+                >
+                  <template #label>
+                    Kategori <span class="text-error">*</span>
+                  </template>
+                </VSelect>
               </VCol>
 
               <!-- Items -->
@@ -882,7 +952,7 @@ onMounted(() => {
                       size="20"
                       class="coffee-icon"
                     />
-                    Isi Paket *
+                    Isi Paket <span class="text-error">*</span>
                   </h6>
                   <VBtn
                     size="small"
@@ -893,6 +963,16 @@ onMounted(() => {
                     Tambah Produk
                   </VBtn>
                 </div>
+
+                <VAlert
+                  v-if="validationErrors.items"
+                  type="error"
+                  variant="tonal"
+                  class="mb-3"
+                  density="compact"
+                >
+                  {{ validationErrors.items }}
+                </VAlert>
 
                 <VAlert
                   v-if="formData.items.length === 0"
@@ -1008,14 +1088,19 @@ onMounted(() => {
               >
                 <VTextField
                   v-model="packagePriceDisplay"
-                  label="Harga Paket *"
                   variant="outlined"
                   prefix="Rp"
                   placeholder="0"
+                  :error="!!validationErrors.package_price"
+                  :error-messages="validationErrors.package_price"
                   @input="handlePackagePriceInput"
                   hint="Masukkan harga paket"
                   persistent-hint
-                />
+                >
+                  <template #label>
+                    Harga Paket <span class="text-error">*</span>
+                  </template>
+                </VTextField>
               </VCol>
 
               <VCol
@@ -1154,7 +1239,7 @@ onMounted(() => {
             >
               <VListItemTitle>{{ product.name }}</VListItemTitle>
               <VListItemSubtitle>
-                {{ formatCurrency(product.price) }} | Stok: {{ product.stock }}
+                {{ formatCurrency(product.price) }} | Stok Real: {{ product.real_stock || 0 }}
               </VListItemSubtitle>
             </VListItem>
           </VList>

@@ -52,17 +52,28 @@
             <div class="order-items mb-4">
               <div
                 v-for="item in cartItems"
-                :key="item.id_product"
+                :key="item.item_type === 'package' ? `pkg-${item.id_package}` : `prd-${item.id_product}`"
                 class="order-item d-flex justify-space-between align-center py-2"
               >
                 <div class="item-info">
-                  <div class="item-name text-body-1 font-weight-medium">{{ item.name }}</div>
+                  <div class="item-name text-body-1 font-weight-medium">
+                    {{ item.name }}
+                    <VChip
+                      v-if="item.item_type === 'package'"
+                      size="x-small"
+                      color="success"
+                      variant="tonal"
+                      class="ml-1"
+                    >
+                      Paket
+                    </VChip>
+                  </div>
                   <div class="item-quantity text-caption text-medium-emphasis">
-                    {{ item.quantity }} × {{ formatCurrency(item.selling_price) }}
+                    {{ item.quantity }} × {{ formatCurrency(item.item_type === 'package' ? (item.package_price || 0) : (item.selling_price || 0)) }}
                   </div>
                 </div>
                 <div class="item-total text-body-1 font-weight-medium">
-                  {{ formatCurrency(item.selling_price * item.quantity) }}
+                  {{ formatCurrency((item.item_type === 'package' ? (item.package_price || 0) : (item.selling_price || 0)) * item.quantity) }}
                 </div>
               </div>
             </div>
@@ -670,7 +681,10 @@ const localDialog = computed({
 
 const subtotal = computed(() => {
   return props.cartItems.reduce((total, item) => {
-    return total + (item.selling_price * item.quantity)
+    const price = item.item_type === 'package' 
+      ? (item.package_price || 0) 
+      : (item.selling_price || 0)
+    return total + (price * item.quantity)
   }, 0)
 })
 
@@ -891,12 +905,17 @@ const processPayment = async () => {
     
     // Prepare payment data
     const paymentPayload = {
-      cart_items: props.cartItems.map(item => ({
-        product_id: item.id_product, // FIXED: use id_product instead of id
-        quantity: item.quantity,
-        unit_price: item.selling_price,
-        subtotal: item.selling_price * item.quantity
-      })),
+      cart_items: props.cartItems.map(item => {
+        const price = item.item_type === 'package' ? (item.package_price || 0) : (item.selling_price || 0)
+        return {
+          product_id: item.item_type === 'package' ? undefined : item.id_product,
+          package_id: item.item_type === 'package' ? item.id_package : undefined,
+          item_type: item.item_type || 'product',
+          quantity: item.quantity,
+          unit_price: price,
+          subtotal: price * item.quantity
+        }
+      }),
       order_type: selectedOrderType.value,
       customer_id: selectedCustomer.value,
       payment_method: selectedPaymentMethod.value,

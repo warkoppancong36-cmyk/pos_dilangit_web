@@ -395,7 +395,9 @@ class PosController extends Controller
     public function addItem(Request $request, Order $order): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'id_product' => 'required|exists:products,id_product',
+            'id_product' => 'nullable|exists:products,id_product',
+            'id_package' => 'nullable|exists:packages,id_package',
+            'item_type' => 'required|in:product,package',
             'quantity' => 'required|integer|min:1',
             'price' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string|max:255',
@@ -411,68 +413,106 @@ class PosController extends Controller
         try {
             DB::beginTransaction();
 
+            // Handle package order
+            if ($request->item_type === 'package') {
+                $package = \App\Models\Package::with(['items.product.productItems.item.inventory'])->find($request->id_package);
+                if (!$package) {
+                    throw new \Exception("Package not found for package ID: {$request->id_package}");
+                }
+                
+                // Check if package is active
+                if (!$package->is_active) {
+                    throw new \Exception("Paket {$package->name} tidak aktif");
+                }
+                
+                // Check stock availability for all items in package
+                foreach ($package->items as $packageItem) {
+                    $product = $packageItem->product;
+                    $requiredQty = $packageItem->quantity * $request->quantity;
+                    
+                    $canProduce = $this->calculateProductAvailability($product, $requiredQty);
+                    
+                    if (!$canProduce['available']) {
+                        throw new \Exception("Stock tidak mencukupi untuk item '{$product->name}' dalam paket. {$canProduce['message']}");
+                    }
+                }
+                
+                \Log::info('Creating package order item', [
+                    'order_id' => $order->id_order,
+                    'package_id' => $request->id_package,
+                    'package_name' => $package->name,
+                    'quantity' => $request->quantity,
+                    'user_id' => Auth::id(),
+                    'timestamp' => now()->toDateTimeString()
+                ]);
+                
+                // Create order item for package
+                $orderItem = OrderItem::create([
+                    'id_order' => $order->id_order,
+                    'id_package' => $request->id_package,
+                    'package_name' => $package->name,
+                    'item_type' => 'package',
+                    'item_name' => $package->name,
+                    'item_sku' => $package->sku ?? 'PKG-' . $request->id_package,
+                    'quantity' => $request->quantity,
+                    'unit_price' => $package->package_price,
+                    'total_price' => $package->package_price * $request->quantity,
+                    'discount_amount' => $request->discount_amount ?? 0,
+                    'discount_type' => $request->discount_type,
+                    'discount_percentage' => $request->discount_percentage ?? 0,
+                    'notes' => $request->notes ?? null,
+                ]);
+                
+                // Consume items for each product in package
+                foreach ($package->items as $packageItem) {
+                    $product = $packageItem->product;
+                    $requiredQty = $packageItem->quantity * $request->quantity;
+                    
+                    $this->consumeRecipeItems($product, $requiredQty, $request->cashier_id, $order->id_order, $order->order_type);
+                }
+                
+            } else {
+                // Handle regular product order
+                $product = Product::with(['productItems.item.inventory'])->find($request->id_product);
+                if (!$product) {
+                    throw new \Exception("Product not found for product ID: {$request->id_product}");
+                }
 
-            $product = Product::with(['productItems.item.inventory'])->find($request->id_product);
-            if (!$product) {
-                throw new \Exception("Product not found for product ID: {$request->id_product}");
+                // Check stock availability based on recipe/items
+                $canProduce = $this->calculateProductAvailability($product, $request->quantity);
+                
+                if (!$canProduce['available']) {
+                    throw new \Exception("Stock tidak mencukupi untuk produk: {$product->name}. {$canProduce['message']}");
+                }
+
+                \Log::info('Creating order item', [
+                    'order_id' => $order->id_order,
+                    'product_id' => $request->id_product,
+                    'product_name' => $product->name,
+                    'quantity' => $request->quantity,
+                    'user_id' => Auth::id(),
+                    'timestamp' => now()->toDateTimeString()
+                ]);
+                
+                // Create order item
+                $orderItem = OrderItem::create([
+                    'id_order' => $order->id_order,
+                    'id_product' => $request->id_product,
+                    'item_type' => 'product',
+                    'item_name' => $product->name,
+                    'item_sku' => $product->sku ?? 'NO-SKU',
+                    'quantity' => $request->quantity,
+                    'unit_price' => $request->unit_price ?? $product->unit_price,
+                    'total_price' => $request->total_price ?? $product->total_price,
+                    'discount_amount' => $request->discount_amount ?? 0,
+                    'discount_type' => $request->discount_type,
+                    'discount_percentage' => $request->discount_percentage ?? 0,
+                    'notes' => $request->notes ?? null,
+                ]);
+
+                // Update inventory based on recipe consumption
+                $this->consumeRecipeItems($product, $request->quantity, $request->cashier_id, $order->id_order, $order->order_type);
             }
-
-            // Check stock availability based on recipe/items
-            $canProduce = $this->calculateProductAvailability($product, $request->quantity);
-            
-            if (!$canProduce['available']) {
-                throw new \Exception("Stock tidak mencukupi untuk produk: {$product->name}. {$canProduce['message']}");
-            }
-
-            \Log::info('Creating order item', [
-                'order_id' => $order->id_order,
-                'product_id' => $request->id_product,
-                'product_name' => $product->name,
-                'quantity' => $request->quantity,
-                'user_id' => Auth::id(),
-                'timestamp' => now()->toDateTimeString()
-            ]);
-            // Create order item
-            $orderItem = OrderItem::create([
-                'id_order' => $order->id_order,
-                'id_product' => $request->id_product,
-                'item_name' => $product->name,
-                'item_sku' => $product->sku ?? 'NO-SKU',
-                'quantity' => $request->quantity,
-                'unit_price' => $request->unit_price ?? $product->unit_price,
-                'total_price' => $request->total_price ?? $product->total_price,
-                'discount_amount' => $request->discount_amount ?? 0,
-                'discount_type' => $request->discount_type,
-                'discount_percentage' => $request->discount_percentage ?? 0,
-                'notes' => $request->notes ?? null,
-            ]);
-
-            // Update inventory based on recipe consumption
-            $this->consumeRecipeItems($product, $request->quantity, $request->cashier_id, $order->id_order, $order->order_type);
-
-            // Check inventory availability
-            // $inventory = Inventory::where('id_product', $request->id_product)
-            //     ->first();
-
-            // if (!$inventory || $inventory->available_stock < $request->quantity) {
-            //     return $this->errorResponse('Insufficient stock available', 400);
-            // }
-
-            // Add item to order
-            // $orderItem = $order->addItem(
-            //     $request->id_product,
-            //     $request->quantity,
-            //     $request->price,
-            //     $request->notes
-            // );
-
-            // // Reserve inventory
-            // $inventory->update([
-            //     'reserved_stock' => $inventory->reserved_stock + $request->quantity
-            // ]);
-
-            // Recalculate order totals
-            // $order->calculateTotals(); // DISABLED - tax system not used yet
 
             // Manually recalculate order totals since calculateTotals() is disabled
             $orderItems = $order->orderItems;
@@ -489,9 +529,9 @@ class PosController extends Controller
 
             DB::commit();
 
-            $order->load(['orderItems.product']);
+            $order->load(['orderItems.product', 'orderItems.package']);
 
-            return $this->successResponse($orderItem, 'Item added to order successfully');
+            return $this->successResponse($orderItem, $request->item_type === 'package' ? 'Package added to order successfully' : 'Item added to order successfully');
         } catch (\Exception $e) {
             DB::rollback();
             return $this->serverErrorResponse('Failed to add item: ' . $e->getMessage());
@@ -1399,6 +1439,7 @@ class PosController extends Controller
     public function getProducts(Request $request): JsonResponse
     {
         try {
+            // Get products
             $query = Product::with(['category', 'inventory'])
                 ->where('active', true)
                 ->where('status', 'published');
@@ -1437,6 +1478,10 @@ class PosController extends Controller
                 // Check if product has recipe (ProductItems)
                 $productItems = \App\Models\ProductItem::where('product_id', $product->id_product)->get();
                 
+                $availableStock = 0;
+                $isDisabled = false;
+                $stockStatus = 'available';
+                
                 if ($productItems->count() > 0) {
                     // Product has recipe - calculate stock based on available ingredients
                     $minProducible = PHP_INT_MAX;
@@ -1458,21 +1503,32 @@ class PosController extends Controller
                     }
                     
                     $availableStock = $canProduce ? ($minProducible == PHP_INT_MAX ? 0 : $minProducible) : 0;
-                    
-                    $product->stock_info = [
-                        'current_stock' => $availableStock,
-                        'available_stock' => $availableStock,
-                        'is_available' => $availableStock > 0
-                    ];
                 } else {
-                    
-                    // No inventory record - create one with default stock for finished products
-                    $product->stock_info = [
-                        'current_stock' => 0, // Default stock for finished products
-                        'available_stock' => 0,
-                        'is_available' => true
-                    ];
+                    // No recipe - use default stock 0 for finished products
+                    $availableStock = 0;
                 }
+                
+                // Determine stock status and disabled state
+                if ($availableStock <= 0) {
+                    $isDisabled = true;
+                    $stockStatus = 'stok habis';
+                } elseif ($availableStock < 0) {
+                    $isDisabled = true;
+                    $stockStatus = 'stok habis';
+                }
+                
+                $product->stock_info = [
+                    'current_stock' => $availableStock,
+                    'available_stock' => $availableStock,
+                    'is_available' => $availableStock > 0
+                ];
+                
+                // Add disabled status and stock status
+                $product->is_disabled = $isDisabled;
+                $product->stock_status = $stockStatus;
+                
+                // Add type indicator for products
+                $product->item_type = 'product';
             });
 
             return $this->successResponse($products, 'Products retrieved successfully');
@@ -1570,6 +1626,9 @@ class PosController extends Controller
                         'is_available' => true
                     ];
                 }
+                
+                // Add type indicator for products
+                $product->item_type = 'product';
             });
 
             return $this->successResponse($products, 'Products retrieved successfully');
@@ -1627,7 +1686,9 @@ class PosController extends Controller
 
         $validator = Validator::make($request->all(), [
             'cart_items' => 'required|array|min:1',
-            'cart_items.*.product_id' => 'required|integer',
+            'cart_items.*.product_id' => 'nullable|integer',
+            'cart_items.*.package_id' => 'nullable|integer',
+            'cart_items.*.item_type' => 'required|string|in:product,package',
             'cart_items.*.quantity' => 'required|integer|min:1',
             'cart_items.*.unit_price' => 'required|numeric|min:0',
             'cart_items.*.subtotal' => 'required|numeric|min:0',
@@ -1664,6 +1725,21 @@ class PosController extends Controller
                 'request_data' => $request->all()
             ]);
             return $this->validationErrorResponse($validator->errors());
+        }
+
+        // Additional validation: ensure correct ID is present based on item_type
+        foreach ($request->cart_items as $index => $item) {
+            $itemType = $item['item_type'] ?? 'product';
+            
+            if ($itemType === 'package') {
+                if (empty($item['package_id']) || $item['package_id'] == 0) {
+                    return $this->errorResponse("Item #{$index}: package_id diperlukan untuk item bertipe 'package'", 422);
+                }
+            } else {
+                if (empty($item['product_id']) || $item['product_id'] == 0) {
+                    return $this->errorResponse("Item #{$index}: product_id diperlukan untuk item bertipe 'product'", 422);
+                }
+            }
         }
 
         // Validate payment amount for cash transactions (handle both 'cash' and 'tunai')
@@ -1707,38 +1783,173 @@ class PosController extends Controller
             ]);
 
             // Create order items and check inventory
-            foreach ($request->cart_items as $item) {
-                // First, verify product exists
-                $product = Product::with(['productItems.item.inventory'])->find($item['product_id']);
-                if (!$product) {
-                    throw new \Exception("Product not found for product ID: {$item['product_id']}");
-                }
-
-                // Check stock availability based on recipe/items
-                $canProduce = $this->calculateProductAvailability($product, $item['quantity']);
+            foreach ($request->cart_items as $index => $item) {
+                $itemType = $item['item_type'] ?? 'product';
                 
-                if (!$canProduce['available']) {
-                    throw new \Exception("Stock tidak mencukupi untuk produk: {$product->name}. {$canProduce['message']}");
-                }
-
-                // Create order item
-                OrderItem::create([
-                    'id_order' => $order->id_order,
-                    'id_product' => $item['product_id'],
-                    'item_name' => $product->name,
-                    'item_sku' => $product->sku ?? 'NO-SKU',
-                    'quantity' => $item['quantity'],
-                    'unit_price' => $item['unit_price'],
-                    'total_price' => $item['subtotal'],
-                    'notes' => $item['notes'] ?? null,
-                    'discount_amount' => $item['discount_amount'] ?? 0,
-                    'discount_type' => $item['discount_type'] ?? null,
-                    'discount_percentage' => $item['discount_percentage'] ?? null,
-                    'subtotal_before_discount' => $item['quantity'] * $item['unit_price'],
+                \Log::info("Processing cart item", [
+                    'index' => $index,
+                    'item_type' => $itemType,
+                    'product_id' => $item['product_id'] ?? null,
+                    'package_id' => $item['package_id'] ?? null
                 ]);
+                
+                if ($itemType === 'package') {
+                    // Handle package purchase
+                    $packageId = $item['package_id'] ?? null;
+                    
+                    if (!$packageId) {
+                        throw new \Exception("Package ID tidak ditemukan pada item index {$index}");
+                    }
+                    
+                    $package = \App\Models\Package::find($packageId);
+                    
+                    if (!$package) {
+                        throw new \Exception("Paket tidak ditemukan dengan ID: {$packageId}");
+                    }
+                    
+                    // Check if package is active
+                    if (!$package->is_active) {
+                        throw new \Exception("Paket '{$package->name}' tidak aktif");
+                    }
+                    
+                    // Load package items with their products eagerly
+                    $package->load(['items.product.productItems.item.inventory']);
+                    
+                    \Log::info("Package found", [
+                        'package_id' => $package->id_package,
+                        'package_name' => $package->name,
+                        'has_items' => $package->items ? $package->items->count() : 0
+                    ]);
+                    
+                    \Log::info("Package found", [
+                        'package_id' => $package->id_package,
+                        'package_name' => $package->name,
+                        'has_items' => $package->items ? $package->items->count() : 0
+                    ]);
+                    
+                    // Check stock availability for package
+                    if ($package->track_stock && ($package->stock < $item['quantity'])) {
+                        throw new \Exception("Stock paket tidak mencukupi untuk: {$package->name}. Tersedia: {$package->stock}");
+                    }
+                    
+                    // Create order item for package
+                    OrderItem::create([
+                        'id_order' => $order->id_order,
+                        'id_package' => $packageId,
+                        'item_type' => 'package',
+                        'package_name' => $package->name ?? 'Unknown Package',
+                        'item_name' => $package->name ?? 'Unknown Package',
+                        'item_sku' => $package->sku ?? 'NO-SKU',
+                        'quantity' => $item['quantity'],
+                        'unit_price' => $item['unit_price'],
+                        'total_price' => $item['subtotal'],
+                        'notes' => $item['notes'] ?? null,
+                        'discount_amount' => $item['discount_amount'] ?? 0,
+                        'discount_type' => $item['discount_type'] ?? null,
+                        'discount_percentage' => $item['discount_percentage'] ?? null,
+                        'subtotal_before_discount' => $item['quantity'] * $item['unit_price'],
+                    ]);
+                    
+                    // Reduce package stock if track_stock is enabled
+                    if ($package->track_stock) {
+                        $package->decrement('stock', $item['quantity']);
+                    }
+                    
+                    // Process each product in the package and consume their ingredients
+                    if ($package->items && $package->items->count() > 0) {
+                        foreach ($package->items as $packageItem) {
+                            // Validate package item has product_id
+                            if (!$packageItem->id_product) {
+                                \Log::warning("Package item tidak memiliki id_product", [
+                                    'package_id' => $package->id_package,
+                                    'package_item_id' => $packageItem->id_package_item ?? 'unknown'
+                                ]);
+                                continue;
+                            }
+                            
+                            // Get the product
+                            $product = $packageItem->product;
+                            
+                            if (!$product) {
+                                \Log::error("Product tidak ditemukan dalam paket", [
+                                    'package_id' => $package->id_package,
+                                    'package_item_id' => $packageItem->id_package_item ?? 'unknown',
+                                    'product_id' => $packageItem->id_product,
+                                    'message' => 'Product dengan ID ' . $packageItem->id_product . ' tidak ada di database'
+                                ]);
+                                // Skip this item instead of throwing error
+                                continue;
+                            }
+                            
+                            \Log::info("Processing package product", [
+                                'product_id' => $product->id_product,
+                                'product_name' => $product->name ?? 'Unknown',
+                                'quantity_in_package' => $packageItem->quantity
+                            ]);
+                            
+                            // Calculate total quantity needed (package quantity * product quantity in package)
+                            $totalQuantity = $item['quantity'] * $packageItem->quantity;
+                            
+                            // Consume recipe items for this product
+                            try {
+                                $this->consumeRecipeItems($product, $totalQuantity, $request->cashier_id, $order->id_order, $order->order_type);
+                            } catch (\Exception $e) {
+                                \Log::error("Error consuming recipe items", [
+                                    'product_id' => $product->id_product,
+                                    'product_name' => $product->name,
+                                    'error' => $e->getMessage()
+                                ]);
+                                // Continue processing other items
+                            }
+                        }
+                    } else {
+                        \Log::warning("Paket tidak memiliki item produk", [
+                            'package_id' => $package->id_package,
+                            'package_name' => $package->name
+                        ]);
+                    }
+                    
+                } else {
+                    // Handle regular product purchase
+                    $productId = $item['product_id'] ?? null;
+                    
+                    if (!$productId) {
+                        throw new \Exception("Product ID tidak ditemukan pada item index {$index}");
+                    }
+                    
+                    $product = Product::with(['productItems.item.inventory'])->find($productId);
+                    
+                    if (!$product) {
+                        throw new \Exception("Produk tidak ditemukan dengan ID: {$productId}");
+                    }
 
-                // Update inventory based on recipe consumption
-                $this->consumeRecipeItems($product, $item['quantity'], $request->cashier_id, $order->id_order, $order->order_type);
+                    // Check stock availability based on recipe/items
+                    $canProduce = $this->calculateProductAvailability($product, $item['quantity']);
+                    
+                    if (!$canProduce['available']) {
+                        throw new \Exception("Stock tidak mencukupi untuk produk: {$product->name}. {$canProduce['message']}");
+                    }
+
+                    // Create order item
+                    OrderItem::create([
+                        'id_order' => $order->id_order,
+                        'id_product' => $productId,
+                        'item_type' => 'product',
+                        'item_name' => $product->name ?? 'Unknown Product',
+                        'item_sku' => $product->sku ?? 'NO-SKU',
+                        'quantity' => $item['quantity'],
+                        'unit_price' => $item['unit_price'],
+                        'total_price' => $item['subtotal'],
+                        'notes' => $item['notes'] ?? null,
+                        'discount_amount' => $item['discount_amount'] ?? 0,
+                        'discount_type' => $item['discount_type'] ?? null,
+                        'discount_percentage' => $item['discount_percentage'] ?? null,
+                        'subtotal_before_discount' => $item['quantity'] * $item['unit_price'],
+                    ]);
+
+                    // Update inventory based on recipe consumption
+                    $this->consumeRecipeItems($product, $item['quantity'], $request->cashier_id, $order->id_order, $order->order_type);
+                }
             }
 
             // If this payment is a split from an existing order, adjust the original order
@@ -1967,11 +2178,14 @@ class PosController extends Controller
                 'created_at' => $order->created_at,
                 'items' => $order->orderItems->map(function ($item) {
                     return [
-                        'product_name' => $item->product->name,
+                        'product_name' => $item->item_type === 'package' 
+                            ? ($item->package_name ?? $item->item_name) 
+                            : ($item->product ? $item->product->name : $item->item_name),
                         'quantity' => $item->quantity,
                         'unit_price' => $item->unit_price,
-                        'subtotal' => $item->subtotal,
+                        'subtotal' => $item->total_price,
                         'notes' => $item->notes,
+                        'item_type' => $item->item_type ?? 'product',
                         'available_kitchen' => $item->product ? $item->product->available_in_kitchen : null,
                         'available_bar' => $item->product ? $item->product->available_in_bar : null,
                     ];
@@ -1989,7 +2203,7 @@ class PosController extends Controller
                 'stack_trace' => $e->getTraceAsString()
             ]);
 
-            return $this->errorResponse('Gagal memproses pembayaran: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Gagal memproses pembayaran: ' . $e->getMessage() . ' (File: ' . basename($e->getFile()) . ', Line: ' . $e->getLine() . ')', 500);
         }
     }
 
@@ -2084,6 +2298,41 @@ class PosController extends Controller
     }
 
     /**
+     * Get available quantity for a product based on its recipe
+     */
+    private function getProductAvailableQuantity(Product $product): int
+    {
+        // Ensure product has productItems loaded
+        if (!$product->relationLoaded('productItems')) {
+            $product->load(['productItems.item.inventory']);
+        }
+        
+        // If product has no recipe items, check direct inventory
+        if (!$product->productItems || $product->productItems->isEmpty()) {
+            $directInventory = Inventory::where('id_item', $product->id_product)->first();
+            return $directInventory ? (int) $directInventory->available_stock : 0;
+        }
+
+        // For products with recipe, calculate based on ingredients
+        $minQuantity = PHP_INT_MAX;
+        
+        foreach ($product->productItems as $productItem) {
+            $inventory = $productItem->item->inventory ?? null;
+            
+            if (!$inventory) {
+                return 0; // No inventory for ingredient
+            }
+            
+            $quantityNeeded = max(1, $productItem->quantity_needed);
+            $possibleQuantity = floor($inventory->available_stock / $quantityNeeded);
+            
+            $minQuantity = min($minQuantity, $possibleQuantity);
+        }
+        
+        return ($minQuantity == PHP_INT_MAX) ? 0 : (int) $minQuantity;
+    }
+
+    /**
      * Calculate product availability based on recipe items
      */
     private function calculateProductAvailability(Product $product, int $requestedQuantity): array
@@ -2150,8 +2399,13 @@ class PosController extends Controller
      */
     private function consumeRecipeItems(Product $product, int $quantity, int $userId, int $orderId = null, string $orderType = 'takeaway'): void
     {
+        // Ensure product has productItems loaded
+        if (!$product->relationLoaded('productItems')) {
+            $product->load(['productItems.item.inventory']);
+        }
+        
         // If product has no recipe items, try to consume directly
-        if ($product->productItems->isEmpty()) {
+        if (!$product->productItems || $product->productItems->isEmpty()) {
             $directInventory = Inventory::where('id_item', $product->id_product)->first();
             if ($directInventory) {
                 $stockBefore = $directInventory->current_stock;
@@ -2182,11 +2436,33 @@ class PosController extends Controller
 
         // Consume recipe items
         foreach ($product->productItems as $productItem) {
+            // Ensure productItem has item loaded
+            if (!$productItem->relationLoaded('item')) {
+                $productItem->load('item.inventory');
+            }
+            
             $item = $productItem->item;
+            
+            // Check if item exists
+            if (!$item) {
+                \Log::error("Item not found for ProductItem", [
+                    'product_item_id' => $productItem->id_product_item ?? 'unknown',
+                    'product_id' => $product->id_product,
+                    'product_name' => $product->name ?? 'Unknown',
+                    'item_id' => $productItem->item_id ?? 'unknown'
+                ]);
+                continue; // Skip this item
+            }
+            
+            // Ensure item has inventory loaded
+            if (!$item->relationLoaded('inventory')) {
+                $item->load('inventory');
+            }
+            
             $inventory = $item->inventory;
             
             // Debug logging
-            \Log::info("Processing item: {$item->name} (ID: {$item->id_item})");
+            \Log::info("Processing item: " . ($item->name ?? 'Unknown') . " (ID: {$item->id_item})");
             \Log::info("Recipe quantity: {$productItem->quantity_needed}, Order quantity: {$quantity}");
             \Log::info("Item is_takeaway: " . ($item->is_takeaway ? "Yes" : "No"));
             \Log::info("Order type: {$orderType}");
@@ -2228,7 +2504,7 @@ class PosController extends Controller
                             'total_cost' => ($inventory->average_cost ?? 0) * $consumeQuantity,
                             'reference_type' => 'pos_sale',
                             'reference_id' => $orderId,
-                            'notes' => "POS Sale - Recipe consumption for product: {$product->name} (Item: {$item->name}, Order Type: {$orderType})",
+                            'notes' => "POS Sale - Recipe consumption for product: " . ($product->name ?? 'Unknown') . " (Item: " . ($item->name ?? 'Unknown') . ", Order Type: {$orderType})",
                             'movement_date' => now(),
                             'created_by' => $userId,
                         ]);
@@ -2783,6 +3059,111 @@ class PosController extends Controller
 
         } catch (\Exception $e) {
             return $this->serverErrorResponse('Failed to export orders: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Get packages for POS (dedicated endpoint)
+     */
+    public function getPackages(Request $request): JsonResponse
+    {
+        try {
+            // Get packages with items and products
+            $query = \App\Models\Package::with(['category', 'items.product.productItems.item.inventory'])
+                ->where('is_active', true);
+
+            // Search by name or SKU
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('sku', 'like', "%{$search}%");
+                });
+            }
+
+            // Filter by category
+            if ($request->filled('category_id')) {
+                $query->where('category_id', $request->category_id);
+            }
+
+            $packages = $query->orderBy('name')->get();
+
+            // Calculate stock for each package - use highest stock from products
+            $packages->each(function($package) {
+                $maxStock = 0;
+                
+                // Get highest stock from products in the package
+                if ($package->items && $package->items->count() > 0) {
+                    foreach ($package->items as $packageItem) {
+                        if ($packageItem->product) {
+                            $product = $packageItem->product;
+                            
+                            // Calculate product stock based on recipe (same logic as getProducts)
+                            $productStock = 0;
+                            $productItems = \App\Models\ProductItem::where('product_id', $product->id_product)->get();
+                            
+                            if ($productItems->count() > 0) {
+                                // Product has recipe - calculate stock based on available ingredients
+                                $minProducible = PHP_INT_MAX;
+                                $canProduce = true;
+                                
+                                foreach ($productItems as $productItem) {
+                                    $itemInventory = \App\Models\Inventory::where('id_item', $productItem->item_id)->first();
+                                    
+                                    if ($itemInventory) {
+                                        // Calculate how many products can be made from this specific item
+                                        $quantityNeeded = $productItem->quantity_needed > 0 ? $productItem->quantity_needed : 1;
+                                        $possibleFromThisItem = floor($itemInventory->available_stock / $quantityNeeded);
+                                        $minProducible = min($minProducible, $possibleFromThisItem);
+                                    } else {
+                                        $canProduce = false;
+                                        $minProducible = 0;
+                                        break;
+                                    }
+                                }
+                                
+                                $productStock = $canProduce ? ($minProducible == PHP_INT_MAX ? 0 : $minProducible) : 0;
+                            } else {
+                                // No recipe - use default stock 0
+                                $productStock = 0;
+                            }
+                            
+                            // Use the highest stock among all products in package
+                            $maxStock = max($maxStock, $productStock);
+                        }
+                    }
+                }
+                
+                // Determine stock status and disabled state
+                $isDisabled = false;
+                $stockStatus = 'available';
+                
+                if ($maxStock <= 0) {
+                    $isDisabled = true;
+                    $stockStatus = 'stok habis';
+                }
+                
+                // Set additional fields for POS
+                $package->item_type = 'package';
+                $package->unit_price = $package->package_price;
+                $package->total_price = $package->package_price;
+                $package->stock = $maxStock;
+                $package->is_disabled = $isDisabled;
+                $package->stock_status = $stockStatus;
+                
+                // Explicitly set id_package to ensure it's in response
+                if (!isset($package->id_package) && isset($package->id)) {
+                    $package->id_package = $package->id;
+                }
+            });
+
+            return $this->successResponse($packages, 'Packages retrieved successfully');
+        } catch (\Exception $e) {
+            \Log::error('Failed to retrieve packages', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return $this->serverErrorResponse('Failed to retrieve packages: ' . $e->getMessage());
         }
     }
 }

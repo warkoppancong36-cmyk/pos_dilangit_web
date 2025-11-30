@@ -16,6 +16,9 @@ class OrderItem extends Model
     protected $fillable = [
         'id_order',
         'id_product',
+        'id_package',
+        'package_name',
+        'item_type',
         'id_variant', // ENABLED - Variant system for order items
         'item_name',
         'item_sku',
@@ -64,6 +67,11 @@ class OrderItem extends Model
         return $this->belongsTo(Variant::class, 'id_variant', 'id_variant');
     }
 
+    public function package(): BelongsTo
+    {
+        return $this->belongsTo(Package::class, 'id_package', 'id_package');
+    }
+
     // Accessors
     public function getFormattedUnitPriceAttribute(): string
     {
@@ -77,6 +85,10 @@ class OrderItem extends Model
 
     public function getItemCodeAttribute(): string
     {
+        if ($this->item_type === 'package' && $this->package) {
+            return $this->package->sku ?? 'PKG-' . $this->id_package;
+        }
+        
         return $this->product->sku ?? '';
     }
 

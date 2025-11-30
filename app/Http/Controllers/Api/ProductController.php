@@ -93,10 +93,16 @@ class ProductController extends Controller
                 $query->orderBy($sortBy, $sortOrder);
             }
 
-            $perPage = $request->get('per_page', 15);
-            $products = $query->paginate($perPage);
-
-            $response = $this->paginatedResponse($products, 'Data produk berhasil diambil');
+            // Check if pagination should be disabled
+            if ($request->has('paginate') && !filter_var($request->paginate, FILTER_VALIDATE_BOOLEAN)) {
+                $products = $query->get();
+                $response = $this->successResponse($products, 'Data produk berhasil diambil');
+            } else {
+                $perPage = $request->get('per_page', 15);
+                $products = $query->paginate($perPage);
+                $response = $this->paginatedResponse($products, 'Data produk berhasil diambil');
+            }
+            
             $this->logSuccess($request, 'index', 'product', null, $response);
             return $response;
         } catch (\Exception $e) {
