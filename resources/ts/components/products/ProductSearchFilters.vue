@@ -14,15 +14,16 @@
         <VCol cols="12" md="4">
           <VTextField
             v-model="searchQuery"
-            label="Cari produk..."
+            label="Tekan Enter Untuk Mencari produk..."
             placeholder="Nama, SKU, atau deskripsi (min. 3 karakter)"
             prepend-inner-icon="tabler-search"
             :loading="isSearching"
             clearable
             variant="outlined"
-            :hint="searchQuery.length > 0 && searchQuery.length < 3 ? 
+            :hint="searchQuery.length > 0 && searchQuery.length < 3 ?
               `Ketik ${3 - searchQuery.length} karakter lagi untuk mencari` : ''"
             persistent-hint
+            @keydown.enter="handleSearchEnter"
             @click:clear="handleClearSearch"
           />
         </VCol>
@@ -206,7 +207,6 @@
 import { useCategories } from '@/composables/useCategories';
 // Update the import path if the file exists elsewhere, or create the file if missing
 import type { ProductFilters } from '@/composables/useProducts';
-import { watchDebounced } from '@vueuse/core';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 // Props
@@ -243,27 +243,23 @@ watch(() => props.filters, (newFilters) => {
   searchQuery.value = newFilters.search || ''
 }, { deep: true })
 
-// Debounced search - trigger search when user types 3+ characters
-watchDebounced(
-  searchQuery,
-  (newQuery) => {
-    localFilters.search = newQuery
-    
-    // Only trigger search if query is 3+ characters or empty (to clear search)
-    if (newQuery.length >= 3 || newQuery.length === 0) {
-      isSearching.value = true
-      emit('search', newQuery)
-      onFilterChange()
-      
-      // Reset searching state after a short delay
-      setTimeout(() => {
-        isSearching.value = false
-      }, 500)
-    } else {
-    }
-  },
-  { debounce: 500, maxWait: 1000 }
-)
+// Handle search when Enter is pressed
+const handleSearchEnter = () => {
+  const query = searchQuery.value.trim()
+
+  // Only trigger search if query is 3+ characters or empty (to clear search)
+  if (query.length >= 3 || query.length === 0) {
+    isSearching.value = true
+    localFilters.search = query
+    emit('search', query)
+    onFilterChange()
+
+    // Reset searching state after a short delay
+    setTimeout(() => {
+      isSearching.value = false
+    }, 500)
+  }
+}
 
 // Filter options
 const statusOptions = [

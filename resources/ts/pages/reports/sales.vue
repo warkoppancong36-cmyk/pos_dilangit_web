@@ -433,6 +433,46 @@ meta:
         </VCol>
       </VRow>
 
+      <!-- All Products Sold Table -->
+      <VRow class="mb-6" v-if="reportData.all_products && reportData.all_products.length > 0">
+        <VCol cols="12">
+          <VCard>
+            <VCardTitle class="d-flex align-center gap-2">
+              <VIcon icon="mdi-package-variant" />
+              Semua Produk Terjual ({{ reportData.all_products.length }} produk)
+            </VCardTitle>
+            <VCardText>
+              <VDataTable
+                :headers="allProductsHeaders"
+                :items="reportData.all_products"
+                :items-per-page="10"
+                class="elevation-0"
+                no-data-text="Tidak ada data produk"
+              >
+                <template #item.no="{ index }">
+                  {{ index + 1 }}
+                </template>
+                <template #item.quantity="{ item }">
+                  <VChip size="small" color="primary" variant="tonal">
+                    {{ (item as any).quantity }}
+                  </VChip>
+                </template>
+                <template #item.revenue="{ item }">
+                  <span class="font-weight-bold text-success">
+                    {{ (item as any).revenue }}
+                  </span>
+                </template>
+                <template #item.avg_price="{ item }">
+                  <span class="text-body-2">
+                    {{ (item as any).avg_price }}
+                  </span>
+                </template>
+              </VDataTable>
+            </VCardText>
+          </VCard>
+        </VCol>
+      </VRow>
+
       <!-- Business Analytics Section -->
       <VRow class="mb-6">
         <!-- Peak Hours Analysis -->
@@ -667,6 +707,14 @@ const categoryHeaders = [
   { title: 'Qty Terjual', key: 'quantity_sold', align: 'center' as const },
   { title: 'Revenue', key: 'revenue', align: 'end' as const },
   { title: 'Harga Rata2', key: 'avg_price', align: 'end' as const }
+]
+
+const allProductsHeaders = [
+  { title: 'No', key: 'no', align: 'start' as const, sortable: false },
+  { title: 'Nama Produk', key: 'name', align: 'start' as const },
+  { title: 'Jumlah Terjual', key: 'quantity', align: 'center' as const },
+  { title: 'Total Pendapatan', key: 'revenue', align: 'end' as const },
+  { title: 'Harga Rata-rata', key: 'avg_price', align: 'end' as const }
 ]
 
 // Utility functions
@@ -1318,24 +1366,47 @@ const exportToExcel = async () => {
       XLSX.utils.book_append_sheet(workbook, dailySheet, 'Penjualan Harian')
     }
     
-    // 3. Top Products Sheet
+    // 3. Top Products Sheet (Top 20)
     if (reportData.value.top_products && reportData.value.top_products.length > 0) {
       const topProductsData = [
-        ['PRODUK TERLARIS'],
+        ['TOP 20 PRODUK TERLARIS'],
         ['Periode:', periodInfo],
         [],
-        ['No', 'Nama Produk', 'Jumlah Terjual', 'Total Pendapatan'],
+        ['No', 'Nama Produk', 'Jumlah Terjual', 'Total Pendapatan', 'Harga Rata-rata'],
         ...reportData.value.top_products.map((item: any, index: number) => [
           index + 1,
           item.name,
           item.quantity,
-          formatExcelCurrency(item.revenue)
+          formatExcelCurrency(item.revenue),
+          item.avg_price || '-'
         ])
       ]
-      
+
       const productsSheet = XLSX.utils.aoa_to_sheet(topProductsData)
-      productsSheet['!cols'] = [{ wch: 5 }, { wch: 30 }, { wch: 15 }, { wch: 20 }]
-      XLSX.utils.book_append_sheet(workbook, productsSheet, 'Produk Terlaris')
+      productsSheet['!cols'] = [{ wch: 5 }, { wch: 30 }, { wch: 15 }, { wch: 20 }, { wch: 18 }]
+      XLSX.utils.book_append_sheet(workbook, productsSheet, 'Top 20 Produk')
+    }
+
+    // 3b. ALL Products Sheet (Semua Produk Terjual)
+    if (reportData.value.all_products && reportData.value.all_products.length > 0) {
+      const allProductsData = [
+        ['SEMUA PRODUK TERJUAL'],
+        ['Periode:', periodInfo],
+        ['Total Produk:', reportData.value.all_products.length],
+        [],
+        ['No', 'Nama Produk', 'Jumlah Terjual', 'Total Pendapatan', 'Harga Rata-rata'],
+        ...reportData.value.all_products.map((item: any, index: number) => [
+          index + 1,
+          item.name,
+          item.quantity,
+          formatExcelCurrency(item.revenue),
+          item.avg_price || '-'
+        ])
+      ]
+
+      const allProductsSheet = XLSX.utils.aoa_to_sheet(allProductsData)
+      allProductsSheet['!cols'] = [{ wch: 5 }, { wch: 30 }, { wch: 15 }, { wch: 20 }, { wch: 18 }]
+      XLSX.utils.book_append_sheet(workbook, allProductsSheet, 'Semua Produk')
     }
     
     // 4. Enhanced Top Customers Sheet

@@ -56,7 +56,8 @@
               clearable
               hide-details
               class="search-input"
-              @click:clear="productSearch = ''"
+              @keyup.enter="applySearch"
+              @click:clear="clearSearch"
             />
           </div>
           
@@ -514,6 +515,7 @@ const products = ref<Product[]>([])
 const categories = ref<any[]>([])
 const customers = ref<Customer[]>([])
 const productSearch = ref('')
+const appliedSearch = ref('') // Applied search term (only after Enter)
 const selectedCategory = ref<number | null>(null)
 const selectedStation = ref<'kitchen' | 'bar' | null>(null)
 const viewMode = ref<'products' | 'packages'>('products')
@@ -573,9 +575,9 @@ const filteredProducts = computed(() => {
     filtered = filtered.filter(product => product.item_type === 'package')
   }
 
-  // Filter by search
-  if (productSearch.value) {
-    const search = productSearch.value.toLowerCase()
+  // Filter by search (only use appliedSearch after Enter key is pressed)
+  if (appliedSearch.value) {
+    const search = appliedSearch.value.toLowerCase()
     filtered = filtered.filter(product =>
       product.name.toLowerCase().includes(search) ||
       product.sku?.toLowerCase().includes(search) ||
@@ -716,6 +718,16 @@ const loadCustomers = async () => {
   } catch (error) {
     console.error('Error loading customers:', error)
   }
+}
+
+// Search methods
+const applySearch = () => {
+  appliedSearch.value = productSearch.value
+}
+
+const clearSearch = () => {
+  productSearch.value = ''
+  appliedSearch.value = ''
 }
 
 // Enhanced methods for UI

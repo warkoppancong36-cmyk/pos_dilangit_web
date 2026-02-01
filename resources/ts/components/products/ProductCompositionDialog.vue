@@ -24,7 +24,7 @@
         />
       </VCardTitle>
 
-      <VCardText class="pa-6">
+      <VCardText class="pa-6 dialog-content">
         <!-- Product Info Summary -->
         <VCard variant="tonal" class="mb-6">
           <VCardText class="pa-4">
@@ -333,7 +333,7 @@
       </VCardText>
 
       <!-- Actions -->
-      <VCardActions class="pa-6 pt-0">
+      <VCardActions class="pa-6 dialog-footer">
         <VBtn
           color="warning"
           variant="outlined"
@@ -1095,5 +1095,40 @@ const closeDialog = () => {
 <style scoped>
 .border-b {
   border-bottom: 1px solid rgb(var(--v-theme-surface-variant));
+}
+
+/* Sticky Footer Styles */
+.dialog-content {
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.dialog-footer {
+  position: sticky;
+  bottom: 0;
+  background: rgb(var(--v-theme-surface));
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  z-index: 10;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Scrollbar Styling */
+.dialog-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dialog-content::-webkit-scrollbar-track {
+  background: rgba(var(--v-theme-on-surface), 0.05);
+  border-radius: 4px;
+}
+
+.dialog-content::-webkit-scrollbar-thumb {
+  background: rgba(var(--v-theme-on-surface), 0.2);
+  border-radius: 4px;
+}
+
+.dialog-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--v-theme-on-surface), 0.3);
 }
 </style>

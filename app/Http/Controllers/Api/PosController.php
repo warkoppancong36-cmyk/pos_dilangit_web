@@ -1729,6 +1729,8 @@ class PosController extends Controller
             'transaction_date' => 'nullable|string', // Added for Flutter compatibility
             'bank' => 'nullable|string|max:50', // optional bank/biller info for qris/card/bank_transfer
             'bank_id' => 'nullable|integer|exists:banks,id_bank', // optional master bank reference from mobile
+            // Kitchen Notification System
+            'created_by_station' => 'nullable|string|in:kasir,bar,kitchen', // Station yang membuat order
         ]);
 
         if ($validator->fails()) {
@@ -1777,6 +1779,19 @@ class PosController extends Controller
             // Generate order number
             $orderNumber = $this->generateOrderNumber();
 
+            // Check if order has kitchen items
+            $hasKitchenItems = false;
+            foreach ($request->cart_items as $item) {
+                // For package items, we'll determine later; for product items check now
+                if (isset($item['item_type']) && $item['item_type'] === 'product' && isset($item['product_id'])) {
+                    $product = Product::find($item['product_id']);
+                    if ($product && $product->available_in_kitchen) {
+                        $hasKitchenItems = true;
+                        break;
+                    }
+                }
+            }
+
             // Create order
             $order = Order::create([
                 'order_number' => $orderNumber,
@@ -1792,6 +1807,9 @@ class PosController extends Controller
                 'total_amount' => $request->total_amount,
                 'notes' => $request->notes,
                 'order_date' => now(),
+                // Kitchen Notification System fields
+                'created_by_station' => $request->input('created_by_station', 'kasir'),
+                'kitchen_status' => $hasKitchenItems ? 'pending' : null,
             ]);
 
             // Create order items and check inventory
@@ -2755,6 +2773,8 @@ class PosController extends Controller
             'applied_promotions' => 'nullable|array',
             'transaction_date' => 'nullable|string',
             'payment_method' => 'nullable|string',
+            // Kitchen Notification System
+            'created_by_station' => 'nullable|string|in:kasir,bar,kitchen',
         ];
 
         // Add cart validation only if not empty open bill
@@ -2797,6 +2817,38 @@ class PosController extends Controller
             // Generate order number
             $orderNumber = $this->generateOrderNumber();
 
+            // Check if order has kitchen items
+            $hasKitchenItems = false;
+            if (!$isEmptyOpenBill && !empty($request->cart_items)) {
+                foreach ($request->cart_items as $item) {
+                    // Skip empty items
+                    if (($item['quantity'] ?? 0) == 0) {
+                        continue;
+                    }
+                    
+                    $itemType = $item['item_type'] ?? 'product';
+                    
+                    if ($itemType === 'product' && isset($item['product_id'])) {
+                        $product = Product::find($item['product_id']);
+                        if ($product && $product->available_in_kitchen) {
+                            $hasKitchenItems = true;
+                            break;
+                        }
+                    } elseif ($itemType === 'package' && isset($item['package_id'])) {
+                        // Check if package has any product with available_in_kitchen
+                        $package = \App\Models\Package::with(['items.product'])->find($item['package_id']);
+                        if ($package && $package->items) {
+                            foreach ($package->items as $packageItem) {
+                                if ($packageItem->product && $packageItem->product->available_in_kitchen) {
+                                    $hasKitchenItems = true;
+                                    break 2; // Break both loops
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Create pending order
             $order = Order::create([
                 'order_number' => $orderNumber,
@@ -2811,6 +2863,9 @@ class PosController extends Controller
                 'guest_count' => $request->guest_count ?? 1,
                 'notes' => $request->notes,
                 'order_date' => now(),
+                // Kitchen Notification System fields
+                'created_by_station' => $request->input('created_by_station', 'kasir'),
+                'kitchen_status' => $hasKitchenItems ? 'pending' : null,
             ]);
 
             // Create order items and check inventory (skip for empty open bill)

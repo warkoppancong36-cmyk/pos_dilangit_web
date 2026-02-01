@@ -133,6 +133,29 @@ class ReportController extends Controller
                 ->limit(20)
                 ->get();
 
+            // All products sold (without limit) - for complete product list
+            $allProductsQuery = DB::table('order_items')
+                ->join('orders', 'order_items.id_order', '=', 'orders.id_order')
+                ->join('products', 'order_items.id_product', '=', 'products.id_product')
+                ->select(
+                    'products.name',
+                    'products.id_product as id',
+                    DB::raw('SUM(order_items.quantity) as total_sold'),
+                    DB::raw('SUM(order_items.total_price) as total_revenue'),
+                    DB::raw('AVG(order_items.unit_price) as avg_price')
+                )
+                ->where('orders.status', '!=', 'cancelled')
+                ->whereBetween('orders.order_date', [$startDate, $endDate]);
+
+            if ($hourStart && $hourEnd) {
+                $allProductsQuery->whereRaw('TIME(orders.order_date) >= ?', [$hourStart])
+                                ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
+            }
+
+            $allProducts = $allProductsQuery->groupBy('products.id_product', 'products.name')
+                ->orderBy('total_revenue', 'desc')
+                ->get();
+
             // Sales by customer (if customer data exists)
             $salesByCustomerQuery = Order::join('customers', 'orders.id_customer', '=', 'customers.id_customer')
                 ->select(
@@ -381,6 +404,15 @@ class ReportController extends Controller
                 'top_products' => $topProducts->map(function($item) {
                     return [
                         'name' => $item->name,
+                        'quantity' => $item->total_sold ?: 0,
+                        'revenue' => $this->formatRupiah($item->total_revenue),
+                        'avg_price' => $this->formatRupiah($item->avg_price)
+                    ];
+                }),
+                'all_products' => $allProducts->map(function($item) {
+                    return [
+                        'name' => $item->name,
+                        'id' => $item->id,
                         'quantity' => $item->total_sold ?: 0,
                         'revenue' => $this->formatRupiah($item->total_revenue),
                         'avg_price' => $this->formatRupiah($item->avg_price)
