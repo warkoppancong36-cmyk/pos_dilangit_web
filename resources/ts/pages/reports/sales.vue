@@ -437,14 +437,29 @@ meta:
       <VRow class="mb-6" v-if="reportData.all_products && reportData.all_products.length > 0">
         <VCol cols="12">
           <VCard>
-            <VCardTitle class="d-flex align-center gap-2">
-              <VIcon icon="mdi-package-variant" />
-              Semua Produk Terjual ({{ reportData.all_products.length }} produk)
+            <VCardTitle class="d-flex align-center justify-space-between">
+              <div class="d-flex align-center gap-2">
+                <VIcon icon="mdi-package-variant" />
+                Semua Produk Terjual ({{ reportData.all_products.length }} produk)
+              </div>
+              <VTextField
+                v-model="allProductsSearch"
+                prepend-inner-icon="mdi-magnify"
+                label="Cari produk..."
+                placeholder="Ketik nama produk"
+                single-line
+                hide-details
+                density="compact"
+                variant="outlined"
+                clearable
+                style="max-width: 300px;"
+              />
             </VCardTitle>
             <VCardText>
               <VDataTable
                 :headers="allProductsHeaders"
                 :items="reportData.all_products"
+                :search="allProductsSearch"
                 :items-per-page="10"
                 class="elevation-0"
                 no-data-text="Tidak ada data produk"
@@ -659,6 +674,7 @@ const customStartDate = ref('')
 const customEndDate = ref('')
 const hourStart = ref('')
 const hourEnd = ref('')
+const allProductsSearch = ref('')
 
 // Chart reference
 const dailySalesChart = ref<HTMLCanvasElement>()
