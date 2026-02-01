@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\InventoryController;
 use App\Http\Controllers\InventoryUploadController;
 use App\Http\Controllers\Api\PosController;
+use App\Http\Controllers\Api\KitchenController;
 use App\Http\Controllers\Api\DiscountController;
 use App\Http\Controllers\Api\CashDrawerController;
 use App\Http\Controllers\Api\PromotionController;
@@ -350,6 +351,12 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
         Route::post('/orders/{order}/discount', [PosController::class, 'applyDiscount']);
         Route::post('/orders/{order}/tax', [PosController::class, 'applyTax']);
         Route::post('/orders/{order}/payment', [PosController::class, 'processPayment']);
+    });
+
+    // Kitchen Notification System Routes
+    Route::prefix('kitchen')->group(function () {
+        Route::get('/orders', [KitchenController::class, 'getKitchenOrders']);
+        Route::put('/orders/{id}/status', [KitchenController::class, 'updateKitchenOrderStatus']);
     });
 
     // Cash Drawer Routes

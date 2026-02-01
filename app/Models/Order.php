@@ -38,6 +38,11 @@ class Order extends Model
         'completed_at',
         'created_by',
         'updated_by',
+        // Kitchen Notification System fields
+        'created_by_station',
+        'kitchen_status',
+        'kitchen_acknowledged_at',
+        'kitchen_completed_at',
     ];
 
     protected $casts = [
@@ -54,6 +59,9 @@ class Order extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
+        // Kitchen Notification System casts
+        'kitchen_acknowledged_at' => 'datetime',
+        'kitchen_completed_at' => 'datetime',
     ];
 
     protected $appends = [
