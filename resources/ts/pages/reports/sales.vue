@@ -146,7 +146,7 @@ meta:
 
        <!-- Today's Sales Cards -->
       <VRow class="mb-6">
-        <VCol cols="12" md="6">
+        <VCol cols="12" md="4">
           <VCard>
             <VCardText class="text-center">
               <VIcon icon="mdi-calendar-today" size="32" class="text-purple mb-2" />
@@ -160,8 +160,23 @@ meta:
             </VCardText>
           </VCard>
         </VCol>
-        
-        <VCol cols="12" md="6">
+
+        <VCol cols="12" md="4">
+          <VCard>
+            <VCardText class="text-center">
+              <VIcon icon="mdi-filter-variant" size="32" class="text-success mb-2" />
+              <div class="text-h5 font-weight-bold text-success">
+                {{ formatCurrency(reportData?.summary?.total_revenue || 0) }}
+              </div>
+              <div class="text-body-2 text-medium-emphasis">Total Penjualan (Filter)</div>
+              <div class="text-caption text-medium-emphasis mt-1">
+                {{ reportData?.summary?.total_orders || 0 }} order | {{ getSelectedPeriodLabel() }}
+              </div>
+            </VCardText>
+          </VCard>
+        </VCol>
+
+        <VCol cols="12" md="4">
           <VCard>
             <VCardText class="text-center">
               <VIcon icon="mdi-chart-bar" size="32" class="text-indigo mb-2" />
