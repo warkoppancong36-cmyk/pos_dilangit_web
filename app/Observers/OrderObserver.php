@@ -98,8 +98,8 @@ class OrderObserver
                 ['id_order' => $order->id_order],
                 [
                     'order_number' => $order->order_number,
-                    'order_date' => Carbon::parse($order->created_at)->format('Y-m-d'),
-                    'order_time' => Carbon::parse($order->created_at)->format('H:i:s'),
+                    'order_date' => $order->order_date ? Carbon::parse($order->order_date)->format('Y-m-d') : Carbon::parse($order->created_at)->format('Y-m-d'),
+                    'order_time' => $order->order_date ? Carbon::parse($order->order_date)->format('H:i:s') : Carbon::parse($order->created_at)->format('H:i:s'),
                     'customer_name' => $customer->name ?? 'Guest',
                     'table_number' => $order->table_number,
                     'order_type' => $order->order_type,

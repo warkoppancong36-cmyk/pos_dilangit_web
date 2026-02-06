@@ -39,7 +39,7 @@ meta:
     <VCard class="mb-6">
       <VCardText>
         <VRow>
-          <VCol cols="12" md="4">
+          <VCol cols="12" md="3">
             <VSelect
               v-model="selectedPeriod"
               :items="periodOptions"
@@ -51,7 +51,18 @@ meta:
               @update:model-value="onPeriodChange"
             />
           </VCol>
-          
+
+          <VCol cols="12" md="2" v-if="selectedPeriod === 'month'">
+            <VSelect
+              v-model="selectedYear"
+              :items="yearOptions"
+              label="Tahun"
+              variant="outlined"
+              density="compact"
+              @update:model-value="onYearChange"
+            />
+          </VCol>
+
           <VCol cols="12" md="3" v-if="selectedPeriod === 'custom'">
             <VTextField
               v-model="customStartDate"
@@ -62,7 +73,7 @@ meta:
               @update:model-value="loadReportData"
             />
           </VCol>
-          
+
           <VCol cols="12" md="3" v-if="selectedPeriod === 'custom'">
             <VTextField
               v-model="customEndDate"
@@ -73,8 +84,8 @@ meta:
               @update:model-value="loadReportData"
             />
           </VCol>
-          
-          <VCol cols="12" md="3" v-else-if="selectedPeriod === 'month'">
+
+          <VCol cols="12" md="3" v-if="selectedPeriod === 'month'">
             <VSelect
               v-model="selectedMonth"
               :items="monthOptions"
@@ -665,7 +676,7 @@ meta:
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import Chart from 'chart.js/auto'
@@ -684,6 +695,7 @@ const todaySalesData = ref({
 const paymentMethodData = ref<any[]>([])
 const orderTypeData = ref<any[]>([])
 const selectedPeriod = ref('today')
+const selectedYear = ref(new Date().getFullYear())
 const selectedMonth = ref('')
 const customStartDate = ref('')
 const customEndDate = ref('')
@@ -702,22 +714,28 @@ const periodOptions = [
   { title: 'Custom Range', value: 'custom' }
 ]
 
-// Generate month options based on current year
+// Generate year options (current year and 5 years back)
 const currentYear = new Date().getFullYear()
-const monthOptions = [
-  { title: 'Januari', value: `${currentYear}-01` },
-  { title: 'Februari', value: `${currentYear}-02` },
-  { title: 'Maret', value: `${currentYear}-03` },
-  { title: 'April', value: `${currentYear}-04` },
-  { title: 'Mei', value: `${currentYear}-05` },
-  { title: 'Juni', value: `${currentYear}-06` },
-  { title: 'Juli', value: `${currentYear}-07` },
-  { title: 'Agustus', value: `${currentYear}-08` },
-  { title: 'September', value: `${currentYear}-09` },
-  { title: 'Oktober', value: `${currentYear}-10` },
-  { title: 'November', value: `${currentYear}-11` },
-  { title: 'Desember', value: `${currentYear}-12` }
-]
+const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i)
+
+// Generate month options based on selected year (reactive)
+const monthOptions = computed(() => {
+  const year = selectedYear.value
+  return [
+    { title: 'Januari', value: `${year}-01` },
+    { title: 'Februari', value: `${year}-02` },
+    { title: 'Maret', value: `${year}-03` },
+    { title: 'April', value: `${year}-04` },
+    { title: 'Mei', value: `${year}-05` },
+    { title: 'Juni', value: `${year}-06` },
+    { title: 'Juli', value: `${year}-07` },
+    { title: 'Agustus', value: `${year}-08` },
+    { title: 'September', value: `${year}-09` },
+    { title: 'Oktober', value: `${year}-10` },
+    { title: 'November', value: `${year}-11` },
+    { title: 'Desember', value: `${year}-12` }
+  ]
+})
 
 // Table headers
 const customerHeaders = [
@@ -979,14 +997,20 @@ const getSelectedPeriodLabel = () => {
 // Event handlers
 const onPeriodChange = () => {
   if (selectedPeriod.value === 'month') {
-    // Set default to current month
-    const currentMonth = new Date().toISOString().slice(0, 7)
-    selectedMonth.value = currentMonth
+    // Set default to current month of selected year
+    selectedMonth.value = `${selectedYear.value}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
   } else if (selectedPeriod.value === 'today') {
     const today = new Date().toISOString().slice(0, 10)
     customStartDate.value = today
     customEndDate.value = today
   }
+  loadReportData()
+}
+
+const onYearChange = () => {
+  // Update month value to selected year when year changes
+  const currentMonth = selectedMonth.value.split('-')[1] || '01'
+  selectedMonth.value = `${selectedYear.value}-${currentMonth}`
   loadReportData()
 }
 
@@ -1259,7 +1283,8 @@ const exportToExcel = async () => {
       } 
       // If it's a regular string number
       else if (typeof value === 'string') {
-        numValue = parseFloat(value.replace(/[^\d]/g, ''))
+        // Keep decimal point, only remove other non-numeric chars except dot
+        numValue = parseFloat(value.replace(/[^\d.]/g, ''))
       }
       // If it's already a number
       else if (typeof value === 'number') {
@@ -1577,9 +1602,13 @@ const exportToExcel = async () => {
     if (transactionHistory && transactionHistory.length > 0) {
       transactionHistory.forEach((order: any, index: number) => {
         try {
-          const orderDate = new Date(order.created_at)
+          // Use order_date from cache table, fallback to created_at if not available
+          const dateTimeStr = order.order_date || order.created_at
+          const orderDate = new Date(dateTimeStr)
           const dateStr = orderDate.toLocaleDateString('id-ID')
-          const timeStr = orderDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+          const timeStr = order.order_time
+            ? new Date(`2000-01-01 ${order.order_time}`).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+            : orderDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
           
           // Get customer name (from raw SQL)
           const customerName = order.customer_name || 'Guest'
