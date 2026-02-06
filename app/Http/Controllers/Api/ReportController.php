@@ -994,25 +994,27 @@ class ReportController extends Controller
     }
 
     /**
-     * Get payment methods analytics for today
+     * Get payment methods analytics with filter support
      */
-    public function paymentMethods(): JsonResponse
+    public function paymentMethods(Request $request): JsonResponse
     {
         try {
-            $today = Carbon::today();
-            
-            // Debug: Check if there are any orders today
-            $totalOrdersToday = DB::table('orders')
+            $startDate = $this->getStartDate($request);
+            $endDate = $this->getEndDate($request);
+
+            // Debug: Check if there are any orders in period
+            $totalOrdersInPeriod = DB::table('orders')
                 ->where('status', '!=', 'cancelled')
-                ->whereDate('order_date', $today)
+                ->whereBetween('order_date', [$startDate, $endDate])
                 ->count();
-                
-            // Debug: Check if there are any payments today
-            $totalPaymentsToday = DB::table('payments')
-                ->whereDate('created_at', $today)
+
+            // Debug: Check if there are any payments in period
+            $totalPaymentsInPeriod = DB::table('payments')
+                ->join('orders', 'payments.id_order', '=', 'orders.id_order')
+                ->whereBetween('orders.order_date', [$startDate, $endDate])
                 ->count();
-            
-            // Get payment methods breakdown for today only - paid orders
+
+            // Get payment methods breakdown for selected period - paid orders
             $paymentMethods = DB::table('orders')
                 ->join('payments', 'orders.id_order', '=', 'payments.id_order')
                 ->select(
@@ -1023,7 +1025,7 @@ class ReportController extends Controller
                 ->where('orders.status', '!=', 'cancelled')
                 ->where('orders.status', '!=', 'pending')    // Exclude pending orders
                 ->where('payments.status', 'paid')
-                ->whereDate('orders.order_date', $today)
+                ->whereBetween('orders.order_date', [$startDate, $endDate])
                 ->whereNull('orders.deleted_at')             // Exclude soft deleted orders
                 ->groupBy('payments.payment_method')
                 ->orderBy('total_amount', 'desc')
@@ -1045,15 +1047,16 @@ class ReportController extends Controller
                 'total_amount_formatted' => $this->formatRupiah($formattedData->sum('total_amount')),
                 'method_count' => $formattedData->count(),
                 'total_orders' => $formattedData->sum('order_count'),
-                'debug_orders_today' => $totalOrdersToday,
-                'debug_payments_today' => $totalPaymentsToday
+                'debug_orders_in_period' => $totalOrdersInPeriod,
+                'debug_payments_in_period' => $totalPaymentsInPeriod
             ];
 
             return $this->successResponse([
                 'data' => $formattedData->toArray(),
                 'summary' => $summary,
-                'date' => $today->format('Y-m-d'),
-                'date_formatted' => $today->format('d M Y')
+                'start_date' => $startDate->format('Y-m-d'),
+                'end_date' => $endDate->format('Y-m-d'),
+                'period_formatted' => $startDate->format('d M Y') . ' - ' . $endDate->format('d M Y')
             ], 'Payment methods analytics retrieved successfully');
 
         } catch (\Exception $e) {
@@ -1062,14 +1065,15 @@ class ReportController extends Controller
     }
 
     /**
-     * Get order types analytics for today
+     * Get order types analytics with filter support
      */
-    public function orderTypes(): JsonResponse
+    public function orderTypes(Request $request): JsonResponse
     {
         try {
-            $today = Carbon::today();
-            
-            // Get order types breakdown for today only - paid orders  
+            $startDate = $this->getStartDate($request);
+            $endDate = $this->getEndDate($request);
+
+            // Get order types breakdown for selected period - paid orders
             $orderTypes = DB::table('orders')
                 ->join('payments', 'orders.id_order', '=', 'payments.id_order')
                 ->select(
@@ -1080,7 +1084,7 @@ class ReportController extends Controller
                 ->where('orders.status', '!=', 'cancelled')
                 ->where('orders.status', '!=', 'pending')    // Exclude pending orders
                 ->where('payments.status', 'paid')
-                ->whereDate('orders.order_date', $today)
+                ->whereBetween('orders.order_date', [$startDate, $endDate])
                 ->whereNull('orders.deleted_at')             // Exclude soft deleted orders
                 ->groupBy('orders.order_type')
                 ->orderBy('total_amount', 'desc')
@@ -1107,8 +1111,9 @@ class ReportController extends Controller
             return $this->successResponse([
                 'data' => $formattedData->toArray(),
                 'summary' => $summary,
-                'date' => $today->format('Y-m-d'),
-                'date_formatted' => $today->format('d M Y')
+                'start_date' => $startDate->format('Y-m-d'),
+                'end_date' => $endDate->format('Y-m-d'),
+                'period_formatted' => $startDate->format('d M Y') . ' - ' . $endDate->format('d M Y')
             ], 'Order types analytics retrieved successfully');
 
         } catch (\Exception $e) {
