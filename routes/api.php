@@ -357,6 +357,9 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
     Route::prefix('kitchen')->group(function () {
         Route::get('/orders', [KitchenController::class, 'getKitchenOrders']);
         Route::put('/orders/{id}/status', [KitchenController::class, 'updateKitchenOrderStatus']);
+        // New endpoints for kitchen order management
+        Route::post('/orders', [KitchenController::class, 'createKitchenOrder']);
+        Route::post('/orders/{id}/print', [KitchenController::class, 'markAsPrinted']);
     });
 
     // Cash Drawer Routes
