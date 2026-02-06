@@ -54,7 +54,7 @@ class OrdersExport
                 $itemsList,
                 'Rp ' . number_format($order->total_amount, 0, ',', '.'),
                 $paymentMethods,
-                $order->created_at->format('d/m/Y H:i'),
+                $order->order_date ? \Carbon\Carbon::parse($order->order_date)->format('d/m/Y H:i') : '-',
                 $order->user ? $order->user->name : 'System',
                 $order->notes ?? ''
             ];

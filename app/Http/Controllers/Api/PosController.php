@@ -16,6 +16,8 @@ use App\Models\Bank;
 use App\Models\InventoryMovement;
 use App\Models\CashTransaction;
 use App\Models\CashRegister;
+use App\Models\KitchenOrder;
+use App\Models\KitchenOrderItem;
 use App\Exports\OrdersExport;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\Request;
@@ -391,6 +393,8 @@ class PosController extends Controller
 
     /**
      * Add item to order
+     * Jika item memiliki available_in_kitchen: true, akan membuat KitchenOrder baru
+     * sehingga item akan muncul di Kitchen Display pada tab "Pesanan Baru"
      */
     public function addItem(Request $request, Order $order): JsonResponse
     {
@@ -404,6 +408,9 @@ class PosController extends Controller
             'discount_amount' => 'nullable|numeric|min:0',
             'discount_type' => 'nullable|in:fixed,percentage',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
+            // Kitchen notification fields
+            'available_kitchen' => 'nullable|boolean',
+            'station' => 'nullable|string|in:bar,kasir',
         ]);
 
         if ($validator->fails()) {
@@ -412,6 +419,9 @@ class PosController extends Controller
 
         try {
             DB::beginTransaction();
+
+            $kitchenItems = []; // Collect kitchen items for notification
+            $orderItem = null;
 
             // Handle package order
             if ($request->item_type === 'package') {
@@ -463,12 +473,23 @@ class PosController extends Controller
                     'notes' => $request->notes ?? null,
                 ]);
                 
-                // Consume items for each product in package
+                // Consume items for each product in package and check for kitchen items
                 foreach ($package->items as $packageItem) {
                     $product = $packageItem->product;
                     $requiredQty = $packageItem->quantity * $request->quantity;
                     
                     $this->consumeRecipeItems($product, $requiredQty, $request->cashier_id, $order->id_order, $order->order_type);
+                    
+                    // Check if product is available in kitchen
+                    if ($product && $product->available_in_kitchen) {
+                        $kitchenItems[] = [
+                            'id_order_item' => $orderItem->id_order_item,
+                            'product_name' => $product->name,
+                            'quantity' => $packageItem->quantity * $request->quantity,
+                            'variant_name' => null,
+                            'notes' => $request->notes,
+                        ];
+                    }
                 }
                 
             } else {
@@ -512,6 +533,20 @@ class PosController extends Controller
 
                 // Update inventory based on recipe consumption
                 $this->consumeRecipeItems($product, $request->quantity, $request->cashier_id, $order->id_order, $order->order_type);
+                
+                // Check if product is available in kitchen
+                // Use request parameter or product's available_in_kitchen flag
+                $isKitchenItem = $request->input('available_kitchen', $product->available_in_kitchen);
+                
+                if ($isKitchenItem) {
+                    $kitchenItems[] = [
+                        'id_order_item' => $orderItem->id_order_item,
+                        'product_name' => $product->name,
+                        'quantity' => $request->quantity,
+                        'variant_name' => null,
+                        'notes' => $request->notes,
+                    ];
+                }
             }
 
             // Manually recalculate order totals since calculateTotals() is disabled
@@ -527,11 +562,45 @@ class PosController extends Controller
                 'total_amount' => $totalAmount
             ]);
 
+            // Create new KitchenOrder if there are kitchen items
+            // This creates a SEPARATE kitchen order with different ID but same order_number
+            // so it will appear in Kitchen Display as "Pesanan Baru"
+            $kitchenOrder = null;
+            if (!empty($kitchenItems) && \Illuminate\Support\Facades\Schema::hasTable('kitchen_orders')) {
+                $station = $request->input('station', 'kasir');
+                
+                $kitchenOrder = \App\Models\KitchenOrder::createFromOrderItems($order, $kitchenItems, $station);
+                
+                \Log::info('New kitchen order created for added item', [
+                    'kitchen_order_id' => $kitchenOrder->id_kitchen_order,
+                    'order_id' => $order->id_order,
+                    'order_number' => $order->order_number,
+                    'items_count' => count($kitchenItems),
+                    'station' => $station,
+                ]);
+            }
+
             DB::commit();
 
             $order->load(['orderItems.product', 'orderItems.package']);
 
-            return $this->successResponse($orderItem, $request->item_type === 'package' ? 'Package added to order successfully' : 'Item added to order successfully');
+            // Prepare response with kitchen order info if created
+            $response = [
+                'order_item' => $orderItem,
+                'kitchen_order' => $kitchenOrder ? [
+                    'id' => $kitchenOrder->id_kitchen_order,
+                    'order_number' => $kitchenOrder->order_number,
+                    'status' => $kitchenOrder->status,
+                    'items_count' => count($kitchenItems),
+                ] : null,
+            ];
+
+            return $this->successResponse(
+                $response, 
+                $request->item_type === 'package' 
+                    ? 'Package added to order successfully' 
+                    : 'Item added to order successfully' . ($kitchenOrder ? ' (Kitchen notified)' : '')
+            );
         } catch (\Exception $e) {
             DB::rollback();
             return $this->serverErrorResponse('Failed to add item: ' . $e->getMessage());
@@ -715,6 +784,25 @@ class PosController extends Controller
                     $inventory->update([
                         'reserved_stock' => max(0, $inventory->reserved_stock - $orderItem->quantity)
                     ]);
+                }
+            }
+
+            // Check if this item exists in kitchen display and remove if still pending
+            $kitchenOrderItems = KitchenOrderItem::where('id_order_item', $orderItem->id_order_item)->get();
+
+            foreach ($kitchenOrderItems as $kitchenItem) {
+                // Get the kitchen order to check status
+                $kitchenOrder = $kitchenItem->kitchenOrder;
+
+                // Only delete from kitchen display if the kitchen order status is still pending
+                if ($kitchenOrder && $kitchenOrder->status === KitchenOrder::STATUS_PENDING) {
+                    $kitchenItem->delete();
+
+                    // If kitchen order has no more items, delete the kitchen order too
+                    $remainingItems = KitchenOrderItem::where('id_kitchen_order', $kitchenOrder->id_kitchen_order)->count();
+                    if ($remainingItems === 0) {
+                        $kitchenOrder->delete();
+                    }
                 }
             }
 
@@ -1343,6 +1431,9 @@ class PosController extends Controller
 
             // Update order items if provided
             if ($request->has('items')) {
+                // Track existing item IDs before deletion for kitchen notification comparison
+                $existingItemProductIds = $order->orderItems->pluck('id_product')->toArray();
+                
                 // Release all current reserved stock
                 foreach ($order->orderItems as $existingItem) {
                     $inventory = Inventory::where('id_product', $existingItem->id_product)->first();
@@ -1356,7 +1447,8 @@ class PosController extends Controller
                 // Delete existing items
                 $order->orderItems()->delete();
 
-                // Add new items
+                // Add new items and collect kitchen items
+                $kitchenItems = [];
                 foreach ($request->items as $itemData) {
                     $product = Product::with(['productItems.item.inventory'])->find($itemData['id_product']);
                     if (!$product) {
@@ -1370,9 +1462,10 @@ class PosController extends Controller
                     }
 
                     // Create new order item
-                    OrderItem::create([
+                    $orderItem = OrderItem::create([
                         'id_order' => $order->id_order,
                         'id_product' => $itemData['id_product'],
+                        'item_type' => 'product',
                         'item_name' => $product->name,
                         'item_sku' => $product->sku ?? 'NO-SKU',
                         'quantity' => $itemData['quantity'],
@@ -1388,6 +1481,32 @@ class PosController extends Controller
                             'reserved_stock' => $inventory->reserved_stock + $itemData['quantity']
                         ]);
                     }
+                    
+                    // Check if this is a NEW kitchen item (not in existing items)
+                    // Only create kitchen notification for NEW items, not updates
+                    $isNewItem = !in_array($itemData['id_product'], $existingItemProductIds);
+                    if ($isNewItem && $product->available_in_kitchen) {
+                        $kitchenItems[] = [
+                            'id_order_item' => $orderItem->id_order_item,
+                            'product_name' => $product->name,
+                            'quantity' => $itemData['quantity'],
+                            'variant_name' => null,
+                            'notes' => $itemData['notes'] ?? null,
+                        ];
+                    }
+                }
+                
+                // Create kitchen order for new kitchen items
+                if (!empty($kitchenItems) && \Illuminate\Support\Facades\Schema::hasTable('kitchen_orders')) {
+                    $station = $request->input('station', 'kasir');
+                    $kitchenOrder = \App\Models\KitchenOrder::createFromOrderItems($order, $kitchenItems, $station);
+                    
+                    \Log::info('Kitchen order created from editOrder', [
+                        'kitchen_order_id' => $kitchenOrder->id_kitchen_order,
+                        'order_id' => $order->id_order,
+                        'order_number' => $order->order_number,
+                        'items_count' => count($kitchenItems),
+                    ]);
                 }
             }
 
@@ -2177,6 +2296,10 @@ class PosController extends Controller
 
             // Create cash transaction for cash drawer integration
             $this->createCashTransaction($order, $payment, $request);
+
+            // AUTO-CREATE KITCHEN ORDER untuk items yang available_in_kitchen
+            // Ini yang membuat data muncul di Kitchen Display
+            $this->createKitchenOrderForOrder($order, $request->input('created_by_station', 'kasir'));
 
             DB::commit();
 
@@ -2985,12 +3108,18 @@ class PosController extends Controller
             // Load order with relationships for response
             $order->load(['user', 'customer', 'orderItems.product']);
 
+            // Kitchen Notification System: Create kitchen order if there are kitchen items
+            if ($hasKitchenItems) {
+                $this->createKitchenOrderForOrder($order, $request->input('created_by_station', 'kasir'));
+            }
+
             // Log successful pending order creation
             \Log::info("Pending order created successfully", [
                 'order_id' => $order->id_order,
                 'order_number' => $order->order_number,
                 'order_type' => $order->order_type,
-                'cashier_id' => $request->cashier_id
+                'cashier_id' => $request->cashier_id,
+                'has_kitchen_items' => $hasKitchenItems
             ]);
 
             return $this->successResponse([
@@ -3143,7 +3272,7 @@ class PosController extends Controller
     {
         try {
             $query = Order::with(['customer', 'user', 'orderItems.product', 'payments'])
-                ->orderBy('created_at', 'desc');
+                ->orderBy('order_date', 'desc');
 
             // Apply same filters as getOrders method
             if ($request->has('search')) {
@@ -3177,15 +3306,15 @@ class PosController extends Controller
             }
 
             if ($request->has('date_from')) {
-                $query->whereDate('created_at', '>=', $request->date_from);
+                $query->whereDate('order_date', '>=', $request->date_from);
             }
 
             if ($request->has('date_to')) {
-                $query->whereDate('created_at', '<=', $request->date_to);
+                $query->whereDate('order_date', '<=', $request->date_to);
             }
 
             if (!$request->has('date_from') && !$request->has('date_to')) {
-                $query->whereDate('created_at', '>=', now()->subDays(30));
+                $query->whereDate('order_date', '>=', now()->subDays(30));
             }
 
             $orders = $query->get();
@@ -3309,6 +3438,92 @@ class PosController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
             return $this->serverErrorResponse('Failed to retrieve packages: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Auto-create KitchenOrder untuk order yang memiliki item available_in_kitchen
+     * Dipanggil setelah order berhasil dibuat di processDirectPayment atau createPendingOrder
+     * 
+     * @param Order $order
+     * @param string $station Station yang membuat order (kasir/bar)
+     * @return KitchenOrder|null
+     */
+    private function createKitchenOrderForOrder(Order $order, string $station = 'kasir')
+    {
+        try {
+            // Check if kitchen_orders table exists
+            if (!\Illuminate\Support\Facades\Schema::hasTable('kitchen_orders')) {
+                \Log::info('Kitchen orders table not found, skipping kitchen order creation');
+                return null;
+            }
+
+            // Load order items with product relationship
+            $order->load(['orderItems.product', 'customer']);
+
+            // Collect items that need to be sent to kitchen
+            $kitchenItems = [];
+            
+            foreach ($order->orderItems as $orderItem) {
+                // Check if it's a product with available_in_kitchen
+                if ($orderItem->item_type === 'product' && $orderItem->product && $orderItem->product->available_in_kitchen) {
+                    $kitchenItems[] = [
+                        'id_order_item' => $orderItem->id_order_item,
+                        'product_name' => $orderItem->item_name ?? $orderItem->product->name,
+                        'quantity' => $orderItem->quantity,
+                        'variant_name' => null,
+                        'notes' => $orderItem->notes,
+                    ];
+                }
+                
+                // Check if it's a package - need to check individual products in package
+                if ($orderItem->item_type === 'package' && $orderItem->id_package) {
+                    $package = \App\Models\Package::with(['items.product'])->find($orderItem->id_package);
+                    if ($package && $package->items) {
+                        foreach ($package->items as $packageItem) {
+                            if ($packageItem->product && $packageItem->product->available_in_kitchen) {
+                                $kitchenItems[] = [
+                                    'id_order_item' => $orderItem->id_order_item,
+                                    'product_name' => $packageItem->product->name . ' (dari ' . $package->name . ')',
+                                    'quantity' => $packageItem->quantity * $orderItem->quantity,
+                                    'variant_name' => null,
+                                    'notes' => $orderItem->notes,
+                                ];
+                            }
+                        }
+                    }
+                }
+            }
+
+            // If no kitchen items, don't create kitchen order
+            if (empty($kitchenItems)) {
+                \Log::info('No kitchen items found in order, skipping kitchen order creation', [
+                    'order_id' => $order->id_order,
+                    'order_number' => $order->order_number
+                ]);
+                return null;
+            }
+
+            // Create kitchen order using the model's static method
+            $kitchenOrder = \App\Models\KitchenOrder::createFromOrderItems($order, $kitchenItems, $station);
+
+            \Log::info('Kitchen order created successfully', [
+                'kitchen_order_id' => $kitchenOrder->id_kitchen_order,
+                'order_id' => $order->id_order,
+                'order_number' => $order->order_number,
+                'items_count' => count($kitchenItems),
+                'station' => $station,
+            ]);
+
+            return $kitchenOrder;
+        } catch (\Exception $e) {
+            \Log::error('Failed to create kitchen order', [
+                'order_id' => $order->id_order,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            // Don't throw - kitchen order creation should not block the main transaction
+            return null;
         }
     }
 }
