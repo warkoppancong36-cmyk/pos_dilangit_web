@@ -222,9 +222,13 @@ class Product extends Model
      */
     public function scopeLowStock($query)
     {
-        return $query->whereHas('inventory', function ($q) {
-            $q->whereColumn('current_stock', '<=', 'reorder_level')
-              ->where('current_stock', '>', 0);
+        // Produk dengan inventory yang stoknya rendah
+        // ATAU produk tanpa inventory dianggap stok rendah jika tidak aktif
+        return $query->where(function ($q) {
+            $q->whereHas('inventory', function ($subQ) {
+                $subQ->whereColumn('current_stock', '<=', 'reorder_level')
+                     ->where('current_stock', '>', 0);
+            });
         });
     }
 
@@ -233,8 +237,13 @@ class Product extends Model
      */
     public function scopeInStock($query)
     {
-        return $query->whereHas('inventory', function ($q) {
-            $q->where('current_stock', '>', 0);
+        // Produk dengan inventory yang ada stoknya
+        // ATAU produk tanpa inventory tetapi aktif (dianggap selalu tersedia)
+        return $query->where(function ($q) {
+            $q->whereHas('inventory', function ($subQ) {
+                $subQ->where('current_stock', '>', 0);
+            })
+            ->orWhereDoesntHave('inventory');  // Produk tanpa inventory dianggap tersedia
         });
     }
 
@@ -243,6 +252,7 @@ class Product extends Model
      */
     public function scopeOutOfStock($query)
     {
+        // Hanya produk yang punya inventory DAN stoknya habis
         return $query->whereHas('inventory', function ($q) {
             $q->where('current_stock', '<=', 0);
         });

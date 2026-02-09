@@ -387,15 +387,16 @@ class KitchenController extends Controller
             $order = Order::findOrFail($request->order_id);
             $station = $request->input('station', 'kasir');
 
-            $kitchenOrder = KitchenOrder::createFromOrderItems($order, $request->items, $station);
+            // Use findOrCreateForOrder to add to existing kitchen order if available
+            $kitchenOrder = KitchenOrder::findOrCreateForOrder($order, $request->items, $station);
 
-            $kitchenOrder->load('items');
+            $kitchenOrder->load('items'); //untuk item
 
-            Log::info('New kitchen order created for existing order', [
+            Log::info('Kitchen order updated/created for existing order', [
                 'kitchen_order_id' => $kitchenOrder->id_kitchen_order,
                 'order_id' => $order->id_order,
                 'order_number' => $order->order_number,
-                'items_count' => count($request->items),
+                'total_items_count' => $kitchenOrder->items()->count(),
                 'station' => $station,
             ]);
 
