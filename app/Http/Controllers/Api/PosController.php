@@ -562,20 +562,20 @@ class PosController extends Controller
                 'total_amount' => $totalAmount
             ]);
 
-            // Create new KitchenOrder if there are kitchen items
-            // This creates a SEPARATE kitchen order with different ID but same order_number
-            // so it will appear in Kitchen Display as "Pesanan Baru"
+            // Find or create KitchenOrder - this ensures items are added to existing order
+            // instead of creating separate kitchen orders
             $kitchenOrder = null;
             if (!empty($kitchenItems) && \Illuminate\Support\Facades\Schema::hasTable('kitchen_orders')) {
                 $station = $request->input('station', 'kasir');
                 
-                $kitchenOrder = \App\Models\KitchenOrder::createFromOrderItems($order, $kitchenItems, $station);
+                // Use findOrCreateForOrder to add to existing kitchen order
+                $kitchenOrder = \App\Models\KitchenOrder::findOrCreateForOrder($order, $kitchenItems, $station);
                 
-                \Log::info('New kitchen order created for added item', [
+                \Log::info('Kitchen order updated/created for added item', [
                     'kitchen_order_id' => $kitchenOrder->id_kitchen_order,
                     'order_id' => $order->id_order,
                     'order_number' => $order->order_number,
-                    'items_count' => count($kitchenItems),
+                    'total_items_count' => $kitchenOrder->items()->count(),
                     'station' => $station,
                 ]);
             }
@@ -1496,16 +1496,17 @@ class PosController extends Controller
                     }
                 }
                 
-                // Create kitchen order for new kitchen items
+                // Find or create kitchen order for new kitchen items
+                // This ensures items are added to existing kitchen order instead of creating new one
                 if (!empty($kitchenItems) && \Illuminate\Support\Facades\Schema::hasTable('kitchen_orders')) {
                     $station = $request->input('station', 'kasir');
-                    $kitchenOrder = \App\Models\KitchenOrder::createFromOrderItems($order, $kitchenItems, $station);
+                    $kitchenOrder = \App\Models\KitchenOrder::findOrCreateForOrder($order, $kitchenItems, $station);
                     
-                    \Log::info('Kitchen order created from editOrder', [
+                    \Log::info('Kitchen order updated/created from editOrder', [
                         'kitchen_order_id' => $kitchenOrder->id_kitchen_order,
                         'order_id' => $order->id_order,
                         'order_number' => $order->order_number,
-                        'items_count' => count($kitchenItems),
+                        'total_items_count' => $kitchenOrder->items()->count(),
                     ]);
                 }
             }

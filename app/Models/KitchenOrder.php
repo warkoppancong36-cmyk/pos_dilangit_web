@@ -164,6 +164,54 @@ class KitchenOrder extends Model
         return $this->save();
     }
 
+    /**
+     * Add items to an existing kitchen order
+     */
+    public function addItems(array $items): void
+    {
+        foreach ($items as $item) {
+            KitchenOrderItem::create([
+                'id_kitchen_order' => $this->id_kitchen_order,
+                'id_order_item' => $item['id_order_item'] ?? null,
+                'product_name' => $item['product_name'] ?? $item['item_name'] ?? 'Unknown Product',
+                'quantity' => $item['quantity'] ?? 1,
+                'variant_name' => $item['variant_name'] ?? null,
+                'customizations' => $item['customizations'] ?? null,
+                'notes' => $item['notes'] ?? null,
+                'status' => 'pending',
+            ]);
+        }
+    }
+
+    /**
+     * Find or create kitchen order for an order
+     * This ensures that all items for the same order go into ONE kitchen order
+     */
+    public static function findOrCreateForOrder(Order $order, array $items, string $station = 'kasir'): self
+    {
+        // Try to find existing active kitchen order for this order
+        $kitchenOrder = self::where('id_order', $order->id_order)
+            ->whereIn('status', [self::STATUS_PENDING, self::STATUS_IN_PROGRESS])
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if ($kitchenOrder) {
+            // Add items to existing kitchen order
+            $kitchenOrder->addItems($items);
+            \Log::info('Items added to existing kitchen order', [
+                'kitchen_order_id' => $kitchenOrder->id_kitchen_order,
+                'order_id' => $order->id_order,
+                'order_number' => $order->order_number,
+                'new_items_count' => count($items),
+            ]);
+        } else {
+            // Create new kitchen order with items
+            $kitchenOrder = self::createFromOrderItems($order, $items, $station);
+        }
+
+        return $kitchenOrder;
+    }
+
     public static function createFromOrderItems(Order $order, array $items, string $station = 'kasir'): self
     {
         $kitchenOrder = self::create([
