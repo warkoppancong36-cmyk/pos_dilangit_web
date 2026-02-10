@@ -1553,6 +1553,25 @@ class PosController extends Controller
                 $this->restoreRecipeItems($product, $orderItem->quantity, Auth::id(), $order->id_order);
             }
 
+            // Cancel all related kitchen orders
+            if (\Illuminate\Support\Facades\Schema::hasTable('kitchen_orders')) {
+                $kitchenOrders = \App\Models\KitchenOrder::where('id_order', $order->id_order)
+                    ->whereIn('status', [
+                        \App\Models\KitchenOrder::STATUS_PENDING,
+                        \App\Models\KitchenOrder::STATUS_IN_PROGRESS
+                    ])
+                    ->get();
+
+                foreach ($kitchenOrders as $kitchenOrder) {
+                    $kitchenOrder->cancel();
+                    \Log::info('Kitchen order cancelled', [
+                        'kitchen_order_id' => $kitchenOrder->id_kitchen_order,
+                        'order_id' => $order->id_order,
+                        'order_number' => $order->order_number,
+                    ]);
+                }
+            }
+
             // Update order status
             $order->updateStatus('cancelled', Auth::id());
 
