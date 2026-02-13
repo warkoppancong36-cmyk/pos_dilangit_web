@@ -166,33 +166,43 @@ class KitchenOrder extends Model
 
     /**
      * Add items to an existing kitchen order
+     * Wrapped in DB::transaction so ALL items succeed or ALL are rolled back
      */
     public function addItems(array $items): void
     {
-        foreach ($items as $item) {
-            KitchenOrderItem::create([
-                'id_kitchen_order' => $this->id_kitchen_order,
-                'id_order_item' => $item['id_order_item'] ?? null,
-                'product_name' => $item['product_name'] ?? $item['item_name'] ?? 'Unknown Product',
-                'quantity' => $item['quantity'] ?? 1,
-                'variant_name' => $item['variant_name'] ?? null,
-                'customizations' => $item['customizations'] ?? null,
-                'notes' => $item['notes'] ?? null,
-                'status' => 'pending',
-            ]);
-        }
+        \Illuminate\Support\Facades\DB::transaction(function () use ($items) {
+            foreach ($items as $item) {
+                \Log::info('Creating kitchen order item', [
+                    'kitchen_order_id' => $this->id_kitchen_order,
+                    'product_name' => $item['product_name'] ?? 'Unknown',
+                    'quantity' => $item['quantity'] ?? 1,
+                ]);
+
+                KitchenOrderItem::create([
+                    'id_kitchen_order' => $this->id_kitchen_order,
+                    'id_order_item' => $item['id_order_item'] ?? null,
+                    'product_name' => $item['product_name'] ?? $item['item_name'] ?? 'Unknown Product',
+                    'quantity' => $item['quantity'] ?? 1,
+                    'variant_name' => $item['variant_name'] ?? null,
+                    'customizations' => $item['customizations'] ?? null,
+                    'notes' => $item['notes'] ?? null,
+                    'status' => 'pending',
+                ]);
+            }
+        });
     }
 
     /**
      * Find or create kitchen order for an order
-     * This ensures that all items for the same order go into ONE kitchen order
+     * Uses lockForUpdate to prevent race condition when multiple items are added simultaneously
      */
     public static function findOrCreateForOrder(Order $order, array $items, string $station = 'kasir'): self
     {
-        // Try to find existing active kitchen order for this order
+        // Use lockForUpdate to prevent race condition (two simultaneous requests both creating new kitchen orders)
         $kitchenOrder = self::where('id_order', $order->id_order)
             ->whereIn('status', [self::STATUS_PENDING, self::STATUS_IN_PROGRESS])
             ->orderBy('created_at', 'desc')
+            ->lockForUpdate()
             ->first();
 
         if ($kitchenOrder) {
@@ -214,30 +224,38 @@ class KitchenOrder extends Model
 
     public static function createFromOrderItems(Order $order, array $items, string $station = 'kasir'): self
     {
-        $kitchenOrder = self::create([
-            'id_order' => $order->id_order,
-            'order_number' => $order->order_number,
-            'table_number' => $order->table_number,
-            'order_type' => $order->order_type,
-            'customer_name' => $order->customer ? $order->customer->name : ($order->customer_info['name'] ?? 'Walk-in Customer'),
-            'status' => self::STATUS_PENDING,
-            'created_by_station' => $station,
-            'notes' => $order->notes,
-        ]);
-
-        foreach ($items as $item) {
-            KitchenOrderItem::create([
-                'id_kitchen_order' => $kitchenOrder->id_kitchen_order,
-                'id_order_item' => $item['id_order_item'] ?? null,
-                'product_name' => $item['product_name'] ?? $item['item_name'] ?? 'Unknown Product',
-                'quantity' => $item['quantity'] ?? 1,
-                'variant_name' => $item['variant_name'] ?? null,
-                'customizations' => $item['customizations'] ?? null,
-                'notes' => $item['notes'] ?? null,
-                'status' => 'pending',
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($order, $items, $station) {
+            $kitchenOrder = self::create([
+                'id_order' => $order->id_order,
+                'order_number' => $order->order_number,
+                'table_number' => $order->table_number,
+                'order_type' => $order->order_type,
+                'customer_name' => $order->customer ? $order->customer->name : ($order->customer_info['name'] ?? 'Walk-in Customer'),
+                'status' => self::STATUS_PENDING,
+                'created_by_station' => $station,
+                'notes' => $order->notes,
             ]);
-        }
 
-        return $kitchenOrder;
+            foreach ($items as $item) {
+                \Log::info('Creating kitchen order item (new order)', [
+                    'kitchen_order_id' => $kitchenOrder->id_kitchen_order,
+                    'product_name' => $item['product_name'] ?? 'Unknown',
+                    'quantity' => $item['quantity'] ?? 1,
+                ]);
+
+                KitchenOrderItem::create([
+                    'id_kitchen_order' => $kitchenOrder->id_kitchen_order,
+                    'id_order_item' => $item['id_order_item'] ?? null,
+                    'product_name' => $item['product_name'] ?? $item['item_name'] ?? 'Unknown Product',
+                    'quantity' => $item['quantity'] ?? 1,
+                    'variant_name' => $item['variant_name'] ?? null,
+                    'customizations' => $item['customizations'] ?? null,
+                    'notes' => $item['notes'] ?? null,
+                    'status' => 'pending',
+                ]);
+            }
+
+            return $kitchenOrder;
+        });
     }
 }
