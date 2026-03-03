@@ -166,7 +166,6 @@ class KitchenOrder extends Model
 
     /**
      * Add items to an existing kitchen order
-     * Wrapped in DB::transaction so ALL items succeed or ALL are rolled back
      */
     public function addItems(array $items): void
     {
@@ -209,7 +208,6 @@ class KitchenOrder extends Model
         $kitchenOrder = self::where('id_order', $order->id_order)
             ->where('status', self::STATUS_PENDING)
             ->orderBy('created_at', 'desc')
-            ->lockForUpdate()
             ->first();
 
         if ($kitchenOrder) {
@@ -231,38 +229,30 @@ class KitchenOrder extends Model
 
     public static function createFromOrderItems(Order $order, array $items, string $station = 'kasir'): self
     {
-        return \Illuminate\Support\Facades\DB::transaction(function () use ($order, $items, $station) {
-            $kitchenOrder = self::create([
-                'id_order' => $order->id_order,
-                'order_number' => $order->order_number,
-                'table_number' => $order->table_number,
-                'order_type' => $order->order_type,
-                'customer_name' => $order->customer ? $order->customer->name : ($order->customer_info['name'] ?? 'Walk-in Customer'),
-                'status' => self::STATUS_PENDING,
-                'created_by_station' => $station,
-                'notes' => $order->notes,
+        $kitchenOrder = self::create([
+            'id_order' => $order->id_order,
+            'order_number' => $order->order_number,
+            'table_number' => $order->table_number,
+            'order_type' => $order->order_type,
+            'customer_name' => $order->customer ? $order->customer->name : ($order->customer_info['name'] ?? 'Walk-in Customer'),
+            'status' => self::STATUS_PENDING,
+            'created_by_station' => $station,
+            'notes' => $order->notes,
+        ]);
+
+        foreach ($items as $item) {
+            KitchenOrderItem::create([
+                'id_kitchen_order' => $kitchenOrder->id_kitchen_order,
+                'id_order_item' => $item['id_order_item'] ?? null,
+                'product_name' => $item['product_name'] ?? $item['item_name'] ?? 'Unknown Product',
+                'quantity' => $item['quantity'] ?? 1,
+                'variant_name' => $item['variant_name'] ?? null,
+                'customizations' => $item['customizations'] ?? null,
+                'notes' => $item['notes'] ?? null,
+                'status' => 'pending',
             ]);
+        }
 
-            foreach ($items as $item) {
-                \Log::info('Creating kitchen order item (new order)', [
-                    'kitchen_order_id' => $kitchenOrder->id_kitchen_order,
-                    'product_name' => $item['product_name'] ?? 'Unknown',
-                    'quantity' => $item['quantity'] ?? 1,
-                ]);
-
-                KitchenOrderItem::create([
-                    'id_kitchen_order' => $kitchenOrder->id_kitchen_order,
-                    'id_order_item' => $item['id_order_item'] ?? null,
-                    'product_name' => $item['product_name'] ?? $item['item_name'] ?? 'Unknown Product',
-                    'quantity' => $item['quantity'] ?? 1,
-                    'variant_name' => $item['variant_name'] ?? null,
-                    'customizations' => $item['customizations'] ?? null,
-                    'notes' => $item['notes'] ?? null,
-                    'status' => 'pending',
-                ]);
-            }
-
-            return $kitchenOrder;
-        });
+        return $kitchenOrder;
     }
 }

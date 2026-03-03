@@ -516,9 +516,6 @@ class PosController extends Controller
                 ]);
                 
                 // Create order item
-                $unitPrice = $request->unit_price ?? $product->unit_price ?? 0;
-                $totalPrice = $request->total_price ?? ($unitPrice * $request->quantity);
-
                 $orderItem = OrderItem::create([
                     'id_order' => $order->id_order,
                     'id_product' => $request->id_product,
@@ -526,8 +523,8 @@ class PosController extends Controller
                     'item_name' => $product->name,
                     'item_sku' => $product->sku ?? 'NO-SKU',
                     'quantity' => $request->quantity,
-                    'unit_price' => $unitPrice,
-                    'total_price' => $totalPrice,
+                    'unit_price' => $request->unit_price ?? $product->unit_price,
+                    'total_price' => $request->total_price ?? $product->total_price,
                     'discount_amount' => $request->discount_amount ?? 0,
                     'discount_type' => $request->discount_type,
                     'discount_percentage' => $request->discount_percentage ?? 0,
@@ -553,8 +550,7 @@ class PosController extends Controller
             }
 
             // Manually recalculate order totals since calculateTotals() is disabled
-            // Force fresh query to include newly created item (avoid Eloquent cache)
-            $orderItems = $order->orderItems()->get();
+            $orderItems = $order->orderItems;
             $subtotal = $orderItems->sum('total_price');
             $totalDiscount = $orderItems->sum('discount_amount');
             $totalAmount = $subtotal - $totalDiscount;
@@ -1922,25 +1918,15 @@ class PosController extends Controller
             // Generate order number
             $orderNumber = $this->generateOrderNumber();
 
-            // Check if order has kitchen items (check both products and packages)
+            // Check if order has kitchen items
             $hasKitchenItems = false;
             foreach ($request->cart_items as $item) {
-                $itemType = $item['item_type'] ?? 'product';
-                if ($itemType === 'product' && isset($item['product_id'])) {
+                // For package items, we'll determine later; for product items check now
+                if (isset($item['item_type']) && $item['item_type'] === 'product' && isset($item['product_id'])) {
                     $product = Product::find($item['product_id']);
                     if ($product && $product->available_in_kitchen) {
                         $hasKitchenItems = true;
                         break;
-                    }
-                } elseif ($itemType === 'package' && isset($item['package_id'])) {
-                    $package = \App\Models\Package::with(['items.product'])->find($item['package_id']);
-                    if ($package && $package->items) {
-                        foreach ($package->items as $packageItem) {
-                            if ($packageItem->product && $packageItem->product->available_in_kitchen) {
-                                $hasKitchenItems = true;
-                                break 2;
-                            }
-                        }
                     }
                 }
             }
@@ -2333,16 +2319,7 @@ class PosController extends Controller
 
             // AUTO-CREATE KITCHEN ORDER untuk items yang available_in_kitchen
             // Ini yang membuat data muncul di Kitchen Display
-            if ($hasKitchenItems) {
-                $kitchenOrder = $this->createKitchenOrderForOrder($order, $request->input('created_by_station', 'kasir'));
-                if (!$kitchenOrder) {
-                    \Log::critical('CRITICAL: Kitchen order creation FAILED for direct payment order', [
-                        'order_id' => $order->id_order,
-                        'order_number' => $order->order_number,
-                        'kitchen_items_expected' => true,
-                    ]);
-                }
-            }
+            $this->createKitchenOrderForOrder($order, $request->input('created_by_station', 'kasir'));
 
             DB::commit();
 
@@ -3146,23 +3123,15 @@ class PosController extends Controller
                 }
             }
 
-            // Kitchen Notification System: Create kitchen order if there are kitchen items
-            // Must be BEFORE DB::commit() so creation is atomic with the order transaction
-            if ($hasKitchenItems) {
-                $kitchenOrder = $this->createKitchenOrderForOrder($order, $request->input('created_by_station', 'kasir'));
-                if (!$kitchenOrder) {
-                    \Log::critical('CRITICAL: Kitchen order creation FAILED for pending order', [
-                        'order_id' => $order->id_order,
-                        'order_number' => $order->order_number,
-                        'kitchen_items_expected' => true,
-                    ]);
-                }
-            }
-
             DB::commit();
 
             // Load order with relationships for response
             $order->load(['user', 'customer', 'orderItems.product']);
+
+            // Kitchen Notification System: Create kitchen order if there are kitchen items
+            if ($hasKitchenItems) {
+                $this->createKitchenOrderForOrder($order, $request->input('created_by_station', 'kasir'));
+            }
 
             // Log successful pending order creation
             \Log::info("Pending order created successfully", [
