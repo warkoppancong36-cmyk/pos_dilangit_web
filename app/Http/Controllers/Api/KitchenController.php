@@ -389,10 +389,13 @@ class KitchenController extends Controller
             $order = Order::findOrFail($request->order_id);
             $station = $request->input('station', 'kasir');
 
-            // Use findOrCreateForOrder to add to existing kitchen order if available
-            $kitchenOrder = KitchenOrder::findOrCreateForOrder($order, $request->items, $station);
+            // Wrap in transaction so lockForUpdate() in findOrCreateForOrder works correctly
+            // Without this, the SELECT FOR UPDATE lock is released immediately (no effect)
+            $kitchenOrder = DB::transaction(function () use ($order, $request, $station) {
+                return KitchenOrder::findOrCreateForOrder($order, $request->items, $station);
+            });
 
-            $kitchenOrder->load('items'); //untuk item
+            $kitchenOrder->load('items');
 
             Log::info('Kitchen order updated/created for existing order', [
                 'kitchen_order_id' => $kitchenOrder->id_kitchen_order,
