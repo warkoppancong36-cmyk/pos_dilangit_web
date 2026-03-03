@@ -189,18 +189,25 @@ class KitchenOrder extends Model
                     'status' => 'pending',
                 ]);
             }
+
+            // Touch updated_at so kitchen display polling detects the change
+            $this->touch();
         });
     }
 
     /**
      * Find or create kitchen order for an order
      * Uses lockForUpdate to prevent race condition when multiple items are added simultaneously
+     * Only merges into PENDING kitchen orders — if the existing order is already in_progress,
+     * a new kitchen order is created so kitchen staff gets a fresh notification.
      */
     public static function findOrCreateForOrder(Order $order, array $items, string $station = 'kasir'): self
     {
-        // Use lockForUpdate to prevent race condition (two simultaneous requests both creating new kitchen orders)
+        // Only look for PENDING kitchen orders.
+        // If the existing one is already in_progress (staff already acknowledged it),
+        // we create a NEW kitchen order so the new items appear as a fresh notification.
         $kitchenOrder = self::where('id_order', $order->id_order)
-            ->whereIn('status', [self::STATUS_PENDING, self::STATUS_IN_PROGRESS])
+            ->where('status', self::STATUS_PENDING)
             ->orderBy('created_at', 'desc')
             ->lockForUpdate()
             ->first();

@@ -61,7 +61,9 @@ class KitchenController extends Controller
         if ($request->has('since_timestamp')) {
             try {
                 $sinceTimestamp = Carbon::parse($request->since_timestamp);
-                $query->where('created_at', '>', $sinceTimestamp);
+                // Use updated_at so kitchen orders with newly added items are also detected
+                // (created_at doesn't change when items are added to existing kitchen orders)
+                $query->where('updated_at', '>=', $sinceTimestamp);
             } catch (\Exception $e) {
                 Log::warning('Invalid since_timestamp format', [
                     'timestamp' => $request->since_timestamp,
