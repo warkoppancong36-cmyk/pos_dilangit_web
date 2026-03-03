@@ -112,8 +112,9 @@ class KitchenController extends Controller
 
             return [
                 'id' => $kitchenOrder->id_kitchen_order,
+                'id_order' => $kitchenOrder->id_order,
                 'order_number' => $kitchenOrder->order_number,
-                'transaction_id' => $kitchenOrder->id_order,
+                'transaction_id' => $kitchenOrder->id_order, // kept for backward compatibility
                 'customer_name' => $kitchenOrder->customer_name ?? 'Walk-in Customer',
                 'table_number' => $kitchenOrder->table_number,
                 'order_type' => $kitchenOrder->order_type,
@@ -201,8 +202,9 @@ class KitchenController extends Controller
 
             return [
                 'id' => $order->id_order,
+                'id_order' => $order->id_order,
                 'order_number' => $order->order_number,
-                'transaction_id' => $order->id_order,
+                'transaction_id' => $order->id_order, // kept for backward compatibility
                 'customer_name' => $order->customer ? $order->customer->name : ($order->customer_info['name'] ?? 'Walk-in Customer'),
                 'table_number' => $order->table_number,
                 'order_type' => $order->order_type,
