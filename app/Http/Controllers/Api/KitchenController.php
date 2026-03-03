@@ -61,9 +61,7 @@ class KitchenController extends Controller
         if ($request->has('since_timestamp')) {
             try {
                 $sinceTimestamp = Carbon::parse($request->since_timestamp);
-                // Use updated_at so kitchen orders with newly added items are also detected
-                // (created_at doesn't change when items are added to existing kitchen orders)
-                $query->where('updated_at', '>=', $sinceTimestamp);
+                $query->where('created_at', '>', $sinceTimestamp);
             } catch (\Exception $e) {
                 Log::warning('Invalid since_timestamp format', [
                     'timestamp' => $request->since_timestamp,
@@ -112,9 +110,8 @@ class KitchenController extends Controller
 
             return [
                 'id' => $kitchenOrder->id_kitchen_order,
-                'id_order' => $kitchenOrder->id_order,
                 'order_number' => $kitchenOrder->order_number,
-                'transaction_id' => $kitchenOrder->id_order, // kept for backward compatibility
+                'transaction_id' => $kitchenOrder->id_order,
                 'customer_name' => $kitchenOrder->customer_name ?? 'Walk-in Customer',
                 'table_number' => $kitchenOrder->table_number,
                 'order_type' => $kitchenOrder->order_type,
@@ -202,9 +199,8 @@ class KitchenController extends Controller
 
             return [
                 'id' => $order->id_order,
-                'id_order' => $order->id_order,
                 'order_number' => $order->order_number,
-                'transaction_id' => $order->id_order, // kept for backward compatibility
+                'transaction_id' => $order->id_order,
                 'customer_name' => $order->customer ? $order->customer->name : ($order->customer_info['name'] ?? 'Walk-in Customer'),
                 'table_number' => $order->table_number,
                 'order_type' => $order->order_type,
@@ -397,7 +393,7 @@ class KitchenController extends Controller
                 return KitchenOrder::findOrCreateForOrder($order, $request->items, $station);
             });
 
-            $kitchenOrder->load('items');
+            $kitchenOrder->load('items'); //untuk item
 
             Log::info('Kitchen order updated/created for existing order', [
                 'kitchen_order_id' => $kitchenOrder->id_kitchen_order,
