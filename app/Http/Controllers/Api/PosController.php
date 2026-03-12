@@ -282,15 +282,11 @@ class PosController extends Controller
                 ]);
             }
             
-            // Limit
-            $limit = min((int)$request->get('per_page', 500), 1000);
-            
             $startTime = microtime(true);
-            
+
             $results = $query
                 ->orderBy('order_date', 'desc')
                 ->orderBy('order_time', 'desc')
-                ->limit($limit)
                 ->get();
             
             // Parse items_detail JSON
@@ -310,7 +306,6 @@ class PosController extends Controller
                 'meta' => [
                     'total' => count($results),
                     'execution_time_ms' => $executionTime,
-                    'limit' => $limit,
                     'source' => 'cache'
                 ]
             ]);
