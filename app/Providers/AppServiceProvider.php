@@ -6,7 +6,9 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Route;
 use App\Models\Category;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\PurchaseItem;
+use App\Observers\OrderItemObserver;
 use App\Observers\OrderObserver;
 use App\Observers\PurchaseItemObserver;
 
@@ -33,6 +35,7 @@ class AppServiceProvider extends ServiceProvider
 
         // Register observers
         Order::observe(OrderObserver::class);
+        OrderItem::observe(OrderItemObserver::class);
         PurchaseItem::observe(PurchaseItemObserver::class);
     }
 }

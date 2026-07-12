@@ -12,6 +12,11 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // MODIFY COLUMN is MySQL-only; sqlite (tests) stores enums as text
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         Schema::table('purchases', function (Blueprint $table) {
             // Update status enum to include pending, ordered, completed
             DB::statement("ALTER TABLE purchases MODIFY COLUMN status ENUM('pending', 'ordered', 'received', 'completed', 'cancelled') DEFAULT 'pending'");
