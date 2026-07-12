@@ -19,15 +19,21 @@ return new class extends Migration
             }
         });
         
-        // Check if foreign key exists before adding
-        $foreignKeyExists = DB::select("
-            SELECT CONSTRAINT_NAME 
-            FROM information_schema.KEY_COLUMN_USAGE 
-            WHERE TABLE_SCHEMA = DATABASE() 
-            AND TABLE_NAME = 'inventory' 
-            AND CONSTRAINT_NAME = 'inventory_id_item_foreign'
-        ");
-        
+        // Check if foreign key exists before adding (information_schema is MySQL-only)
+        if (DB::getDriverName() === 'mysql') {
+            $foreignKeyExists = DB::select("
+                SELECT CONSTRAINT_NAME
+                FROM information_schema.KEY_COLUMN_USAGE
+                WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME = 'inventory'
+                AND CONSTRAINT_NAME = 'inventory_id_item_foreign'
+            ");
+        } else {
+            $foreignKeyExists = collect(Schema::getForeignKeys('inventory'))
+                ->filter(fn ($fk) => ($fk['columns'] ?? []) === ['id_item'])
+                ->all();
+        }
+
         if (empty($foreignKeyExists)) {
             Schema::table('inventory', function (Blueprint $table) {
                 $table->foreign('id_item')->references('id_item')->on('items')->onDelete('cascade');

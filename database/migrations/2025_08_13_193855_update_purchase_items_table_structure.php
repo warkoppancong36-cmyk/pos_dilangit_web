@@ -26,31 +26,30 @@ return new class extends Migration
             echo "Backup table 'purchase_items_backup' created.\n";
         }
         
+        // Drop old foreign keys first (if they exist). Each drop runs in its own
+        // Schema::table call — Blueprint queues operations until the closure
+        // returns, so a try/catch INSIDE the closure never catches anything.
+        foreach ([['id_product'], ['id_variant']] as $foreignKey) {
+            try {
+                Schema::table('purchase_items', function (Blueprint $table) use ($foreignKey) {
+                    $table->dropForeign($foreignKey);
+                });
+            } catch (Exception $e) {
+                // Foreign key might not exist
+            }
+        }
+
+        // Drop old indexes only when they actually exist
+        $existingIndexes = collect(Schema::getIndexes('purchase_items'))->pluck('name');
+        foreach (['purchase_items_id_product_index', 'purchase_items_id_variant_index'] as $indexName) {
+            if ($existingIndexes->contains($indexName)) {
+                Schema::table('purchase_items', function (Blueprint $table) use ($indexName) {
+                    $table->dropIndex($indexName);
+                });
+            }
+        }
+
         Schema::table('purchase_items', function (Blueprint $table) {
-            // Drop old foreign keys first (if they exist)
-            try {
-                $table->dropForeign(['id_product']);
-            } catch (Exception $e) {
-                // Foreign key might not exist
-            }
-            try {
-                $table->dropForeign(['id_variant']);
-            } catch (Exception $e) {
-                // Foreign key might not exist
-            }
-            
-            // Drop old indexes (if they exist)
-            try {
-                $table->dropIndex(['id_product']);
-            } catch (Exception $e) {
-                // Index might not exist
-            }
-            try {
-                $table->dropIndex(['id_variant']);
-            } catch (Exception $e) {
-                // Index might not exist
-            }
-            
             // Add new columns
             $table->unsignedBigInteger('purchase_id')->after('id_purchase_item')->nullable();
             $table->unsignedBigInteger('item_id')->after('purchase_id')->nullable();

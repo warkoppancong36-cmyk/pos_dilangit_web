@@ -30,7 +30,7 @@
           <VCol cols="12" md="3">
             <VTextField
               v-model="searchQuery"
-              label="Cari transaksi..."
+              label="Cari no. order / nama / produk..."
               variant="outlined"
               density="compact"
               prepend-inner-icon="tabler-search"

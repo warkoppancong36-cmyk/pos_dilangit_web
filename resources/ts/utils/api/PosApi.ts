@@ -223,16 +223,17 @@ export interface UpdateOrderStatusData {
 }
 
 export interface EditOrderData {
-  order_type?: 'dine_in' | 'takeaway' | 'delivery'
+  order_type?: 'dine_in' | 'takeaway' | 'delivery' | string
   table_number?: string
   guest_count?: number
-  id_customer?: number
+  id_customer?: number | null
   customer_info?: {
     name: string
     phone?: string
   }
   notes?: string
-  discount_type?: 'percentage' | 'fixed'
+  // '' / null clears the discount server-side
+  discount_type?: 'percentage' | 'fixed' | '' | null
   discount_value?: number
   items?: Array<{
     id_product: number

@@ -88,9 +88,13 @@ return new class extends Migration
 
         // Indexes for purchases table - untuk performance purchase queries
         Schema::table('purchases', function (Blueprint $table) {
-            // Index untuk supplier_id
-            $table->index('supplier_id', 'idx_purchases_supplier_id');
-            
+            // Index untuk supplier_id — fresh installs create purchases with
+            // an id_supplier column instead (2025_08_03_000002), so only index
+            // supplier_id when that column actually exists
+            if (Schema::hasColumn('purchases', 'supplier_id')) {
+                $table->index('supplier_id', 'idx_purchases_supplier_id');
+            }
+
             // Index untuk purchase_date
             $table->index('purchase_date', 'idx_purchases_date');
             
