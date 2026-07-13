@@ -99,18 +99,6 @@
             <VCol cols="12">
               <VCard variant="outlined">
                 <VCardText>
-                  <!-- Package items are preserved server-side, not editable here -->
-                  <VAlert
-                    v-if="packageItems.length > 0"
-                    type="info"
-                    variant="tonal"
-                    class="mb-4"
-                  >
-                    Pesanan ini berisi {{ packageItems.length }} item paket
-                    ({{ packageItems.map(p => p.item_name || p.package_name).join(', ') }})
-                    yang tidak dapat diedit di sini dan akan tetap dipertahankan.
-                  </VAlert>
-
                   <!-- Add Item Button -->
                   <VBtn
                     color="primary"
@@ -331,7 +319,7 @@
         <VBtn
           color="primary"
           :loading="saving"
-          :disabled="!formValid || (formData.items.length === 0 && packageItems.length === 0)"
+          :disabled="!formValid || formData.items.length === 0"
           @click="saveOrder"
         >
           Simpan Perubahan
@@ -367,7 +355,6 @@ const saving = ref(false)
 const errorMessage = ref('')
 const customers = ref<any[]>([])
 const products = ref<any[]>([])
-const packageItems = ref<any[]>([])
 
 // Form data
 const formData = ref({
@@ -407,16 +394,9 @@ const localDialog = computed({
 })
 
 const orderSummary = computed(() => {
-  const productsSubtotal = formData.value.items.reduce((sum, item) => {
+  const subtotal = formData.value.items.reduce((sum, item) => {
     return sum + (item.quantity * item.unit_price)
   }, 0)
-
-  // Package items are preserved server-side, so they count toward the total
-  const packagesSubtotal = packageItems.value.reduce((sum, item) => {
-    return sum + (Number(item.total_price) || 0)
-  }, 0)
-
-  const subtotal = productsSubtotal + packagesSubtotal
 
   let discount = 0
   if (formData.value.discount_type && formData.value.discount_value > 0) {
@@ -462,36 +442,21 @@ const initializeForm = () => {
     // Support both possible naming conventions
     const orderItems = props.order.orderItems || props.order.order_items || []
 
-    // Package items cannot be edited here — they are preserved by the backend.
-    // Keep them separate so the summary still adds up correctly.
-    packageItems.value = orderItems.filter((item: any) => item.item_type === 'package')
-
-    // The order stores the discount as a rupiah amount; for percentage
-    // discounts derive the percentage back from the previous subtotal
-    const discountType = props.order.discount_type || ''
-    const discountAmount = Number(props.order.discount_amount) || 0
-    const previousSubtotal = Number(props.order.subtotal) || 0
-    const discountValue = discountType === 'percentage' && previousSubtotal > 0
-      ? Math.round((discountAmount / previousSubtotal) * 10000) / 100
-      : discountAmount
-
     formData.value = {
       order_type: props.order.order_type || '',
       table_number: props.order.table_number || '',
       guest_count: props.order.guest_count || 1,
       id_customer: props.order.id_customer || null,
       notes: props.order.notes || '',
-      discount_type: discountType,
-      discount_value: discountValue,
-      items: orderItems
-        .filter((item: any) => item.item_type !== 'package')
-        .map((item: any) => ({
-          id_product: item.id_product,
-          item_type: 'product',
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          notes: item.notes || ''
-        }))
+      discount_type: props.order.discount_type || '',
+      discount_value: props.order.discount_amount || 0,
+      items: orderItems.map((item: any) => ({
+        id_product: item.id_product,
+        item_type: 'product',
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        notes: item.notes || ''
+      }))
     }
   }
 }
@@ -529,13 +494,13 @@ const saveOrder = async () => {
     saving.value = true
     errorMessage.value = '' // Clear previous error
     
-    const updateData: import('@/utils/api/PosApi').EditOrderData = {
+    const updateData = {
       order_type: formData.value.order_type,
       table_number: formData.value.table_number,
       guest_count: formData.value.guest_count,
       id_customer: formData.value.id_customer,
       notes: formData.value.notes,
-      discount_type: formData.value.discount_type as 'percentage' | 'fixed' | '',
+      discount_type: formData.value.discount_type,
       discount_value: formData.value.discount_value,
       items: formData.value.items.filter(item => item.id_product)
     }
