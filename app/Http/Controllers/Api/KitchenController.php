@@ -94,29 +94,12 @@ class KitchenController extends Controller
         $limit = min($limit, 100);
         $kitchenOrders = $query->limit($limit)->get();
 
-        // Optional station filter: 'kitchen' or 'bar'. Without it, items for
-        // BOTH stations are returned (each item carries its own flags so the
-        // client can route printing per item).
-        $station = $request->input('station');
-
-        $transformedOrders = $kitchenOrders->map(function ($kitchenOrder) use ($station) {
+        $transformedOrders = $kitchenOrders->map(function ($kitchenOrder) {
             $items = collect();
 
             if ($kitchenOrder->order) {
                 $items = $kitchenOrder->order->orderItems
-                    ->filter(function ($item) use ($station) {
-                        if (!$item->product) {
-                            return false;
-                        }
-                        if ($station === 'kitchen') {
-                            return (bool) $item->product->available_in_kitchen;
-                        }
-                        if ($station === 'bar') {
-                            return (bool) $item->product->available_in_bar;
-                        }
-
-                        return $item->product->available_in_kitchen || $item->product->available_in_bar;
-                    })
+                    ->filter(fn($item) => $item->product && $item->product->available_in_kitchen)
                     ->map(fn($item) => [
                         'id_order_item'  => $item->id_order_item,
                         'product_name'   => $item->item_name,
@@ -125,8 +108,6 @@ class KitchenController extends Controller
                         'customizations' => $item->customizations,
                         'notes'          => $item->notes,
                         'status'         => $item->status,
-                        'available_kitchen' => (bool) $item->product->available_in_kitchen,
-                        'available_bar'     => (bool) $item->product->available_in_bar,
                     ])->values();
             }
 
@@ -150,13 +131,6 @@ class KitchenController extends Controller
             ];
         });
 
-        // When filtering per station, hide orders that have nothing for it
-        if (in_array($station, ['kitchen', 'bar'], true)) {
-            $transformedOrders = $transformedOrders
-                ->filter(fn ($order) => count($order['items']) > 0)
-                ->values();
-        }
-
         return response()->json([
             'success' => true,
             'data' => $transformedOrders,
@@ -178,8 +152,7 @@ class KitchenController extends Controller
         $query = Order::with(['orderItems.product', 'customer', 'user'])
             ->whereHas('orderItems', function ($q) {
                 $q->whereHas('product', function ($productQuery) {
-                    $productQuery->where('available_in_kitchen', true)
-                        ->orWhere('available_in_bar', true);
+                    $productQuery->where('available_in_kitchen', true);
                 });
             })
             ->whereNotNull('kitchen_status');
@@ -209,23 +182,10 @@ class KitchenController extends Controller
         $limit = min($limit, 100);
         $orders = $query->limit($limit)->get();
 
-        // Optional station filter: 'kitchen' or 'bar' (see new-table path)
-        $station = $request->input('station');
-
-        $kitchenOrders = $orders->map(function ($order) use ($station) {
+        $kitchenOrders = $orders->map(function ($order) {
             $kitchenItems = $order->orderItems
-                ->filter(function ($item) use ($station) {
-                    if (!$item->product) {
-                        return false;
-                    }
-                    if ($station === 'kitchen') {
-                        return (bool) $item->product->available_in_kitchen;
-                    }
-                    if ($station === 'bar') {
-                        return (bool) $item->product->available_in_bar;
-                    }
-
-                    return $item->product->available_in_kitchen || $item->product->available_in_bar;
+                ->filter(function ($item) {
+                    return $item->product && $item->product->available_in_kitchen;
                 })
                 ->map(function ($item) {
                     return [
@@ -236,8 +196,6 @@ class KitchenController extends Controller
                         'customizations' => $item->customizations,
                         'notes' => $item->notes,
                         'status' => $item->status,
-                        'available_kitchen' => (bool) $item->product->available_in_kitchen,
-                        'available_bar'     => (bool) $item->product->available_in_bar,
                     ];
                 })
                 ->values();
@@ -257,13 +215,6 @@ class KitchenController extends Controller
                 'items' => $kitchenItems,
             ];
         });
-
-        // When filtering per station, hide orders that have nothing for it
-        if (in_array($station, ['kitchen', 'bar'], true)) {
-            $kitchenOrders = $kitchenOrders
-                ->filter(fn ($order) => count($order['items']) > 0)
-                ->values();
-        }
 
         return response()->json([
             'success' => true,

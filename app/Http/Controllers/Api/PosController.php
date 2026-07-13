@@ -1393,14 +1393,6 @@ class PosController extends Controller
             return $this->errorResponse('Cannot edit completed or cancelled orders', 422);
         }
 
-        // Validate discount early — the amount itself is computed AFTER the
-        // items are updated so it is always based on the new subtotal
-        if ($request->has('discount_type') && $request->has('discount_value')) {
-            if ($request->discount_type === 'percentage' && $request->discount_value > 100) {
-                return $this->errorResponse('Percentage discount cannot exceed 100%', 400);
-            }
-        }
-
         try {
             DB::beginTransaction();
 
@@ -1417,20 +1409,34 @@ class PosController extends Controller
                 $order->update($updateData);
             }
 
-            // Update order items if provided.
-            // Only PRODUCT items are managed here — package items on the order
-            // are preserved untouched (the edit dialog cannot edit packages).
-            if ($request->has('items')) {
-                $existingProductItems = $order->orderItems()->where('item_type', 'product')->get();
-
-                // Track existing item IDs before deletion for kitchen notification comparison
-                $existingItemProductIds = $existingProductItems->pluck('id_product')->toArray();
-
-                // Release reserved stock of the product items being replaced
-                foreach ($existingProductItems as $existingItem) {
-                    if (!$existingItem->id_product) {
-                        continue;
+            // Update discount if provided
+            if ($request->has('discount_type') && $request->has('discount_value')) {
+                $discountAmount = 0;
+                if ($request->discount_type === 'percentage') {
+                    if ($request->discount_value > 100) {
+                        return $this->errorResponse('Percentage discount cannot exceed 100%', 400);
                     }
+                    $discountAmount = ($order->subtotal * $request->discount_value) / 100;
+                } else {
+                    $discountAmount = $request->discount_value;
+                    if ($discountAmount > $order->subtotal) {
+                        return $this->errorResponse('Discount amount cannot exceed subtotal', 400);
+                    }
+                }
+
+                $order->update([
+                    'discount_type' => $request->discount_type,
+                    'discount_amount' => $discountAmount,
+                ]);
+            }
+
+            // Update order items if provided
+            if ($request->has('items')) {
+                // Track existing item IDs before deletion for kitchen notification comparison
+                $existingItemProductIds = $order->orderItems->pluck('id_product')->toArray();
+
+                // Release all current reserved stock
+                foreach ($order->orderItems as $existingItem) {
                     $inventory = Inventory::where('id_product', $existingItem->id_product)->first();
                     if ($inventory) {
                         $inventory->update([
@@ -1439,8 +1445,8 @@ class PosController extends Controller
                     }
                 }
 
-                // Delete existing product items (package items stay)
-                $order->orderItems()->where('item_type', 'product')->delete();
+                // Delete existing items
+                $order->orderItems()->delete();
 
                 // Add new items and collect kitchen items
                 $kitchenItems = [];
@@ -1477,10 +1483,10 @@ class PosController extends Controller
                         ]);
                     }
                     
-                    // Check if this is a NEW kitchen/bar item (not in existing items)
+                    // Check if this is a NEW kitchen item (not in existing items)
                     // Only create kitchen notification for NEW items, not updates
                     $isNewItem = !in_array($itemData['id_product'], $existingItemProductIds);
-                    if ($isNewItem && ($product->available_in_kitchen || $product->available_in_bar)) {
+                    if ($isNewItem && $product->available_in_kitchen) {
                         $kitchenItems[] = [
                             'id_order_item' => $orderItem->id_order_item,
                             'product_name' => $product->name,
@@ -1506,40 +1512,8 @@ class PosController extends Controller
                 }
             }
 
-            // Manually recalculate order totals since calculateTotals() is
-            // disabled (tax system not used yet) — same convention as the
-            // add/update/delete item endpoints
-            $order->unsetRelation('orderItems');
-            $subtotal = (float) $order->orderItems()->sum('total_price');
-
-            // Re-derive the order-level discount against the NEW subtotal
-            $discountType = $order->discount_type;
-            $discountAmount = (float) $order->discount_amount;
-            if ($request->has('discount_type') && $request->has('discount_value')) {
-                $discountType = $request->discount_type;
-                if ($discountType === 'percentage') {
-                    $discountAmount = ($subtotal * (float) $request->discount_value) / 100;
-                } elseif ($discountType === 'fixed') {
-                    $discountAmount = (float) $request->discount_value;
-                    if ($discountAmount > $subtotal) {
-                        DB::rollback();
-                        return $this->errorResponse('Discount amount cannot exceed subtotal', 400);
-                    }
-                } else {
-                    $discountAmount = 0; // discount cleared
-                }
-            }
-            $discountAmount = min($discountAmount, $subtotal);
-
-            $order->update([
-                'discount_type' => $discountType,
-                'subtotal' => $subtotal,
-                'discount_amount' => $discountAmount,
-                'total_amount' => $subtotal
-                    + (float) ($order->tax_amount ?? 0)
-                    + (float) ($order->service_charge ?? 0)
-                    - $discountAmount,
-            ]);
+            // Recalculate order totals
+            // $order->calculateTotals(); // DISABLED - tax system not used yet
 
             DB::commit();
 
@@ -3512,10 +3486,8 @@ class PosController extends Controller
             $kitchenItems = [];
             
             foreach ($order->orderItems as $orderItem) {
-                // Products routed to the kitchen OR the bar station both live in
-                // kitchen_orders — each item carries its own availability flags
-                if ($orderItem->item_type === 'product' && $orderItem->product
-                    && ($orderItem->product->available_in_kitchen || $orderItem->product->available_in_bar)) {
+                // Check if it's a product with available_in_kitchen
+                if ($orderItem->item_type === 'product' && $orderItem->product && $orderItem->product->available_in_kitchen) {
                     $kitchenItems[] = [
                         'id_order_item' => $orderItem->id_order_item,
                         'product_name' => $orderItem->item_name ?? $orderItem->product->name,
@@ -3530,8 +3502,7 @@ class PosController extends Controller
                     $package = \App\Models\Package::with(['items.product'])->find($orderItem->id_package);
                     if ($package && $package->items) {
                         foreach ($package->items as $packageItem) {
-                            if ($packageItem->product
-                                && ($packageItem->product->available_in_kitchen || $packageItem->product->available_in_bar)) {
+                            if ($packageItem->product && $packageItem->product->available_in_kitchen) {
                                 $kitchenItems[] = [
                                     'id_order_item' => $orderItem->id_order_item,
                                     'product_name' => $packageItem->product->name . ' (dari ' . $package->name . ')',
