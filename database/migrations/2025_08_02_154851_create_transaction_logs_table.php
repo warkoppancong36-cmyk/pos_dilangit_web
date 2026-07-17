@@ -9,6 +9,53 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Raw SQL below is MySQL-only (AUTO_INCREMENT, partitioning, events).
+        // On other drivers (sqlite for tests) create a portable equivalent.
+        if (DB::getDriverName() !== 'mysql') {
+            Schema::create('transaction_logs', function (Blueprint $table) {
+                $table->id();
+                $table->string('transaction_id');
+                $table->string('method', 10);
+                $table->string('endpoint', 500);
+                $table->string('url', 1000);
+                $table->unsignedBigInteger('user_id')->nullable();
+                $table->string('username')->nullable();
+                $table->string('user_role')->nullable();
+                $table->string('token_id')->nullable();
+                $table->json('request_headers')->nullable();
+                $table->longText('request_payload')->nullable();
+                $table->string('request_ip', 45);
+                $table->text('user_agent')->nullable();
+                $table->integer('response_status');
+                $table->longText('response_payload')->nullable();
+                $table->json('response_headers')->nullable();
+                $table->decimal('execution_time', 8, 3)->nullable();
+                $table->bigInteger('memory_usage')->nullable();
+                $table->string('session_id')->nullable();
+                $table->string('device_type')->nullable();
+                $table->string('browser')->nullable();
+                $table->string('platform')->nullable();
+                $table->string('location')->nullable();
+                $table->string('transaction_type')->nullable();
+                $table->string('module')->nullable();
+                $table->string('action')->nullable();
+                $table->string('entity_type')->nullable();
+                $table->string('entity_id')->nullable();
+                $table->boolean('is_successful')->default(true);
+                $table->text('error_message')->nullable();
+                $table->text('stack_trace')->nullable();
+                $table->timestamp('created_at')->useCurrent();
+                $table->date('created_date')->nullable();
+                $table->timestamp('completed_at')->nullable();
+
+                $table->unique(['transaction_id', 'created_date'], 'unique_transaction_id');
+                $table->index(['user_id', 'created_date'], 'idx_user_created');
+                $table->index(['endpoint', 'method'], 'idx_endpoint_method');
+            });
+
+            return;
+        }
+
         // Create the table first without partitioning using raw SQL for better control
         DB::statement("
             CREATE TABLE transaction_logs (

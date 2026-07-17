@@ -11,13 +11,23 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Drop every index referencing supplier_id first (including
+        // idx_items_supplier_id from the HPP index migration) — MySQL drops
+        // them implicitly with the column, sqlite leaves orphans that break
+        // later table rebuilds
+        $indexes = collect(Schema::getIndexes('items'))->pluck('name');
+        foreach (['items_supplier_id_index', 'idx_items_supplier_id'] as $indexName) {
+            if ($indexes->contains($indexName)) {
+                Schema::table('items', function (Blueprint $table) use ($indexName) {
+                    $table->dropIndex($indexName);
+                });
+            }
+        }
+
         Schema::table('items', function (Blueprint $table) {
             // Drop foreign key first
             $table->dropForeign(['supplier_id']);
-            
-            // Drop index
-            $table->dropIndex(['supplier_id']);
-            
+
             // Drop the column
             $table->dropColumn('supplier_id');
         });

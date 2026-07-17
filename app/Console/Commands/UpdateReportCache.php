@@ -2,151 +2,89 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Order;
+use App\Services\ReportCacheService;
+use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class UpdateReportCache extends Command
 {
-    protected $signature = 'report:update-cache {--date=} {--force}';
-    protected $description = 'Update report cache tables for faster reporting';
+    protected $signature = 'report:update-cache
+        {--date= : Rebuild a single date (Y-m-d)}
+        {--from= : Start of a date range (Y-m-d)}
+        {--to= : End of a date range (Y-m-d, defaults to today)}
+        {--all : Rebuild every date that has orders}
+        {--force : Delete existing cache rows for the date(s) first}';
 
-    public function handle()
+    protected $description = 'Rebuild report cache tables (report_transaction_cache & report_sales_daily) via ReportCacheService';
+
+    public function handle(ReportCacheService $reportCache)
     {
-        $date = $this->option('date') ? Carbon::parse($this->option('date')) : Carbon::today();
         $force = $this->option('force');
-        
-        $this->info("🚀 Updating report cache for date: {$date->format('Y-m-d')}");
-        
-        try {
-            DB::beginTransaction();
-            
-            // 1. Update Transaction Cache
-            $this->updateTransactionCache($date, $force);
-            
-            // 2. Update Daily Sales Summary
-            $this->updateDailySalesSummary($date, $force);
-            
-            DB::commit();
-            
-            $this->info("✅ Report cache updated successfully!");
-            
-        } catch (\Exception $e) {
-            DB::rollBack();
-            $this->error("❌ Failed to update report cache: " . $e->getMessage());
-            $this->error($e->getTraceAsString());
-            return 1;
+        $dates = $this->resolveDates();
+
+        if ($dates->isEmpty()) {
+            $this->info('Nothing to rebuild — no matching dates with orders.');
+
+            return 0;
         }
-        
+
+        $this->info("🚀 Rebuilding report cache for {$dates->count()} date(s)...");
+
+        foreach ($dates as $date) {
+            $date = Carbon::parse($date);
+
+            try {
+                if ($force) {
+                    DB::table('report_transaction_cache')
+                        ->whereDate('order_date', $date)
+                        ->delete();
+                }
+
+                $count = 0;
+                Order::whereDate('created_at', $date)
+                    ->chunkById(200, function ($orders) use ($reportCache, &$count) {
+                        foreach ($orders as $order) {
+                            $reportCache->updateReportCache($order, withDailySummary: false);
+                            $count++;
+                        }
+                    }, 'id_order');
+
+                $reportCache->updateDailySummary($date);
+
+                $this->info("   ✓ {$date->format('Y-m-d')}: {$count} transactions cached");
+            } catch (\Exception $e) {
+                $this->error("   ✗ {$date->format('Y-m-d')}: " . $e->getMessage());
+            }
+        }
+
+        $this->info('✅ Report cache rebuild finished!');
+
         return 0;
     }
-    
-    private function updateTransactionCache($date, $force)
+
+    private function resolveDates()
     {
-        $this->info("📊 Updating transaction cache...");
-        
-        // Delete existing cache for the date if force update
-        if ($force) {
-            DB::table('report_transaction_cache')
-                ->whereDate('order_date', $date)
-                ->delete();
+        if ($this->option('all')) {
+            return DB::table('orders')
+                ->selectRaw('DATE(created_at) as order_day')
+                ->distinct()
+                ->orderBy('order_day')
+                ->pluck('order_day');
         }
-        
-        // Get orders for the date
-        $orders = DB::table('orders as o')
-            ->leftJoin('customers as c', 'o.id_customer', '=', 'c.id_customer')
-            ->whereDate('o.created_at', $date)
-            ->select(
-                'o.id_order',
-                'o.order_number',
-                DB::raw('DATE(o.created_at) as order_date'),
-                DB::raw('TIME(o.created_at) as order_time'),
-                DB::raw('COALESCE(c.name, "Guest") as customer_name'),
-                'o.table_number',
-                'o.order_type',
-                'o.status',
-                'o.total_amount'
-            )
-            ->get();
-        
-        foreach ($orders as $order) {
-            // Get payment method
-            $payment = DB::table('payments')
-                ->where('id_order', $order->id_order)
-                ->first();
-            
-            // Get items
-            $items = DB::table('order_items as oi')
-                ->leftJoin('products as p', 'oi.id_product', '=', 'p.id_product')
-                ->where('oi.id_order', $order->id_order)
-                ->select(
-                    DB::raw('COALESCE(p.name, "Unknown") as name'),
-                    'oi.quantity'
-                )
-                ->get();
-            
-            $itemsDetail = $items->map(function($item) {
-                return [
-                    'name' => $item->name,
-                    'quantity' => $item->quantity
-                ];
-            })->toArray();
-            
-            // Insert or update cache
-            DB::table('report_transaction_cache')->updateOrInsert(
-                ['id_order' => $order->id_order],
-                [
-                    'order_number' => $order->order_number,
-                    'order_date' => $order->order_date,
-                    'order_time' => $order->order_time,
-                    'customer_name' => $order->customer_name,
-                    'table_number' => $order->table_number,
-                    'order_type' => $order->order_type,
-                    'status' => $order->status,
-                    'total_amount' => $order->total_amount,
-                    'payment_method' => $payment->payment_method ?? 'cash',
-                    'items_count' => count($items),
-                    'items_detail' => json_encode($itemsDetail),
-                    'updated_at' => now()
-                ]
-            );
+
+        if ($this->option('from')) {
+            $from = Carbon::parse($this->option('from'));
+            $to = $this->option('to') ? Carbon::parse($this->option('to')) : Carbon::today();
+
+            return collect(CarbonPeriod::create($from, $to)->toArray())
+                ->map(fn ($d) => $d->format('Y-m-d'));
         }
-        
-        $this->info("   ✓ Cached {$orders->count()} transactions");
-    }
-    
-    private function updateDailySalesSummary($date, $force)
-    {
-        $this->info("📊 Updating daily sales summary...");
-        
-        $summary = DB::table('orders')
-            ->whereDate('created_at', $date)
-            ->selectRaw('
-                COUNT(*) as total_orders,
-                SUM(CASE WHEN status = "completed" THEN 1 ELSE 0 END) as completed_orders,
-                SUM(CASE WHEN status = "cancelled" THEN 1 ELSE 0 END) as cancelled_orders,
-                SUM(CASE WHEN status = "completed" THEN total_amount ELSE 0 END) as total_revenue,
-                SUM(CASE WHEN status = "completed" THEN discount_amount ELSE 0 END) as total_discount,
-                SUM(CASE WHEN status = "completed" THEN tax_amount ELSE 0 END) as total_tax,
-                AVG(CASE WHEN status = "completed" THEN total_amount ELSE NULL END) as average_order_value
-            ')
-            ->first();
-        
-        DB::table('report_sales_daily')->updateOrInsert(
-            ['report_date' => $date->format('Y-m-d')],
-            [
-                'total_orders' => $summary->total_orders ?? 0,
-                'completed_orders' => $summary->completed_orders ?? 0,
-                'cancelled_orders' => $summary->cancelled_orders ?? 0,
-                'total_revenue' => $summary->total_revenue ?? 0,
-                'total_discount' => $summary->total_discount ?? 0,
-                'total_tax' => $summary->total_tax ?? 0,
-                'average_order_value' => $summary->average_order_value ?? 0,
-                'updated_at' => now()
-            ]
-        );
-        
-        $this->info("   ✓ Daily summary updated");
+
+        $date = $this->option('date') ? Carbon::parse($this->option('date')) : Carbon::today();
+
+        return collect([$date->format('Y-m-d')]);
     }
 }
-

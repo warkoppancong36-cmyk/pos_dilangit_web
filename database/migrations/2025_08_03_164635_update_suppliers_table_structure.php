@@ -8,6 +8,15 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Drop the index on "active" first — sqlite cannot drop a column
+        // that is still referenced by an index (MySQL drops it implicitly)
+        $indexes = collect(Schema::getIndexes('suppliers'))->pluck('name');
+        if ($indexes->contains('suppliers_active_index')) {
+            Schema::table('suppliers', function (Blueprint $table) {
+                $table->dropIndex('suppliers_active_index');
+            });
+        }
+
         Schema::table('suppliers', function (Blueprint $table) {
             $table->string('bank_name', 100)->nullable()->after('tax_number');
             $table->string('bank_account', 50)->nullable()->after('bank_name');

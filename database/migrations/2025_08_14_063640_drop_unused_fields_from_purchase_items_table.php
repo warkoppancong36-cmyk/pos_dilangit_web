@@ -11,6 +11,21 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Drop every index that references the doomed columns first — MySQL
+        // drops them implicitly with the column, sqlite leaves orphans that
+        // break later table rebuilds
+        $doomedColumns = ['id_product', 'id_purchase', 'id_variant'];
+        foreach (Schema::getIndexes('purchase_items') as $index) {
+            if (($index['primary'] ?? false) || empty($index['name'])) {
+                continue;
+            }
+            if (array_intersect($doomedColumns, $index['columns'] ?? [])) {
+                Schema::table('purchase_items', function (Blueprint $table) use ($index) {
+                    $table->dropIndex($index['name']);
+                });
+            }
+        }
+
         Schema::table('purchase_items', function (Blueprint $table) {
             // Check if columns exist before dropping them
             if (Schema::hasColumn('purchase_items', 'id_product')) {

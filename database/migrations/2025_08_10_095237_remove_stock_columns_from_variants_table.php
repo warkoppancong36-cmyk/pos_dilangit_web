@@ -11,6 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Drop the composite index first — sqlite cannot drop a column
+        // that is still referenced by an index (MySQL drops it implicitly)
+        $indexes = collect(Schema::getIndexes('variants'))->pluck('name');
+        if ($indexes->contains('variants_stock_min_stock_index')) {
+            Schema::table('variants', function (Blueprint $table) {
+                $table->dropIndex('variants_stock_min_stock_index');
+            });
+        }
+
         Schema::table('variants', function (Blueprint $table) {
             // Remove stock-related columns as stock is now managed entirely in inventory table
             if (Schema::hasColumn('variants', 'stock')) {

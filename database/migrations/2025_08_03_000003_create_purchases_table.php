@@ -11,6 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Duplicate of 2025_08_03_000002 — skip when the table already exists
+        if (Schema::hasTable('purchases')) {
+            return;
+        }
+
         Schema::create('purchases', function (Blueprint $table) {
             $table->id('id_purchase');
             $table->string('purchase_number')->unique(); // PO-2025-001

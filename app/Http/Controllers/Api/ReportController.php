@@ -49,9 +49,15 @@ class ReportController extends Controller
             $summaryQuery = Order::select(
                     DB::raw('COUNT(*) as total_orders'),
                     DB::raw('SUM(total_amount) as total_revenue'),
-                    DB::raw('CASE WHEN COUNT(*) > 0 THEN SUM(total_amount)/COUNT(*) ELSE 0 END as average_order'),
-                    DB::raw('SUM(CASE WHEN orders.status = "completed" THEN 1 ELSE 0 END) as completed_orders'),
-                    DB::raw('SUM(CASE WHEN orders.status = "cancelled" THEN 1 ELSE 0 END) as cancelled_orders')
+                    // AOV = revenue of COMPLETED orders / number of COMPLETED orders.
+                    // Pending/draft orders (often still Rp 0 in the two-step flow)
+                    // must not drag the average down.
+                    DB::raw("CASE WHEN SUM(CASE WHEN orders.status = 'completed' THEN 1 ELSE 0 END) > 0
+                             THEN SUM(CASE WHEN orders.status = 'completed' THEN total_amount ELSE 0 END)
+                                  / SUM(CASE WHEN orders.status = 'completed' THEN 1 ELSE 0 END)
+                             ELSE 0 END as average_order"),
+                    DB::raw("SUM(CASE WHEN orders.status = 'completed' THEN 1 ELSE 0 END) as completed_orders"),
+                    DB::raw("SUM(CASE WHEN orders.status = 'cancelled' THEN 1 ELSE 0 END) as cancelled_orders")
                 )
                 ->where('orders.status', '!=', 'cancelled')
                 ->whereBetween('orders.order_date', [$startDate, $endDate]);
@@ -76,10 +82,16 @@ class ReportController extends Controller
 
             $totalItems = $totalItemsQuery->sum('order_items.quantity');
 
-            // Daily sales trend
+            // Daily sales trend (+ order count & AOV per day for the export)
             $dailySalesQuery = Order::select(
                     DB::raw('DATE(order_date) as date'),
-                    DB::raw('SUM(total_amount) as total')
+                    DB::raw('SUM(total_amount) as total'),
+                    DB::raw('COUNT(*) as total_orders'),
+                    DB::raw("SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_orders"),
+                    DB::raw("CASE WHEN SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) > 0
+                             THEN SUM(CASE WHEN status = 'completed' THEN total_amount ELSE 0 END)
+                                  / SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)
+                             ELSE 0 END as average_order")
                 )
                 ->whereBetween('order_date', [$startDate, $endDate])
                 ->where('status', '!=', 'cancelled');
@@ -348,7 +360,10 @@ class ReportController extends Controller
                     return [
                         'date' => $item->date,
                         'total' => $this->formatRupiah($item->total),
-                        'revenue' => floatval($item->total ?: 0)  // Raw number for calculations
+                        'revenue' => floatval($item->total ?: 0),  // Raw number for calculations
+                        'total_orders' => (int) ($item->total_orders ?: 0),
+                        'completed_orders' => (int) ($item->completed_orders ?: 0),
+                        'average_order' => floatval($item->average_order ?: 0),
                     ];
                 }),
                 'sales_by_type' => $salesByType->map(function($item) {
