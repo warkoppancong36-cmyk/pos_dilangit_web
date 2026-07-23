@@ -11,11 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Columns may already exist when the base create_products migration includes them
+        if (Schema::hasColumn('products', 'created_by')) {
+            return;
+        }
+
         Schema::table('products', function (Blueprint $table) {
             $table->unsignedBigInteger('created_by')->nullable()->after('featured');
             $table->unsignedBigInteger('updated_by')->nullable()->after('created_by');
             $table->unsignedBigInteger('deleted_by')->nullable()->after('updated_by');
-            
+
             // Add foreign key constraints
             $table->foreign('created_by')->references('id')->on('users')->onDelete('set null');
             $table->foreign('updated_by')->references('id')->on('users')->onDelete('set null');

@@ -13,10 +13,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Remove unit column from purchase_items table
-        Schema::table('purchase_items', function (Blueprint $table) {
-            $table->dropColumn('unit');
-        });
+        // Remove unit column from purchase_items table (if it exists —
+        // on fresh installs this runs before the table is created)
+        if (Schema::hasColumn('purchase_items', 'unit')) {
+            Schema::table('purchase_items', function (Blueprint $table) {
+                $table->dropColumn('unit');
+            });
+        }
 
         // Remove unit column from product_items table (if it exists)
         if (Schema::hasColumn('product_items', 'unit')) {

@@ -11,6 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // MODIFY COLUMN is MySQL-only; sqlite (tests) stores enums as text
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         DB::statement("ALTER TABLE payments MODIFY COLUMN payment_method ENUM('cash', 'credit_card', 'debit_card', 'kartu', 'qris', 'gopay', 'ovo', 'dana', 'shopeepay', 'bank_transfer', 'gofood', 'grabfood', 'shopeefood', 'other')");
     }
 

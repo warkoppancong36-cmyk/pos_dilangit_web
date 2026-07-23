@@ -1410,15 +1410,18 @@ const exportToExcel = async () => {
         ['PENJUALAN HARIAN'],
         ['Periode:', periodInfo],
         [],
-        ['Tanggal', 'Total Penjualan'],
+        ['Tanggal', 'Total Penjualan', 'Total Order', 'Order Selesai', 'Rata-rata Order (AOV)'],
         ...reportData.value.daily_sales.map((item: any) => [
           new Date(item.date).toLocaleDateString('id-ID'),
-          formatExcelCurrency(item.total)
+          formatExcelCurrency(item.total),
+          item.total_orders ?? 0,
+          item.completed_orders ?? 0,
+          formatExcelCurrency(item.average_order ?? 0)
         ])
       ]
-      
+
       const dailySheet = XLSX.utils.aoa_to_sheet(dailySalesData)
-      dailySheet['!cols'] = [{ wch: 15 }, { wch: 20 }]
+      dailySheet['!cols'] = [{ wch: 15 }, { wch: 20 }, { wch: 12 }, { wch: 13 }, { wch: 20 }]
       XLSX.utils.book_append_sheet(workbook, dailySheet, 'Penjualan Harian')
     }
     
