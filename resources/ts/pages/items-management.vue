@@ -1,20 +1,22 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog.vue'
 import ItemDialog from '@/components/items/ItemDialog.vue'
 import ItemSearchFilters from '@/components/items/ItemSearchFilters.vue'
 import ItemStatsCards from '@/components/items/ItemStatsCards.vue'
 import ItemTable from '@/components/items/ItemTable.vue'
 import { useItems } from '@/composables/useItems'
-import { onMounted } from 'vue'
 
 const {
   itemsList,
   loading,
   saveLoading,
   deleteLoading,
+  exportLoading,
   stats,
   dialog,
   deleteDialog,
+  exportDialog,
   editMode,
   selectedItem,
   selectedItems,
@@ -32,6 +34,9 @@ const {
   unitOptions,
   fetchItemsList,
   fetchStats,
+  exportToExcel,
+  openExportDialog,
+  closeExportDialog,
   saveItem,
   deleteItem,
   openCreateDialog,
@@ -58,12 +63,22 @@ onMounted(() => {
   <div class="item-management">
     <div class="d-flex justify-space-between align-center mb-6">
       <div>
-        <h1 class="text-h4 font-weight-bold coffee-title">Kelola Item</h1>
-        <p class="text-body-1 text-medium-emphasis coffee-subtitle">Kelola bahan baku dan item untuk operasional coffee shop Anda</p>
+        <h1 class="text-h4 font-weight-bold coffee-title">
+          Kelola Item
+        </h1>
+        <p class="text-body-1 text-medium-emphasis coffee-subtitle">
+          Kelola bahan baku dan item untuk operasional coffee shop Anda
+        </p>
       </div>
       <div class="d-flex gap-3 align-center">
-        <div v-if="hasSelectedItems" class="d-flex gap-2">
-          <VChip color="primary" size="small">
+        <div
+          v-if="hasSelectedItems"
+          class="d-flex gap-2"
+        >
+          <VChip
+            color="primary"
+            size="small"
+          >
             {{ selectedItems.length }} dipilih
           </VChip>
           <VBtn
@@ -118,6 +133,7 @@ onMounted(() => {
     <ItemTable
       :items="itemsList"
       :loading="loading"
+      :export-loading="exportLoading"
       :current-page="currentPage"
       :total-items="totalItems"
       :items-per-page="itemsPerPage"
@@ -125,6 +141,7 @@ onMounted(() => {
       @update:page="onPageChange"
       @update:items-per-page="onItemsPerPageChange"
       @add-item="openCreateDialog"
+      @export-excel="openExportDialog"
       @edit-item="openEditDialog"
       @delete-item="openDeleteDialog"
       @update:selected-items="(items: number[]) => selectedItems = items"
@@ -152,6 +169,115 @@ onMounted(() => {
       @confirm="confirmDelete"
       @cancel="deleteDialog = false"
     />
+
+    <!-- Export Dialog -->
+    <VDialog
+      v-model="exportDialog"
+      max-width="500"
+      persistent
+    >
+      <VCard>
+        <VCardTitle class="d-flex align-center gap-2">
+          <VIcon
+            icon="tabler-file-spreadsheet"
+            color="success"
+          />
+          Export Data Item ke Excel
+        </VCardTitle>
+
+        <VDivider />
+
+        <VCardText>
+          <div class="mb-4">
+            <h6 class="text-h6 mb-2">
+              Filter yang akan diterapkan:
+            </h6>
+            <div class="d-flex flex-column gap-2">
+              <VChip
+                v-if="filters.search"
+                color="primary"
+                variant="tonal"
+                size="small"
+                prepend-icon="tabler-search"
+              >
+                Pencarian: "{{ filters.search }}"
+              </VChip>
+
+              <VChip
+                v-if="filters.active !== undefined && filters.active !== 'all' && filters.active !== ''"
+                color="info"
+                variant="tonal"
+                size="small"
+                prepend-icon="tabler-toggle-right"
+              >
+                Status: {{ filters.active === true || filters.active === 'true' ? 'Aktif' : 'Nonaktif' }}
+              </VChip>
+
+              <VChip
+                v-if="filters.stock_status && filters.stock_status !== 'all'"
+                color="warning"
+                variant="tonal"
+                size="small"
+                prepend-icon="tabler-package"
+              >
+                Stok: {{ filters.stock_status === 'in_stock' ? 'Stok Tersedia' : filters.stock_status === 'low_stock' ? 'Stok Rendah' : 'Stok Habis' }}
+              </VChip>
+
+              <VChip
+                v-if="filters.station && filters.station !== 'all'"
+                color="primary"
+                variant="tonal"
+                size="small"
+                prepend-icon="tabler-building-store"
+              >
+                Station: {{ filters.station === 'kitchen' ? 'Kitchen Only' : filters.station === 'bar' ? 'Bar Only' : 'Kitchen & Bar' }}
+              </VChip>
+
+              <VChip
+                v-if="!filters.search && (filters.active === undefined || filters.active === 'all' || filters.active === '') && (!filters.stock_status || filters.stock_status === 'all') && (!filters.station || filters.station === 'all')"
+                color="success"
+                variant="tonal"
+                size="small"
+                prepend-icon="tabler-check"
+              >
+                Semua Data (Tanpa Filter)
+              </VChip>
+            </div>
+          </div>
+
+          <VAlert
+            type="info"
+            variant="tonal"
+            class="mb-4"
+          >
+            Data yang akan di-export mengikuti filter yang sedang aktif.
+            File Excel akan berisi kolom Station (Kitchen & Bar) untuk setiap item.
+          </VAlert>
+        </VCardText>
+
+        <VDivider />
+
+        <VCardActions>
+          <VSpacer />
+          <VBtn
+            variant="outlined"
+            :disabled="exportLoading"
+            @click="closeExportDialog"
+          >
+            Batal
+          </VBtn>
+          <VBtn
+            color="success"
+            variant="elevated"
+            prepend-icon="tabler-file-spreadsheet"
+            :loading="exportLoading"
+            @click="exportToExcel(); closeExportDialog()"
+          >
+            Export ke Excel
+          </VBtn>
+        </VCardActions>
+      </VCard>
+    </VDialog>
   </div>
 </template>
 

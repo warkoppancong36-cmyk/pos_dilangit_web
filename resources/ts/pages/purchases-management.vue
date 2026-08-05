@@ -8,14 +8,26 @@
             <h1 class="text-h4 font-weight-bold">Purchase Management</h1>
             <p class="text-body-1 text-medium-emphasis">Kelola pembelian barang dari supplier</p>
           </div>
-          <VBtn
-            color="primary"
-            size="large"
-            @click="openCreateDialog"
-          >
-            <VIcon start>mdi-plus</VIcon>
-            Buat Purchase Order
-          </VBtn>
+          <div class="d-flex gap-2 align-center">
+            <VBtn
+              color="success"
+              variant="elevated"
+              size="large"
+              :loading="exportLoading"
+              @click="openExportDialog"
+            >
+              <VIcon start>mdi-file-excel</VIcon>
+              Export Excel
+            </VBtn>
+            <VBtn
+              color="primary"
+              size="large"
+              @click="openCreateDialog"
+            >
+              <VIcon start>mdi-plus</VIcon>
+              Buat Purchase Order
+            </VBtn>
+          </div>
         </div>
       </VCol>
     </VRow>
@@ -429,6 +441,120 @@
       </VCard>
     </VDialog>
 
+    <!-- Export Dialog -->
+    <VDialog
+      v-model="exportDialog"
+      max-width="500"
+      persistent
+    >
+      <VCard>
+        <VCardTitle class="d-flex align-center gap-2">
+          <VIcon color="success">mdi-file-excel</VIcon>
+          Export Data Pembelian ke Excel
+        </VCardTitle>
+
+        <VDivider />
+
+        <VCardText>
+          <div class="mb-4">
+            <h6 class="text-h6 mb-2">Filter yang akan diterapkan:</h6>
+            <div class="d-flex flex-column gap-2">
+              <VChip
+                v-if="filters.search"
+                color="primary"
+                variant="tonal"
+                size="small"
+                prepend-icon="mdi-magnify"
+              >
+                Pencarian: "{{ filters.search }}"
+              </VChip>
+
+              <VChip
+                v-if="filters.status"
+                color="info"
+                variant="tonal"
+                size="small"
+                prepend-icon="mdi-list-status"
+              >
+                Status: {{ getStatusLabel(filters.status) }}
+              </VChip>
+
+              <VChip
+                v-if="filters.supplier_id"
+                color="warning"
+                variant="tonal"
+                size="small"
+                prepend-icon="mdi-truck"
+              >
+                Supplier: {{ getSupplierName(filters.supplier_id) }}
+              </VChip>
+
+              <VChip
+                v-if="filters.start_date"
+                color="primary"
+                variant="tonal"
+                size="small"
+                prepend-icon="mdi-calendar-start"
+              >
+                Dari: {{ filters.start_date }}
+              </VChip>
+
+              <VChip
+                v-if="filters.end_date"
+                color="primary"
+                variant="tonal"
+                size="small"
+                prepend-icon="mdi-calendar-end"
+              >
+                Sampai: {{ filters.end_date }}
+              </VChip>
+
+              <VChip
+                v-if="!filters.search && !filters.status && !filters.supplier_id && !filters.start_date && !filters.end_date"
+                color="success"
+                variant="tonal"
+                size="small"
+                prepend-icon="mdi-check"
+              >
+                Semua Data (Tanpa Filter)
+              </VChip>
+            </div>
+          </div>
+
+          <VAlert
+            type="info"
+            variant="tonal"
+            class="mb-4"
+          >
+            Data yang akan di-export mengikuti filter yang sedang aktif.
+            File Excel berisi 2 sheet: ringkasan per purchase dan detail item pembelian.
+          </VAlert>
+        </VCardText>
+
+        <VDivider />
+
+        <VCardActions>
+          <VSpacer />
+          <VBtn
+            variant="outlined"
+            :disabled="exportLoading"
+            @click="closeExportDialog"
+          >
+            Batal
+          </VBtn>
+          <VBtn
+            color="success"
+            variant="elevated"
+            :loading="exportLoading"
+            @click="exportToExcel(); closeExportDialog()"
+          >
+            <VIcon start>mdi-file-excel</VIcon>
+            Export ke Excel
+          </VBtn>
+        </VCardActions>
+      </VCard>
+    </VDialog>
+
     <!-- Snackbar -->
     <VSnackbar
       v-model="snackbar.show"
@@ -468,8 +594,12 @@ const snackbar = ref({
 // Dialog states
 const dialogOpen = ref(false)
 const viewDialogOpen = ref(false)
-const receiveDialogOpen = ref(false) 
+const receiveDialogOpen = ref(false)
 const deleteDialogOpen = ref(false)
+
+// Export states
+const exportLoading = ref(false)
+const exportDialog = ref(false)
 const selectedPurchase = ref<any>(null)
 const purchaseToDelete = ref<any>(null)
 const deleteLoading = ref(false)
@@ -602,6 +732,209 @@ const clearFilters = () => {
     end_date: ''
   }
   loadPurchases()
+}
+
+// Export methods
+const openExportDialog = () => {
+  exportDialog.value = true
+}
+
+const closeExportDialog = () => {
+  exportDialog.value = false
+}
+
+const getSupplierName = (supplierId: any) => {
+  const supplier = suppliers.value.find(s => s.id_supplier === supplierId)
+  return supplier?.name || supplierId
+}
+
+const parseAmount = (value: any) => {
+  const num = typeof value === 'string' ? parseFloat(value) : value
+  return isNaN(num) ? 0 : num
+}
+
+// Fetch ALL purchases for export (bypass pagination)
+const fetchAllPurchasesForExport = async () => {
+  const cleanParams: Record<string, any> = {
+    page: 1,
+    per_page: 999999
+  }
+
+  Object.entries(filters.value).forEach(([key, value]) => {
+    if (value && value !== '') {
+      cleanParams[key] = value
+    }
+  })
+
+  const token = getAuthToken()
+  const requestHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  }
+
+  if (token) {
+    requestHeaders['Authorization'] = `Bearer ${token}`
+  }
+
+  const response = await axios.get('/api/purchases', {
+    params: cleanParams,
+    headers: requestHeaders
+  })
+
+  const data = response.data.data.data || []
+
+  // Remove duplicates based on id_purchase
+  return data.filter((purchase: any, index: number, self: any[]) =>
+    index === self.findIndex((t: any) => t.id_purchase === purchase.id_purchase)
+  )
+}
+
+const exportToExcel = async () => {
+  try {
+    exportLoading.value = true
+
+    // Fetch ALL purchases for export (not limited to current page)
+    const allPurchases = await fetchAllPurchasesForExport()
+
+    // Dynamic import for better performance
+    const XLSX = await import('xlsx')
+
+    // Summary statistics
+    const totalPurchases = allPurchases.length
+    const totalValue = allPurchases.reduce((sum: number, purchase: any) =>
+      sum + parseAmount(purchase.total_amount), 0
+    )
+    const statusCounts: Record<string, number> = {}
+    allPurchases.forEach((purchase: any) => {
+      statusCounts[purchase.status] = (statusCounts[purchase.status] || 0) + 1
+    })
+
+    // Sheet 1: one row per purchase
+    const purchaseRows = allPurchases.map((purchase: any, index: number) => ({
+      'No': index + 1,
+      'No. Purchase': purchase.purchase_number,
+      'Supplier': purchase.supplier?.name || '-',
+      'Telepon Supplier': purchase.supplier?.phone || '-',
+      'Tanggal': formatDate(purchase.purchase_date),
+      'Status': getStatusLabel(purchase.status),
+      'Jenis Item': getTotalVariety(purchase),
+      'Total Qty': getTotalItems(purchase),
+      'Subtotal': parseAmount(purchase.subtotal),
+      'Pajak': parseAmount(purchase.tax_amount),
+      'Diskon': parseAmount(purchase.discount_amount),
+      'Total': parseAmount(purchase.total_amount),
+      'Catatan': purchase.notes || '-',
+      'Dibuat': purchase.created_at ? new Date(purchase.created_at).toLocaleDateString('id-ID') : '-'
+    }))
+
+    // Sheet 2: one row per purchase item (detail)
+    const itemRows: Record<string, any>[] = []
+    allPurchases.forEach((purchase: any) => {
+      (purchase.items || []).forEach((purchaseItem: any) => {
+        itemRows.push({
+          'No': itemRows.length + 1,
+          'No. Purchase': purchase.purchase_number,
+          'Supplier': purchase.supplier?.name || '-',
+          'Tanggal': formatDate(purchase.purchase_date),
+          'Status Purchase': getStatusLabel(purchase.status),
+          'Nama Item': purchaseItem.item?.name || 'Unknown Item',
+          'Kode Item': purchaseItem.item?.item_code || '-',
+          'Satuan': purchaseItem.item?.unit || '-',
+          'Qty Dipesan': parseAmount(purchaseItem.quantity_ordered),
+          'Qty Diterima': parseAmount(purchaseItem.quantity_received),
+          'Harga Satuan': parseAmount(purchaseItem.unit_cost),
+          'Total Harga': parseAmount(purchaseItem.total_cost) || parseAmount(purchaseItem.quantity_ordered) * parseAmount(purchaseItem.unit_cost)
+        })
+      })
+    })
+
+    // Filter info for report header
+    const filterInfo: string[] = []
+    if (filters.value.search) {
+      filterInfo.push(`Pencarian: "${filters.value.search}"`)
+    }
+    if (filters.value.status) {
+      filterInfo.push(`Status: ${getStatusLabel(filters.value.status)}`)
+    }
+    if (filters.value.supplier_id) {
+      filterInfo.push(`Supplier: ${getSupplierName(filters.value.supplier_id)}`)
+    }
+    if (filters.value.start_date) {
+      filterInfo.push(`Dari: ${filters.value.start_date}`)
+    }
+    if (filters.value.end_date) {
+      filterInfo.push(`Sampai: ${filters.value.end_date}`)
+    }
+
+    const titleData = [
+      ['LAPORAN DATA PEMBELIAN'],
+      ['Tanggal Export:', new Date().toLocaleDateString('id-ID', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+      })],
+      ['Total Purchase:', totalPurchases],
+      ['Total Nilai Pembelian:', `Rp ${totalValue.toLocaleString('id-ID')}`],
+      ['Status:', `Pending: ${statusCounts.pending || 0}, Dipesan: ${statusCounts.ordered || 0}, Diterima: ${statusCounts.received || 0}, Selesai: ${statusCounts.completed || 0}, Dibatalkan: ${statusCounts.cancelled || 0}`],
+      ['Filter Diterapkan:', filterInfo.length > 0 ? filterInfo.join(', ') : 'Semua Data'],
+      [], // Empty row
+    ]
+
+    const workbook = XLSX.utils.book_new()
+
+    const purchaseSheet = XLSX.utils.aoa_to_sheet(titleData)
+    XLSX.utils.sheet_add_json(purchaseSheet, purchaseRows, { origin: 'A8' })
+    purchaseSheet['!cols'] = [
+      { wch: 5 },   // No
+      { wch: 20 },  // No. Purchase
+      { wch: 25 },  // Supplier
+      { wch: 16 },  // Telepon Supplier
+      { wch: 12 },  // Tanggal
+      { wch: 12 },  // Status
+      { wch: 10 },  // Jenis Item
+      { wch: 10 },  // Total Qty
+      { wch: 15 },  // Subtotal
+      { wch: 12 },  // Pajak
+      { wch: 12 },  // Diskon
+      { wch: 15 },  // Total
+      { wch: 30 },  // Catatan
+      { wch: 12 },  // Dibuat
+    ]
+    XLSX.utils.book_append_sheet(workbook, purchaseSheet, 'Data Pembelian')
+
+    const itemSheet = XLSX.utils.json_to_sheet(itemRows)
+    itemSheet['!cols'] = [
+      { wch: 5 },   // No
+      { wch: 20 },  // No. Purchase
+      { wch: 25 },  // Supplier
+      { wch: 12 },  // Tanggal
+      { wch: 14 },  // Status Purchase
+      { wch: 30 },  // Nama Item
+      { wch: 18 },  // Kode Item
+      { wch: 8 },   // Satuan
+      { wch: 12 },  // Qty Dipesan
+      { wch: 12 },  // Qty Diterima
+      { wch: 15 },  // Harga Satuan
+      { wch: 15 },  // Total Harga
+    ]
+    XLSX.utils.book_append_sheet(workbook, itemSheet, 'Detail Item')
+
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+    XLSX.writeFile(workbook, `purchase-report-${timestamp}.xlsx`)
+
+    snackbar.value = {
+      show: true,
+      message: `Laporan berhasil di-export ke Excel dengan ${totalPurchases} purchase lengkap!`,
+      color: 'success'
+    }
+  } catch (error: any) {
+    console.error('Export error:', error)
+    snackbar.value = {
+      show: true,
+      message: 'Gagal mengexport laporan: ' + (error.response?.data?.message || error.message || 'Unknown error'),
+      color: 'error'
+    }
+  } finally {
+    exportLoading.value = false
+  }
 }
 
 const openCreateDialog = () => {

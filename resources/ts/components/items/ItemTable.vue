@@ -5,6 +5,7 @@ import { formatCurrency } from '@/utils/helpers'
 interface Props {
   items: Item[]
   loading?: boolean
+  exportLoading?: boolean
   selectedItems?: number[]
   currentPage?: number
   itemsPerPage?: number
@@ -14,6 +15,7 @@ interface Props {
 interface Emits {
   (e: 'update:selected-items', selected: number[]): void
   (e: 'add-item'): void
+  (e: 'export-excel'): void
   (e: 'edit-item', item: Item): void
   (e: 'delete-item', item: Item): void
   (e: 'update:page', page: number): void
@@ -22,10 +24,11 @@ interface Emits {
 
 const props = withDefaults(defineProps<Props>(), {
   loading: false,
+  exportLoading: false,
   selectedItems: () => [],
   currentPage: 1,
   itemsPerPage: 15,
-  totalItems: 0
+  totalItems: 0,
 })
 
 const emit = defineEmits<Emits>()
@@ -40,7 +43,7 @@ const headers = [
   { title: 'LOKASI', key: 'storage_location', align: 'center' as const },
   { title: 'STATUS', key: 'active', align: 'center' as const },
   { title: 'STATION', key: 'station_availability', align: 'center' as const },
-  { title: 'AKSI', key: 'actions', align: 'center' as const, sortable: false }
+  { title: 'AKSI', key: 'actions', align: 'center' as const, sortable: false },
 ]
 
 const getStockStatusColor = (status: string) => {
@@ -70,8 +73,11 @@ const getStockStatusText = (status: string) => {
 }
 
 const getStockProgressColor = (percentage: number) => {
-  if (percentage <= 20) return 'error'
-  if (percentage <= 40) return 'warning'
+  if (percentage <= 20)
+    return 'error'
+  if (percentage <= 40)
+    return 'warning'
+
   return 'success'
 }
 </script>
@@ -94,8 +100,17 @@ const getStockProgressColor = (percentage: number) => {
           {{ totalItems }} item
         </VChip>
       </div>
-      
+
       <div class="d-flex align-center gap-2">
+        <VBtn
+          color="success"
+          variant="elevated"
+          prepend-icon="tabler-file-spreadsheet"
+          :loading="exportLoading"
+          @click="$emit('export-excel')"
+        >
+          Export Excel
+        </VBtn>
         <VBtn
           prepend-icon="tabler-plus"
           color="primary"
@@ -110,7 +125,6 @@ const getStockProgressColor = (percentage: number) => {
 
     <VDataTableServer
       :model-value="selectedItems"
-      @update:model-value="$emit('update:selected-items', $event)"
       :headers="headers"
       :items="items"
       :loading="loading"
@@ -119,13 +133,16 @@ const getStockProgressColor = (percentage: number) => {
       :page="currentPage"
       item-value="id_item"
       show-select
+      class="text-no-wrap"
+      @update:model-value="$emit('update:selected-items', $event)"
       @update:page="$emit('update:page', $event)"
       @update:items-per-page="$emit('update:items-per-page', $event)"
-      class="text-no-wrap"
     >
       <template #item.item_info="{ item }">
         <div class="d-flex flex-column">
-          <div class="font-weight-medium text-high-emphasis">{{ item.name }}</div>
+          <div class="font-weight-medium text-high-emphasis">
+            {{ item.name }}
+          </div>
           <VChip
             color="primary"
             variant="outlined"
@@ -134,28 +151,40 @@ const getStockProgressColor = (percentage: number) => {
           >
             {{ item.item_code }}
           </VChip>
-          <div v-if="item.description" class="text-caption text-medium-emphasis mt-1">
+          <div
+            v-if="item.description"
+            class="text-caption text-medium-emphasis mt-1"
+          >
             {{ item.description }}
           </div>
         </div>
       </template>
 
       <template #item.unit="{ item }">
-        <VChip color="info" variant="tonal" size="small">
+        <VChip
+          color="info"
+          variant="tonal"
+          size="small"
+        >
           {{ item.unit }}
         </VChip>
       </template>
 
       <template #item.cost_per_unit="{ item }">
         <div class="text-end">
-          <div class="font-weight-medium">{{ formatCurrency(item.cost_per_unit) }}</div>
+          <div class="font-weight-medium">
+            {{ formatCurrency(item.cost_per_unit) }}
+          </div>
         </div>
       </template>
 
       <template #item.current_stock="{ item }">
         <div class="text-center">
           <div class="d-flex align-center justify-center gap-1">
-            <span class="font-weight-bold" :class="(item.inventory?.current_stock || 0) <= (item.inventory?.reorder_level || 0) ? 'text-error' : 'text-success'">
+            <span
+              class="font-weight-bold"
+              :class="(item.inventory?.current_stock || 0) <= (item.inventory?.reorder_level || 0) ? 'text-error' : 'text-success'"
+            >
               {{ item.inventory?.current_stock || 0 }}
             </span>
             <small class="text-medium-emphasis">{{ item.unit }}</small>
@@ -182,7 +211,11 @@ const getStockProgressColor = (percentage: number) => {
 
       <template #item.storage_location="{ item }">
         <div class="d-flex align-center justify-center gap-1">
-          <VIcon icon="tabler-map-pin" size="16" class="text-medium-emphasis" />
+          <VIcon
+            icon="tabler-map-pin"
+            size="16"
+            class="text-medium-emphasis"
+          />
           <span class="text-sm">{{ item.storage_location || 'Gudang A-Rak 1' }}</span>
         </div>
       </template>
@@ -217,7 +250,10 @@ const getStockProgressColor = (percentage: number) => {
           >
             Bar
           </VChip>
-          <span v-if="!item.available_in_kitchen && !item.available_in_bar" class="text-caption text-medium-emphasis">
+          <span
+            v-if="!item.available_in_kitchen && !item.available_in_bar"
+            class="text-caption text-medium-emphasis"
+          >
             Tidak tersedia
           </span>
         </div>
