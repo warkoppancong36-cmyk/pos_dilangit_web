@@ -20,7 +20,7 @@ class PurchaseController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = Purchase::with(['supplier', 'items.item', 'creator'])
+            $query = Purchase::with(['supplier', 'items.item.inventory', 'creator'])
                 ->orderBy('created_at', 'desc');
 
             // Filter by status

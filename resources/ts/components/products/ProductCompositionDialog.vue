@@ -253,10 +253,20 @@
         <VCard elevation="2">
           <VCardTitle class="bg-grey-lighten-4 py-3">
             <VIcon icon="mdi-format-list-bulleted" class="me-2" />
-            Daftar Item Komposisi ({{ compositionItems.length }})
+            Daftar Item Komposisi <template v-if="!loadingComposition">({{ compositionItems.length }})</template>
           </VCardTitle>
           <VCardText class="pa-0">
-            <div v-if="compositionItems.length === 0" class="text-center pa-8">
+            <div v-if="loadingComposition" class="text-center pa-8">
+              <VProgressCircular
+                indeterminate
+                color="primary"
+                size="48"
+                class="mb-4"
+              />
+              <p class="text-body-2 text-medium-emphasis mb-0">Memuat komposisi produk...</p>
+            </div>
+
+            <div v-else-if="compositionItems.length === 0" class="text-center pa-8">
               <VIcon
                 icon="mdi-package-variant-closed"
                 size="64"
@@ -353,6 +363,7 @@
           color="primary"
           @click="saveComposition"
           :loading="loading"
+          :disabled="loadingComposition"
         >
           Simpan Komposisi
         </VBtn>
@@ -497,6 +508,8 @@ const dialogModel = computed({
 // Form state
 const loading = ref(false)
 const compositionItems = ref<CompositionItem[]>([])
+const loadingComposition = ref(false)
+const compositionLoaded = ref(false)
 
 // Snackbar state
 const errorSnackbar = ref(false)
@@ -555,35 +568,31 @@ const initialCompositionItems = ref<CompositionItem[]>([])
 // Fetch product composition from API
 const fetchProductComposition = async () => {
   if (!props.product) return
-  
+
+  loadingComposition.value = true
+  compositionLoaded.value = false
   try {
     const productId = props.product.id_product || props.product.id
-    
+
     // Fetch product items for this specific product
-    const response = await ProductItemsApi.getAll({ 
+    const response = await ProductItemsApi.getAll({
       product_id: productId,
       page: 1,
       per_page: 100000
     })
-    
+
     if (response.success && response.data?.data) {
       compositionItems.value = response.data.data
       // Store initial data for comparison during save
       initialCompositionItems.value = JSON.parse(JSON.stringify(response.data.data))
-      
-      // Debug: Log data structure
-      console.log('📥 Fetched composition items:', response.data.data)
-      if (response.data.data.length > 0) {
-        console.log('📥 First item structure:', {
-          full: response.data.data[0],
-          item: response.data.data[0].item,
-          item_id: response.data.data[0].item_id,
-          id_product_item: response.data.data[0].id_product_item
-        })
-      }
+      compositionLoaded.value = true
     }
   } catch (error) {
     console.error('Error fetching product composition:', error)
+    errorMessage.value = 'Gagal memuat komposisi produk. Tutup dialog dan coba lagi.'
+    errorSnackbar.value = true
+  } finally {
+    loadingComposition.value = false
   }
 }
 
@@ -674,16 +683,17 @@ const getStockLabel = (item: any): string => {
   return 'Habis'
 }
 
-// Watch for props changes
-watch(() => props.items, (newItems) => {
-  if (newItems && newItems.length > 0) {
-  }
-  compositionItems.value = [...newItems]
-}, { immediate: true })
+// NOTE: props.items is intentionally NOT watched. The parent only has a
+// paginated global slice of product-items, so it can pass an empty/incomplete
+// list; overwriting compositionItems with it clobbers the data fetched by
+// fetchProductComposition and made saveComposition delete the real rows.
 
 // Watch for dialog opening to fetch composition data
 watch(() => props.modelValue, async (isOpen) => {
   if (isOpen && props.product) {
+    compositionItems.value = []
+    initialCompositionItems.value = []
+    compositionLoaded.value = false
     fetchProductComposition()
     // Load HPP data when dialog opens
     await loadHPPData()
@@ -909,6 +919,16 @@ const removeItem = (index: number) => {
 const saveComposition = async () => {
   if (!props.product) return
 
+  // Never save while the composition is still loading (or failed to load) —
+  // the diff against initialCompositionItems would be wrong and could
+  // mass-delete the real composition rows.
+  if (loadingComposition.value) return
+  if (!compositionLoaded.value) {
+    errorMessage.value = 'Komposisi belum berhasil dimuat. Tutup dialog dan buka kembali sebelum menyimpan.'
+    errorSnackbar.value = true
+    return
+  }
+
   loading.value = true
   try {
     
@@ -1086,7 +1106,9 @@ const closeDialog = () => {
   dialogModel.value = false
   // Reset form when closing
   setTimeout(() => {
-    compositionItems.value = [...props.items]
+    compositionItems.value = []
+    initialCompositionItems.value = []
+    compositionLoaded.value = false
     cancelEdit()
   }, 300)
 }

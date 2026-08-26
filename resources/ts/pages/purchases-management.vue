@@ -16,7 +16,7 @@
               :loading="exportLoading"
               @click="openExportDialog"
             >
-              <VIcon start>mdi-file-excel</VIcon>
+              <VIcon start>tabler-file-spreadsheet</VIcon>
               Export Excel
             </VBtn>
             <VBtn
@@ -449,7 +449,7 @@
     >
       <VCard>
         <VCardTitle class="d-flex align-center gap-2">
-          <VIcon color="success">mdi-file-excel</VIcon>
+          <VIcon color="success">tabler-file-spreadsheet</VIcon>
           Export Data Pembelian ke Excel
         </VCardTitle>
 
@@ -464,7 +464,7 @@
                 color="primary"
                 variant="tonal"
                 size="small"
-                prepend-icon="mdi-magnify"
+                prepend-icon="tabler-search"
               >
                 Pencarian: "{{ filters.search }}"
               </VChip>
@@ -474,7 +474,7 @@
                 color="info"
                 variant="tonal"
                 size="small"
-                prepend-icon="mdi-list-status"
+                prepend-icon="tabler-list-check"
               >
                 Status: {{ getStatusLabel(filters.status) }}
               </VChip>
@@ -484,7 +484,7 @@
                 color="warning"
                 variant="tonal"
                 size="small"
-                prepend-icon="mdi-truck"
+                prepend-icon="tabler-truck"
               >
                 Supplier: {{ getSupplierName(filters.supplier_id) }}
               </VChip>
@@ -494,7 +494,7 @@
                 color="primary"
                 variant="tonal"
                 size="small"
-                prepend-icon="mdi-calendar-start"
+                prepend-icon="tabler-calendar-event"
               >
                 Dari: {{ filters.start_date }}
               </VChip>
@@ -504,7 +504,7 @@
                 color="primary"
                 variant="tonal"
                 size="small"
-                prepend-icon="mdi-calendar-end"
+                prepend-icon="tabler-calendar-check"
               >
                 Sampai: {{ filters.end_date }}
               </VChip>
@@ -514,7 +514,7 @@
                 color="success"
                 variant="tonal"
                 size="small"
-                prepend-icon="mdi-check"
+                prepend-icon="tabler-check"
               >
                 Semua Data (Tanpa Filter)
               </VChip>
@@ -548,7 +548,7 @@
             :loading="exportLoading"
             @click="exportToExcel(); closeExportDialog()"
           >
-            <VIcon start>mdi-file-excel</VIcon>
+            <VIcon start>tabler-file-spreadsheet</VIcon>
             Export ke Excel
           </VBtn>
         </VCardActions>
@@ -753,16 +753,14 @@ const parseAmount = (value: any) => {
   return isNaN(num) ? 0 : num
 }
 
-// Fetch ALL purchases for export (bypass pagination)
+// Fetch ALL purchases for export in chunks so no single request can hang or
+// hit server time/memory limits on large datasets
 const fetchAllPurchasesForExport = async () => {
-  const cleanParams: Record<string, any> = {
-    page: 1,
-    per_page: 999999
-  }
+  const baseParams: Record<string, any> = {}
 
   Object.entries(filters.value).forEach(([key, value]) => {
     if (value && value !== '') {
-      cleanParams[key] = value
+      baseParams[key] = value
     }
   })
 
@@ -776,15 +774,26 @@ const fetchAllPurchasesForExport = async () => {
     requestHeaders['Authorization'] = `Bearer ${token}`
   }
 
-  const response = await axios.get('/api/purchases', {
-    params: cleanParams,
-    headers: requestHeaders
-  })
+  const allData: any[] = []
+  const perPage = 500
+  let currentPage = 1
+  let lastPage = 1
 
-  const data = response.data.data.data || []
+  do {
+    const response = await axios.get('/api/purchases', {
+      params: { ...baseParams, page: currentPage, per_page: perPage },
+      headers: requestHeaders,
+      timeout: 60000
+    })
+
+    const payload = response.data.data
+    allData.push(...(payload.data || []))
+    lastPage = payload.last_page || 1
+    currentPage++
+  } while (currentPage <= lastPage)
 
   // Remove duplicates based on id_purchase
-  return data.filter((purchase: any, index: number, self: any[]) =>
+  return allData.filter((purchase: any, index: number, self: any[]) =>
     index === self.findIndex((t: any) => t.id_purchase === purchase.id_purchase)
   )
 }
