@@ -7,7 +7,6 @@ import StatsCards from '@/components/categories/CategoryStatsCards.vue'
 import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog.vue'
 import { useCategories } from '@/composables/useCategories'
 // import '@styles/index.scss'
-import { useDebounceFn } from '@vueuse/core'
 import { onMounted, watch } from 'vue'
 
 const {
@@ -56,15 +55,8 @@ const handleSearchUpdate = (value: string) => {
   search.value = value
 }
 
-// Debounced search
-const debouncedSearch = useDebounceFn(() => {
-  onSearch()
-}, 500)
-
-// Watch for search changes
-watch(search, () => {
-  debouncedSearch()
-})
+// Pencarian dijalankan hanya saat Enter / tombol Cari / clear
+// (event @search dari CategorySearchFilters memanggil onSearch)
 
 const handleStatusFilterUpdate = (value: string) => {
   statusFilter.value = value

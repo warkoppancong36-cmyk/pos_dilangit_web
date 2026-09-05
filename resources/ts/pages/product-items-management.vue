@@ -217,7 +217,8 @@ onMounted(async () => {
               prepend-inner-icon="mdi-magnify"
               hide-details
               clearable
-              @update:model-value="handleFiltersUpdate"
+              @keyup.enter="handleFiltersUpdate"
+              @click:clear="handleFiltersUpdate"
             />
           </VCol>
 

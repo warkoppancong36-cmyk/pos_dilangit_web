@@ -36,6 +36,8 @@
               prepend-inner-icon="tabler-search"
               clearable
               hide-details
+              @keyup.enter="applySearch"
+              @click:clear="searchQuery = ''; applySearch()"
             />
           </VCol>
           <VCol cols="12" md="2">
@@ -609,17 +611,14 @@ watch(localDialog, (newValue) => {
 })
 
 // Watch for filter changes - reload data from backend
-let filterTimeout: ReturnType<typeof setTimeout> | null = null
-watch([searchQuery, statusFilter, categoryFilter, dateFrom, dateTo], () => {
-  // Debounce filter changes
-  if (filterTimeout) {
-    clearTimeout(filterTimeout)
-  }
-  
-  filterTimeout = setTimeout(() => {
-    loadTransactions(1, pagination.value.per_page) // Reset to page 1 when filtering
-  }, 500) // 500ms debounce
+// (searchQuery sengaja tidak di-watch — pencarian dijalankan hanya saat Enter/clear)
+watch([statusFilter, categoryFilter, dateFrom, dateTo], () => {
+  loadTransactions(1, pagination.value.per_page) // Reset to page 1 when filtering
 })
+
+const applySearch = () => {
+  loadTransactions(1, pagination.value.per_page)
+}
 </script>
 
 <style scoped>

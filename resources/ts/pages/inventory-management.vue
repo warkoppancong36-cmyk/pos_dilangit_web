@@ -1100,7 +1100,8 @@ watch(totalItems, (newValue, oldValue) => {
                   prepend-inner-icon="tabler-search"
                   clearable
                   variant="outlined"
-                  @update:model-value="handleFiltersUpdate({ search: $event })"
+                  @keyup.enter="handleFiltersUpdate({ search: filters.search })"
+                  @click:clear="handleFiltersUpdate({ search: '' })"
                 />
               </VCol>
 

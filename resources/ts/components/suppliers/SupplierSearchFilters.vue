@@ -2,13 +2,6 @@
 import type { SupplierFilters } from '@/utils/api/SuppliersApi'
 import { computed, ref, watch } from 'vue'
 
-// Debounce utility
-let searchTimeout: any = null
-const debounceSearch = (callback: Function, delay: number = 500) => {
-  if (searchTimeout) clearTimeout(searchTimeout)
-  searchTimeout = setTimeout(callback, delay)
-}
-
 interface Props {
   filters: SupplierFilters
   loading?: boolean
@@ -40,23 +33,18 @@ watch(
 
 // Update filters
 const updateFilters = (key: keyof SupplierFilters, value: any) => {
-  
   localFilters.value[key] = value
-  
-  
-  // Emit immediately for non-search filters
+
+  // Emit immediately for non-search filters.
+  // Search hanya diterapkan saat Enter / tombol Cari / clear (via handleSearch).
   if (key !== 'search') {
     emit('update:filters', { ...localFilters.value })
-  } else {
-    // Debounce search
-    debounceSearch(() => {
-      emit('update:filters', { ...localFilters.value })
-    })
   }
 }
 
 // Search
 const handleSearch = () => {
+  emit('update:filters', { ...localFilters.value })
   emit('search')
 }
 
@@ -130,8 +118,8 @@ const hasActiveFilters = computed(() => {
             placeholder="Kota"
             variant="outlined"
             clearable
-            @update:model-value="(value) => updateFilters('city', value)"
-            @click:clear="updateFilters('city', '')"
+            @keyup.enter="handleSearch"
+            @click:clear="localFilters.city = ''; handleSearch()"
           />
         </VCol>
 
@@ -142,8 +130,8 @@ const hasActiveFilters = computed(() => {
             placeholder="Provinsi"
             variant="outlined"
             clearable
-            @update:model-value="(value) => updateFilters('province', value)"
-            @click:clear="updateFilters('province', '')"
+            @keyup.enter="handleSearch"
+            @click:clear="localFilters.province = ''; handleSearch()"
           />
         </VCol>
 
@@ -181,7 +169,7 @@ const hasActiveFilters = computed(() => {
             v-if="localFilters.search"
             size="small"
             closable
-            @click:close="updateFilters('search', '')"
+            @click:close="updateFilters('search', ''); handleSearch()"
           >
             Pencarian: {{ localFilters.search }}
           </VChip>

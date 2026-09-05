@@ -9,7 +9,8 @@
             prepend-inner-icon="mdi-magnify"
             clearable
             @update:model-value="$emit('update:search', $event)"
-            @click:clear="$emit('update:search', '')"
+            @keyup.enter="$emit('search')"
+            @click:clear="$emit('update:search', ''); $emit('search')"
           />
         </VCol>
         

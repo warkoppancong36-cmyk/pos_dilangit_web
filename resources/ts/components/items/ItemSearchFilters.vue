@@ -90,7 +90,7 @@ const hasActiveFilters = computed(() => {
             prepend-inner-icon="tabler-search"
             clearable
             variant="outlined"
-            @update:model-value="onFilterChange"
+            @keyup.enter="onFilterChange"
             @click:clear="localFilters.search = ''; onFilterChange()"
           />
         </VCol>

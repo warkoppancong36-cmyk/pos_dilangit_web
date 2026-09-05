@@ -20,25 +20,25 @@ meta:
       <div class="d-flex flex-column flex-sm-row gap-3 align-stretch align-sm-center w-100 w-md-auto">
         <!-- Date Range Filter -->
         <div class="d-flex flex-column flex-sm-row gap-2 align-stretch">
-          <VTextField
+          <AppDateTimePicker
             v-model="customStartDate"
-            type="date"
             label="Tanggal Mulai"
+            placeholder="Pilih tanggal"
             density="comfortable"
-            variant="outlined"
             hide-details
             class="flex-grow-1"
-            @change="onCustomDateChange"
+            style="min-inline-size: 150px;"
+            @update:model-value="onCustomDateChange"
           />
-          <VTextField
+          <AppDateTimePicker
             v-model="customEndDate"
-            type="date"
             label="Tanggal Akhir"
+            placeholder="Pilih tanggal"
             density="comfortable"
-            variant="outlined"
             hide-details
             class="flex-grow-1"
-            @change="onCustomDateChange"
+            style="min-inline-size: 150px;"
+            @update:model-value="onCustomDateChange"
           />
         </div>
 
@@ -781,8 +781,14 @@ const createSalesChart = () => {
             }
           },
           tooltip: {
-            titleColor: textColor,
-            bodyColor: textColor
+            backgroundColor: isDark.value ? 'rgba(33, 33, 33, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            titleColor: isDark.value ? '#FFFFFF' : '#000000',
+            bodyColor: isDark.value ? '#FFFFFF' : '#333333',
+            borderColor: isDark.value ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+            borderWidth: 1,
+            callbacks: {
+              label: (context: any) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`
+            }
           }
         },
         scales: {
@@ -936,8 +942,14 @@ const createPurchaseChart = () => {
           }
         },
         tooltip: {
-          titleColor: textColor,
-          bodyColor: textColor
+          backgroundColor: isDark.value ? 'rgba(33, 33, 33, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+          titleColor: isDark.value ? '#FFFFFF' : '#000000',
+          bodyColor: isDark.value ? '#FFFFFF' : '#333333',
+          borderColor: isDark.value ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+          borderWidth: 1,
+          callbacks: {
+            label: (context: any) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`
+          }
         }
       },
       scales: {

@@ -455,8 +455,10 @@ const clearAllPermissions = () => {
 }
 
 // Filter handlers
+// Input pencarian ditampung dulu; diterapkan ke filter hanya saat Enter (onSearch)
+const searchInput = ref('')
 const handleSearchUpdate = (value: string) => {
-  filters.value.search = value
+  searchInput.value = value
 }
 
 const handleStatusFilterUpdate = (value: 'all' | 'active' | 'inactive') => {
@@ -476,7 +478,8 @@ const handleSortOrderUpdate = (value: 'asc' | 'desc') => {
 }
 
 const onSearch = () => {
-  // Search is reactive, no need to do anything
+  // Terapkan input pencarian ke filter (list difilter client-side secara reaktif)
+  filters.value.search = searchInput.value
 }
 
 const closeUsersDialog = () => {
@@ -523,7 +526,7 @@ onMounted(async () => {
 
     <!-- Search and Filters -->
     <RoleSearchFilters
-      :search-value="filters.search"
+      :search-value="searchInput"
       :status-filter="filters.status"
       :permission-filter="filters.permission_filter"
       :sort-by="filters.sort_by"

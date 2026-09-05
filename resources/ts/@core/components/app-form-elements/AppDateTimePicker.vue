@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import FlatPickr from 'vue-flatpickr-component'
+import 'flatpickr/dist/flatpickr.css'
 import { useTheme } from 'vuetify'
 
 // @ts-expect-error There won't be declaration file for it
@@ -73,8 +74,10 @@ if (compAttrs.config && compAttrs.config.inline) {
 
 compAttrs.config = {
   ...compAttrs.config,
-  prevArrow: '<i class="tabler-chevron-left v-icon" style="font-size: 20px; height: 20px; width: 20px;"></i>',
-  nextArrow: '<i class="tabler-chevron-right v-icon" style="font-size: 20px; height: 20px; width: 20px;"></i>',
+  // Inline SVG chevrons: the template's icon CSS bundle has no tabler-* classes,
+  // so class-based arrows would render as invisible (but clickable) buttons.
+  prevArrow: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
+  nextArrow: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
 }
 
 // v-field clear prop

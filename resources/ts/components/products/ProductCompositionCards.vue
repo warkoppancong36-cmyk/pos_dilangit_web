@@ -62,6 +62,12 @@ const filters = ref({
   sortBy: 'name_asc'
 })
 
+// Input pencarian ditampung dulu; diterapkan ke filters.search hanya saat Enter/clear
+const searchInput = ref('')
+const applySearch = () => {
+  filters.value.search = searchInput.value || ''
+}
+
 // Filter options
 const stockStatusOptions = [
   { title: 'Semua Status', value: '' },
@@ -113,6 +119,7 @@ const openDetailDialog = (product: any) => {
 
 // Clear all filters
 const clearAllFilters = () => {
+  searchInput.value = ''
   filters.value = {
     search: '',
     stockStatus: '',
@@ -345,7 +352,7 @@ watch(() => [filters.value.search, filters.value.stockStatus, filters.value.crit
         <VRow>
           <VCol cols="12" md="3">
             <VTextField
-              v-model="filters.search"
+              v-model="searchInput"
               label="Cari Produk"
               placeholder="Nama produk, SKU, atau item..."
               variant="outlined"
@@ -353,6 +360,8 @@ watch(() => [filters.value.search, filters.value.stockStatus, filters.value.crit
               prepend-inner-icon="mdi-magnify"
               hide-details
               clearable
+              @keyup.enter="applySearch"
+              @click:clear="searchInput = ''; applySearch()"
             />
           </VCol>
           

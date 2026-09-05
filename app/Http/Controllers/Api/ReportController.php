@@ -452,6 +452,89 @@ class ReportController extends Controller
     }
 
     /**
+     * Per-product sales detail: every order line for one product within the
+     * same filters as salesReport, so the numbers reconcile with all_products.
+     */
+    public function productSalesDetail(Request $request): JsonResponse
+    {
+        try {
+            $productId = (int) $request->get('product_id');
+
+            if ($productId <= 0) {
+                return $this->errorResponse('product_id is required', null, 422);
+            }
+
+            $product = Product::where('id_product', $productId)->first();
+
+            if (!$product) {
+                return $this->notFoundResponse('Product not found');
+            }
+
+            $startDate = $this->getStartDate($request);
+            $endDate = $this->getEndDate($request);
+            $hourStart = $request->get('hour_start');
+            $hourEnd = $request->get('hour_end');
+
+            // Mirror the all_products query exactly (same joins and filters)
+            // so this detail always adds up to the totals shown in the table.
+            $query = DB::table('order_items')
+                ->join('orders', 'order_items.id_order', '=', 'orders.id_order')
+                ->join('products', 'order_items.id_product', '=', 'products.id_product')
+                ->select(
+                    'orders.order_date',
+                    'orders.order_number',
+                    'orders.order_type',
+                    'orders.status',
+                    'order_items.quantity',
+                    'order_items.unit_price',
+                    'order_items.total_price'
+                )
+                ->where('order_items.id_product', $productId)
+                ->where('orders.status', '!=', 'cancelled')
+                ->whereBetween('orders.order_date', [$startDate, $endDate]);
+
+            if ($hourStart && $hourEnd) {
+                $query->whereRaw('TIME(orders.order_date) >= ?', [$hourStart])
+                      ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
+            }
+
+            $rows = $query->orderBy('orders.order_date', 'desc')->get();
+
+            $totalRevenue = $rows->sum('total_price');
+
+            return $this->successResponse([
+                'product' => [
+                    'id' => $product->id_product,
+                    'name' => $product->name,
+                    'sku' => $product->sku,
+                ],
+                'summary' => [
+                    'transaction_count' => $rows->count(),
+                    'total_quantity' => floatval($rows->sum('quantity')),
+                    'total_revenue' => floatval($totalRevenue),
+                    'total_revenue_formatted' => $this->formatRupiah($totalRevenue),
+                ],
+                'transactions' => $rows->map(function ($row) {
+                    return [
+                        'order_date' => $row->order_date,
+                        'order_number' => $row->order_number,
+                        'order_type' => $row->order_type,
+                        'status' => $row->status,
+                        'quantity' => floatval($row->quantity),
+                        'unit_price' => floatval($row->unit_price),
+                        'unit_price_formatted' => $this->formatRupiah($row->unit_price),
+                        'total_price' => floatval($row->total_price),
+                        'total_price_formatted' => $this->formatRupiah($row->total_price),
+                    ];
+                }),
+            ], 'Product sales detail retrieved successfully');
+
+        } catch (\Exception $e) {
+            return $this->serverErrorResponse('Failed to retrieve product sales detail: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Enhanced Purchase Report with Business Intelligence
      */
     public function purchaseReport(Request $request): JsonResponse

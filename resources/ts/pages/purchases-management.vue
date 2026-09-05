@@ -94,14 +94,15 @@
         <VRow>
           <VCol cols="12" md="4">
             <VTextField
-              v-model="filters.search"
+              v-model="searchInput"
               label="Cari Purchase, Supplier, atau Item"
               placeholder="Masukkan nomor purchase, nama supplier, atau nama item"
               prepend-inner-icon="mdi-magnify"
               variant="outlined"
               density="compact"
               clearable
-              @click:clear="filters.search = ''"
+              @keyup.enter="applySearch"
+              @click:clear="searchInput = ''; applySearch()"
             />
           </VCol>
           <VCol cols="12" md="2">
@@ -614,6 +615,13 @@ const filters = ref({
   end_date: ''
 })
 
+// Input pencarian lokal — diterapkan ke filters.search hanya saat Enter/clear,
+// karena watch(filters) di bawah memicu loadPurchases pada tiap perubahan.
+const searchInput = ref('')
+const applySearch = () => {
+  filters.value.search = searchInput.value || ''
+}
+
 // Table headers
 const headers = [
   { title: 'Purchase & Supplier', key: 'purchase_info', sortable: false },
@@ -724,6 +732,7 @@ const loadStatistics = async () => {
 }
 
 const clearFilters = () => {
+  searchInput.value = ''
   filters.value = {
     search: '',
     status: '',

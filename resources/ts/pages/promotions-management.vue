@@ -65,8 +65,8 @@
               variant="outlined"
               density="compact"
               clearable
-              @input="debouncedSearch"
-              @click:clear="filters.search = ''; fetchPromotions()"
+              @keyup.enter="applySearch"
+              @click:clear="filters.search = ''; applySearch()"
             />
           </VCol>
           <VCol cols="12" md="2">
@@ -259,7 +259,6 @@ import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog.vue'
 import PromotionDialog from '@/components/promotions/PromotionDialog.vue'
 import PromotionViewDialog from '@/components/promotions/PromotionViewDialog.vue'
 import PromotionsApi, { type Promotion, type PromotionFilters, type PromotionStats } from '@/utils/api/PromotionsApi'
-import { useDebounceFn } from '@vueuse/core'
 import { onMounted, ref } from 'vue'
 
 // Data
@@ -331,11 +330,11 @@ const headers = [
   { title: 'Aksi', key: 'actions', sortable: false, align: 'center' as const }
 ] as const
 
-// Debounced search
-const debouncedSearch = useDebounceFn(() => {
+// Pencarian dijalankan hanya saat Enter atau clear
+const applySearch = () => {
   currentPage.value = 1
   fetchPromotions()
-}, 500)
+}
 
 // Methods
 const fetchPromotions = async () => {

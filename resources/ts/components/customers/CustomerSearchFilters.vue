@@ -11,7 +11,7 @@
             prepend-inner-icon="tabler-search"
             clearable
             variant="outlined"
-            @update:model-value="debouncedSearch"
+            @keyup.enter="onFilterChange"
             @click:clear="localFilters.search = ''; onFilterChange()"
           />
         </VCol>
@@ -95,7 +95,7 @@
                 prepend-inner-icon="tabler-map-pin"
                 clearable
                 variant="outlined"
-                @update:model-value="debouncedSearch"
+                @keyup.enter="onFilterChange"
                 @click:clear="localFilters.city = ''; onFilterChange()"
               />
             </VCol>
@@ -123,7 +123,7 @@
                 prepend-inner-icon="tabler-user-check"
                 clearable
                 variant="outlined"
-                @update:model-value="debouncedSearch"
+                @keyup.enter="onFilterChange"
                 @click:clear="localFilters.min_visits = undefined; onFilterChange()"
               />
             </VCol>
@@ -253,15 +253,6 @@ const activeFiltersCount = computed(() => {
   if (localFilters.value.min_visits) count++
   return count
 })
-
-// Debounced search
-let searchTimeout: NodeJS.Timeout
-const debouncedSearch = () => {
-  clearTimeout(searchTimeout)
-  searchTimeout = setTimeout(() => {
-    onFilterChange()
-  }, 500)
-}
 
 // Methods
 const onFilterChange = () => {

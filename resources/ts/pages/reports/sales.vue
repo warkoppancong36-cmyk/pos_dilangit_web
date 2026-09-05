@@ -64,22 +64,20 @@ meta:
           </VCol>
 
           <VCol cols="12" md="3" v-if="selectedPeriod === 'custom'">
-            <VTextField
+            <AppDateTimePicker
               v-model="customStartDate"
-              type="date"
               label="Tanggal Mulai"
-              variant="outlined"
+              placeholder="Pilih tanggal"
               density="compact"
               @update:model-value="loadReportData"
             />
           </VCol>
 
           <VCol cols="12" md="3" v-if="selectedPeriod === 'custom'">
-            <VTextField
+            <AppDateTimePicker
               v-model="customEndDate"
-              type="date"
               label="Tanggal Akhir"
-              variant="outlined"
+              placeholder="Pilih tanggal"
               density="compact"
               @update:model-value="loadReportData"
             />
@@ -508,6 +506,15 @@ meta:
                     {{ (item as any).avg_price }}
                   </span>
                 </template>
+                <template #item.actions="{ item }">
+                  <VBtn
+                    icon="mdi-eye"
+                    variant="text"
+                    size="small"
+                    color="primary"
+                    @click="openProductDetail(item as any)"
+                  />
+                </template>
               </VDataTable>
             </VCardText>
           </VCard>
@@ -672,6 +679,104 @@ meta:
         Silakan pilih periode yang berbeda atau periksa kembali filter Anda
       </p>
     </div>
+
+    <!-- Product Sales Detail Dialog -->
+    <VDialog v-model="productDetailDialog" max-width="960">
+      <VCard>
+        <VCardTitle class="d-flex align-center justify-space-between">
+          <div class="d-flex align-center gap-2">
+            <VIcon icon="mdi-receipt-text" />
+            Detail Penjualan: {{ productDetailData?.product?.name || selectedDetailProduct?.name || '' }}
+          </div>
+          <div class="d-flex align-center gap-2">
+            <VBtn
+              color="success"
+              variant="tonal"
+              size="small"
+              prepend-icon="mdi-file-excel"
+              :loading="productDetailExporting"
+              :disabled="productDetailLoading || !productDetailData"
+              @click="exportProductDetailToExcel"
+            >
+              Export Excel
+            </VBtn>
+            <VBtn
+              icon="mdi-close"
+              variant="text"
+              size="small"
+              @click="productDetailDialog = false"
+            />
+          </div>
+        </VCardTitle>
+        <VCardText>
+          <div v-if="productDetailLoading" class="text-center py-8">
+            <VProgressCircular indeterminate color="primary" size="48" class="mb-3" />
+            <p class="text-body-2 text-medium-emphasis mb-0">Memuat detail penjualan...</p>
+          </div>
+
+          <template v-else-if="productDetailData">
+            <!-- Summary -->
+            <VRow class="mb-4">
+              <VCol cols="12" md="4">
+                <VCard variant="tonal" color="info">
+                  <VCardText class="text-center pa-3">
+                    <div class="text-h6 font-weight-bold">{{ productDetailData.summary.transaction_count }}</div>
+                    <div class="text-caption">Transaksi</div>
+                  </VCardText>
+                </VCard>
+              </VCol>
+              <VCol cols="12" md="4">
+                <VCard variant="tonal" color="primary">
+                  <VCardText class="text-center pa-3">
+                    <div class="text-h6 font-weight-bold">{{ productDetailData.summary.total_quantity }}</div>
+                    <div class="text-caption">Qty Terjual</div>
+                  </VCardText>
+                </VCard>
+              </VCol>
+              <VCol cols="12" md="4">
+                <VCard variant="tonal" color="success">
+                  <VCardText class="text-center pa-3">
+                    <div class="text-h6 font-weight-bold">{{ productDetailData.summary.total_revenue_formatted }}</div>
+                    <div class="text-caption">Total Pendapatan</div>
+                  </VCardText>
+                </VCard>
+              </VCol>
+            </VRow>
+
+            <!-- Transactions -->
+            <VDataTable
+              :headers="productDetailHeaders"
+              :items="productDetailData.transactions"
+              :items-per-page="10"
+              class="elevation-0"
+              no-data-text="Tidak ada transaksi pada periode ini"
+            >
+              <template #item.order_date="{ item }">
+                {{ formatDateTime((item as any).order_date) }}
+              </template>
+              <template #item.order_type="{ item }">
+                <VChip size="small" color="secondary" variant="tonal" class="text-capitalize">
+                  {{ ((item as any).order_type || '-').replace('_', ' ') }}
+                </VChip>
+              </template>
+              <template #item.quantity="{ item }">
+                <VChip size="small" color="primary" variant="tonal">
+                  {{ (item as any).quantity }}
+                </VChip>
+              </template>
+              <template #item.total_price_formatted="{ item }">
+                <span class="font-weight-bold text-success">{{ (item as any).total_price_formatted }}</span>
+              </template>
+            </VDataTable>
+          </template>
+
+          <div v-else class="text-center py-8">
+            <VIcon icon="mdi-alert-circle-outline" size="48" class="text-medium-emphasis mb-3" />
+            <p class="text-body-2 text-medium-emphasis mb-0">Gagal memuat detail penjualan. Coba lagi.</p>
+          </div>
+        </VCardText>
+      </VCard>
+    </VDialog>
   </div>
 </template>
 
@@ -702,6 +807,13 @@ const customEndDate = ref('')
 const hourStart = ref('')
 const hourEnd = ref('')
 const allProductsSearch = ref('')
+
+// Product sales detail dialog state
+const productDetailDialog = ref(false)
+const productDetailLoading = ref(false)
+const productDetailExporting = ref(false)
+const productDetailData = ref<any>(null)
+const selectedDetailProduct = ref<any>(null)
 
 // Chart reference
 const dailySalesChart = ref<HTMLCanvasElement>()
@@ -763,7 +875,17 @@ const allProductsHeaders = [
   { title: 'Nama Produk', key: 'name', align: 'start' as const },
   { title: 'Jumlah Terjual', key: 'quantity', align: 'center' as const },
   { title: 'Total Pendapatan', key: 'revenue', align: 'end' as const },
-  { title: 'Harga Rata-rata', key: 'avg_price', align: 'end' as const }
+  { title: 'Harga Rata-rata', key: 'avg_price', align: 'end' as const },
+  { title: 'Detail', key: 'actions', align: 'center' as const, sortable: false }
+]
+
+const productDetailHeaders = [
+  { title: 'Waktu Transaksi', key: 'order_date', align: 'start' as const },
+  { title: 'No. Order', key: 'order_number', align: 'start' as const },
+  { title: 'Tipe', key: 'order_type', align: 'center' as const },
+  { title: 'Qty', key: 'quantity', align: 'center' as const },
+  { title: 'Harga Satuan', key: 'unit_price_formatted', align: 'end' as const },
+  { title: 'Subtotal', key: 'total_price_formatted', align: 'end' as const }
 ]
 
 // Utility functions
@@ -825,6 +947,96 @@ const formatDate = (dateString: string) => {
     month: 'short',
     year: 'numeric'
   })
+}
+
+const formatDateTime = (dateString: string) => {
+  // MySQL datetime "YYYY-MM-DD HH:mm:ss" needs the T separator for reliable parsing
+  const date = new Date(String(dateString).replace(' ', 'T'))
+  if (isNaN(date.getTime())) return dateString
+  return date.toLocaleString('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+// Export the open product's sales detail to Excel
+const exportProductDetailToExcel = async () => {
+  if (!productDetailData.value) return
+
+  productDetailExporting.value = true
+  try {
+    const XLSX = await import('xlsx')
+    const detail = productDetailData.value
+    const periodInfo = getSelectedPeriodLabel()
+
+    const sheetData = [
+      ['DETAIL PENJUALAN PRODUK'],
+      ['Produk:', detail.product?.name || ''],
+      ['SKU:', detail.product?.sku || '-'],
+      ['Periode:', periodInfo],
+      [],
+      ['Jumlah Transaksi:', detail.summary?.transaction_count || 0],
+      ['Total Qty Terjual:', detail.summary?.total_quantity || 0],
+      ['Total Pendapatan:', detail.summary?.total_revenue_formatted || 'Rp 0'],
+      [],
+      ['No', 'Waktu Transaksi', 'No. Order', 'Tipe', 'Status', 'Qty', 'Harga Satuan', 'Subtotal'],
+      ...(detail.transactions || []).map((trx: any, index: number) => [
+        index + 1,
+        formatDateTime(trx.order_date),
+        trx.order_number,
+        (trx.order_type || '-').replace('_', ' '),
+        trx.status,
+        trx.quantity,
+        trx.unit_price_formatted,
+        trx.total_price_formatted
+      ])
+    ]
+
+    const workbook = XLSX.utils.book_new()
+    const sheet = XLSX.utils.aoa_to_sheet(sheetData)
+    sheet['!cols'] = [
+      { wch: 5 }, { wch: 22 }, { wch: 22 }, { wch: 12 },
+      { wch: 12 }, { wch: 8 }, { wch: 15 }, { wch: 15 }
+    ]
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Detail Penjualan')
+
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+    const safeName = String(detail.product?.name || 'produk')
+      .replace(/[^a-zA-Z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .toLowerCase()
+    XLSX.writeFile(workbook, `detail-penjualan-${safeName}-${timestamp}.xlsx`)
+  } catch (error) {
+    console.error('Error exporting product sales detail:', error)
+  } finally {
+    productDetailExporting.value = false
+  }
+}
+
+// Open per-product sales detail dialog (uses the same active filters as the report)
+const openProductDetail = async (product: any) => {
+  selectedDetailProduct.value = product
+  productDetailDialog.value = true
+  productDetailLoading.value = true
+  productDetailData.value = null
+
+  try {
+    const params: any = getReportParams()
+    params.product_id = product.id
+
+    const response = await axios.get('/api/reports/sales/product-detail', { params })
+    if (response.data.success) {
+      productDetailData.value = response.data.data
+    }
+  } catch (error) {
+    console.error('Error loading product sales detail:', error)
+  } finally {
+    productDetailLoading.value = false
+  }
 }
 
 const getTopProductColor = (index: number) => {

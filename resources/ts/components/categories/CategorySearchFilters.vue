@@ -72,21 +72,9 @@ interface Emits {
 defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-// Debounce utility
-let searchTimeout: any = null
-const debounceSearch = (callback: Function, delay: number = 500) => {
-  if (searchTimeout) clearTimeout(searchTimeout)
-  searchTimeout = setTimeout(callback, delay)
-}
-
-// Handlers
+// Handlers — search hanya dijalankan saat Enter, tombol Cari, atau clear
 const handleSearchUpdate = (value: string) => {
   emit('update:search', value)
-  
-  // Debounce search
-  debounceSearch(() => {
-    emit('search')
-  })
 }
 
 const handleSearch = () => {

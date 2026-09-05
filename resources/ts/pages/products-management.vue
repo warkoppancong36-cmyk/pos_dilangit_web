@@ -120,19 +120,11 @@ const handleOpenRecipeDialog = (product: any) => {
   openRecipeCreateDialog(productId)
 }
 
-const handleOpenCompositionDialog = async (product: any) => {
+const handleOpenCompositionDialog = (product: any) => {
+  // Buka dialog langsung — ProductCompositionDialog mengambil komposisi
+  // produknya sendiri (per product_id), jadi tidak perlu menunggu fetch
+  // global product-items yang berat di sini.
   selectedCompositionProduct.value = product
-  
-  // Fetch composition data for this specific product
-  try {
-    await fetchProductItemsForComposition({
-      page: 1,
-      per_page: 100,
-      critical_only: false
-    })
-  } catch (error) {
-  }
-  
   compositionDialog.value = true
 }
 

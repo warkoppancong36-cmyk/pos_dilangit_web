@@ -76,7 +76,8 @@
               <VCol cols="12" md="3">
                 <VTextField
                   v-model="filters.search"
-                  @input="debouncedSearch"
+                  @keyup.enter="applySearch"
+                  @click:clear="filters.search = ''; applySearch()"
                   label="Search"
                   placeholder="Search by name, SKU..."
                   prepend-inner-icon="mdi-magnify"
@@ -261,7 +262,8 @@
               <VCol cols="12" md="4">
                 <VTextField
                   v-model="compositionFilters.search"
-                  @input="debouncedCompositionSearch"
+                  @keyup.enter="applyCompositionSearch"
+                  @click:clear="compositionFilters.search = ''; applyCompositionSearch()"
                   label="Search"
                   placeholder="Search compositions..."
                   prepend-inner-icon="mdi-magnify"
@@ -433,7 +435,6 @@
 
 <script>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
-import { debounce } from 'lodash'
 import BaseProductModal from './BaseProductModal.vue'
 import BaseProductCompositionModal from './BaseProductCompositionModal.vue'
 import { useBaseProductStore } from '@/stores/baseProduct'
@@ -592,9 +593,10 @@ export default {
       }
     }
 
-    const debouncedSearch = debounce(() => {
+    // Pencarian dijalankan hanya saat Enter atau clear
+    const applySearch = () => {
       loadBaseProducts(1)
-    }, 300)
+    }
 
     const changePage = (page) => {
       if (page >= 1 && page <= pagination.value.last_page) {
@@ -712,9 +714,9 @@ export default {
       }
     }
 
-    const debouncedCompositionSearch = debounce(() => {
+    const applyCompositionSearch = () => {
       loadCompositions(1)
-    }, 300)
+    }
 
     const openCompositionCreateDialog = () => {
       selectedComposition.value = null
@@ -804,7 +806,7 @@ export default {
       stockStatusItems,
       statusItems,
       loadBaseProducts,
-      debouncedSearch,
+      applySearch,
       changePage,
       openCreateModal,
       openEditModal,
@@ -833,7 +835,7 @@ export default {
       compositionFilters,
       compositionHeaders,
       loadCompositions,
-      debouncedCompositionSearch,
+      applyCompositionSearch,
       openCompositionCreateDialog,
       openCompositionCreateDialogForProduct,
       openCompositionEditDialog,

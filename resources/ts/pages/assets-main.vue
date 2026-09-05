@@ -123,7 +123,7 @@
               variant="outlined"
               density="compact"
               clearable
-              @update:model-value="debounceSearch"
+              @keyup.enter="applySearch"
               @click:clear="() => { searchQuery = ''; nextTick(() => fetchAssets()); }"
             />
           </VCol>
@@ -590,17 +590,13 @@ const getConditionColor = (condition: string) => {
   }
 }
 
-// Search debouncing
-let searchTimeout: NodeJS.Timeout
-const debounceSearch = () => {
-  clearTimeout(searchTimeout)
-  searchTimeout = setTimeout(() => {
-    if (searchQuery.value.trim() === '') {
-      fetchAssets() // Fetch all assets when search is empty
-    } else {
-      searchAssets(searchQuery.value)
-    }
-  }, 300)
+// Pencarian dijalankan hanya saat Enter atau clear
+const applySearch = () => {
+  if (searchQuery.value.trim() === '') {
+    fetchAssets() // Fetch all assets when search is empty
+  } else {
+    searchAssets(searchQuery.value)
+  }
 }
 
 // Filter management

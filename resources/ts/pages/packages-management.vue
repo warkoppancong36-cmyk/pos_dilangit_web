@@ -535,10 +535,16 @@ const getAvailabilityColor = (status: string) => {
 }
 
 // ==================== Watchers ====================
-watch([search, statusFilter, categoryFilter, packageTypeFilter], () => {
+// search sengaja tidak di-watch — pencarian dijalankan hanya saat Enter/clear
+watch([statusFilter, categoryFilter, packageTypeFilter], () => {
   currentPage.value = 1
   fetchPackages()
 })
+
+const applySearch = () => {
+  currentPage.value = 1
+  fetchPackages()
+}
 
 watch(currentPage, () => {
   fetchPackages()
@@ -615,6 +621,8 @@ onMounted(() => {
           prepend-inner-icon="tabler-search"
           clearable
           density="comfortable"
+          @keyup.enter="applySearch"
+          @click:clear="search = ''; applySearch()"
         />
       </VCol>
       <VCol

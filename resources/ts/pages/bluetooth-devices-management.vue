@@ -6,7 +6,6 @@ import SearchFilters from '@/components/bluetooth/SearchFilters.vue'
 import StatsCards from '@/components/bluetooth/StatsCards.vue'
 import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog.vue'
 import { useBluetoothDevices } from '@/composables/useBluetoothDevices'
-import { useDebounceFn } from '@vueuse/core'
 import { onMounted, watch } from 'vue'
 
 const {
@@ -57,15 +56,8 @@ const handleSearchUpdate = (value: string) => {
   search.value = value
 }
 
-// Debounced search
-const debouncedSearch = useDebounceFn(() => {
-  onSearch()
-}, 500)
-
-// Watch for search changes
-watch(search, () => {
-  debouncedSearch()
-})
+// Pencarian dijalankan hanya saat Enter / tombol refresh / clear
+// (event @search dari SearchFilters memanggil onSearch)
 
 const handleTypeFilterUpdate = (value: string) => {
   typeFilter.value = value
