@@ -328,15 +328,19 @@ const statusOptions = [
 ]
 
 // Payment method options (nilai mengikuti PaymentDialog / kolom payments.payment_method)
+// SEMENTARA: 'tunai' & 'kartu' ada karena split bill di aplikasi mobile mengirim
+// nilai itu (bukan 'cash'/'card'). Hapus dua opsi ini setelah data & APK dinormalisasi.
 const paymentMethodOptions = [
   { title: 'Semua Metode', value: '' },
   { title: 'Cash', value: 'cash' },
+  { title: 'Tunai (split bill)', value: 'tunai' },
   { title: 'QRIS', value: 'qris' },
   { title: 'E-Wallet', value: 'digital_wallet' },
   { title: 'Gojek', value: 'gojek' },
   { title: 'Grab', value: 'Grab' },
   { title: 'Shopee', value: 'Shopee' },
   { title: 'Debit/Credit Card', value: 'card' },
+  { title: 'Kartu (split bill)', value: 'kartu' },
   { title: 'Transfer Bank', value: 'bank_transfer' }
 ]
 
