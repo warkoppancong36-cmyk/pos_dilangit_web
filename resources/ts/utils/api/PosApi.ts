@@ -464,6 +464,7 @@ export class PosApi {
     status?: string
     category_id?: string
     payment_status?: string
+    payment_method?: string
     start_date?: string
     end_date?: string
   }) {
@@ -478,6 +479,7 @@ export class PosApi {
       if (params?.status) exportParams.status = params.status
       if (params?.category_id) exportParams.category_id = params.category_id
       if (params?.payment_status) exportParams.payment_status = params.payment_status
+      if (params?.payment_method) exportParams.payment_method = params.payment_method
 
       // Always send date parameters to prevent backend default filter
       // Map date parameters: start_date/end_date -> date_from/date_to
@@ -504,6 +506,7 @@ export class PosApi {
     status?: string
     category_id?: string
     payment_status?: string
+    payment_method?: string
     start_date?: string
     end_date?: string
   }) {

@@ -1,1 +1,0 @@
-import{_ as o}from"./UserProfile.vue_vue_type_script_setup_true_lang-CjaDKnY2.js";import"./main-DYSyDU4v.js";import"./VAvatar-CBQHi5FA.js";import"./VImg-Bt0gTyk5.js";import"./VMenu-B_T8-ibG.js";import"./VOverlay-BY-a8iO8.js";import"./forwardRefs-B931MWyl.js";import"./VList-CuJWU3Gp.js";import"./VDivider-BGfH27tA.js";import"./VBadge-1LaWyWnG.js";export{o as default};

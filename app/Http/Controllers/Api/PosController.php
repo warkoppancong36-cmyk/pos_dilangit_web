@@ -267,6 +267,11 @@ class PosController extends Controller
             if ($request->filled('month')) {
                 $whereConditions[] = [DB::raw('DATE_FORMAT(order_date, "%Y-%m")'), '=', $request->month];
             }
+
+            // Payment method filter
+            if ($request->filled('payment_method')) {
+                $whereConditions[] = ['payment_method', '=', $request->payment_method];
+            }
             
             // Hour filters - need to parse from order_time
             $query = DB::table('report_transaction_cache');

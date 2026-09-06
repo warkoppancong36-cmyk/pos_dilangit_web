@@ -52,6 +52,17 @@
             />
           </VCol>
           <VCol cols="12" md="2">
+            <VSelect
+              v-model="paymentMethodFilter"
+              :items="paymentMethodOptions"
+              label="Metode Pembayaran"
+              variant="outlined"
+              density="compact"
+              clearable
+              hide-details
+            />
+          </VCol>
+          <VCol cols="12" md="2">
             <VTextField
               v-model="dateFrom"
               label="Dari Tanggal"
@@ -275,6 +286,7 @@ const loading = ref(false)
 const transactions = ref<any[]>([])
 const searchQuery = ref('')
 const statusFilter = ref('')
+const paymentMethodFilter = ref('')
 const categoryFilter = ref('')
 const dateFrom = ref(new Date().toISOString().split('T')[0]) // Default: today
 const dateTo = ref(new Date().toISOString().split('T')[0])   // Default: today
@@ -308,10 +320,24 @@ const headers = [
 
 // Status options
 const statusOptions = [
+  { title: 'Semua Status', value: '' },
   { title: 'Pending', value: 'pending' },
   { title: 'Diproses', value: 'preparing' },
   { title: 'Selesai', value: 'completed' },
   { title: 'Dibatalkan', value: 'cancelled' }
+]
+
+// Payment method options (nilai mengikuti PaymentDialog / kolom payments.payment_method)
+const paymentMethodOptions = [
+  { title: 'Semua Metode', value: '' },
+  { title: 'Cash', value: 'cash' },
+  { title: 'QRIS', value: 'qris' },
+  { title: 'E-Wallet', value: 'digital_wallet' },
+  { title: 'Gojek', value: 'gojek' },
+  { title: 'Grab', value: 'Grab' },
+  { title: 'Shopee', value: 'Shopee' },
+  { title: 'Debit/Credit Card', value: 'card' },
+  { title: 'Transfer Bank', value: 'bank_transfer' }
 ]
 
 // Items per page options
@@ -349,6 +375,9 @@ const loadTransactions = async (page: number = 1, perPage: number = 15) => {
     }
     if (statusFilter.value) {
       params.status = statusFilter.value
+    }
+    if (paymentMethodFilter.value) {
+      params.payment_method = paymentMethodFilter.value
     }
     if (categoryFilter.value) {
       params.category_id = categoryFilter.value
@@ -564,6 +593,9 @@ const exportTransactions = async () => {
     if (statusFilter.value) {
       params.payment_status = statusFilter.value  // Map status to payment_status for export API
     }
+    if (paymentMethodFilter.value) {
+      params.payment_method = paymentMethodFilter.value
+    }
     if (categoryFilter.value) {
       params.category_id = categoryFilter.value
     }
@@ -612,7 +644,7 @@ watch(localDialog, (newValue) => {
 
 // Watch for filter changes - reload data from backend
 // (searchQuery sengaja tidak di-watch — pencarian dijalankan hanya saat Enter/clear)
-watch([statusFilter, categoryFilter, dateFrom, dateTo], () => {
+watch([statusFilter, paymentMethodFilter, categoryFilter, dateFrom, dateTo], () => {
   loadTransactions(1, pagination.value.per_page) // Reset to page 1 when filtering
 })
 
