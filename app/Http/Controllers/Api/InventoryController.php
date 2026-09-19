@@ -535,12 +535,19 @@ class InventoryController extends Controller
                 'cost_per_unit' => 'nullable|numeric|min:0'
             ]);
 
-            // Find inventory by item_id
-            $inventory = Inventory::where('id_item', $validated['item_id'])->first();
-            
-            if (!$inventory) {
-                return $this->errorResponse('Inventory record not found for this item', null, 404);
-            }
+            // Find inventory by item_id, or create it if this item has no stock
+            // record yet. Items created in admin start without an inventory row,
+            // so older items would otherwise error out on stock adjustment.
+            $inventory = Inventory::firstOrCreate(
+                ['id_item' => $validated['item_id']],
+                [
+                    'current_stock' => 0,
+                    'reserved_stock' => 0,
+                    'reorder_level' => 0,
+                    'average_cost' => $validated['cost_per_unit'] ?? 0,
+                    'created_by' => auth()->id(),
+                ]
+            );
 
             $stockBefore = $inventory->current_stock;
             $newStock = $validated['quantity'];

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Inventory;
 use App\Models\Item;
 use App\Models\Supplier;
 use Illuminate\Http\Request;
@@ -192,9 +193,23 @@ class ItemController extends Controller
                 }
             }
             
+            // Ensure a matching inventory (stock) record exists for this item.
+            // Item creation and stock tracking were previously decoupled, which left
+            // items without an inventory row and made stock updates fail on mobile.
+            Inventory::firstOrCreate(
+                ['id_item' => $item->id_item],
+                [
+                    'current_stock' => $validated['current_stock'] ?? 0,
+                    'reserved_stock' => 0,
+                    'reorder_level' => $validated['minimum_stock'] ?? 0,
+                    'average_cost' => $validated['cost_per_unit'] ?? 0,
+                    'created_by' => Auth::id(),
+                ]
+            );
+
             DB::commit();
 
-            $item->load(['creator']);
+            $item->load(['creator', 'inventory']);
 
             return response()->json([
                 'success' => true,
