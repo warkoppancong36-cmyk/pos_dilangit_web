@@ -300,6 +300,12 @@ class KitchenController extends Controller
 
         $kitchenOrder->save();
 
+        if ($oldStatus !== $kitchenOrder->status) {
+            \App\Services\Push\KitchenPushDispatcher::afterCommit(
+                fn (\App\Contracts\KitchenPushNotifier $push) => $push->statusChanged($kitchenOrder)
+            );
+        }
+
         Log::info('Kitchen order status updated (new table)', [
             'kitchen_order_id' => $kitchenOrder->id_kitchen_order,
             'order_number' => $kitchenOrder->order_number,

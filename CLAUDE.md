@@ -45,6 +45,10 @@ HPP = cost of production. Products have a `cost` field updated by `HPPCalculatio
 
 `KitchenOrder::findOrCreateForOrder()` merges new items into an existing **pending** kitchen order for the same `id_order`. If the existing kitchen order is already `in_progress`, a new kitchen order is created so kitchen staff sees a fresh notification. The kitchen order lifecycle is: `pending` → `in_progress` (acknowledged) → `completed`.
 
+**Push (FCM):** setiap kitchen order dibuat / ditambah item / berubah status, `KitchenPushDispatcher` mengirim event ke `KitchenPushNotifier` setelah DB commit dan setelah response (`DB::afterCommit` + `defer`, tanpa queue worker). Trigger ada di `KitchenOrder::createFromOrderItems()`, `KitchenOrder::addItems()`, dan `KitchenController::updateKitchenOrderStatusNewTable()` — jangan kirim push dari controller lain. `FcmClient` berbicara langsung ke FCM HTTP v1 (tanpa library; `kreait/firebase-php` bentrok dengan `lcobucci/jwt` 4.0.4 yang dikunci `tymon/jwt-auth`). `FCM_ENABLED=false` memakai `NullKitchenPushNotifier`. Push hanyalah sinyal; Flutter selalu re-fetch `GET /kitchen/orders`. Lihat `docs/KITCHEN_PUSH_FCM.md`.
+
+**Testing:** MySQL lokal tidak selalu hidup — jalankan test dengan `DB_CONNECTION=sqlite DB_DATABASE=":memory:" php artisan test`.
+
 ### POS Domain Concepts
 - **PPN** = Pajak Pertambahan Nilai (Indonesian VAT), managed via `PpnController`
 - **Base Products** = raw ingredients (`base_products` table) used in recipes

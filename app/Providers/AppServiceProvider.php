@@ -19,7 +19,24 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(\App\Services\Push\FcmClient::class, function () {
+            return new \App\Services\Push\FcmClient(
+                config('services.fcm.credentials'),
+                config('services.fcm.timeout')
+            );
+        });
+
+        // FCM_ENABLED=false (lokal/testing) → push jadi no-op
+        $this->app->bind(\App\Contracts\KitchenPushNotifier::class, function ($app) {
+            if (! config('services.fcm.enabled')) {
+                return new \App\Services\Push\NullKitchenPushNotifier();
+            }
+
+            return new \App\Services\Push\FcmKitchenPushNotifier(
+                $app->make(\App\Services\Push\FcmClient::class),
+                config('services.fcm.kitchen_topic')
+            );
+        });
     }
 
     /**

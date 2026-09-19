@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    // Push order ke Kitchen Display (lihat docs/KITCHEN_PUSH_FCM.md)
+    'fcm' => [
+        'enabled' => (bool) env('FCM_ENABLED', false),
+        'kitchen_topic' => env('FCM_KITCHEN_TOPIC', 'kitchen-orders'),
+        'credentials' => env('FIREBASE_CREDENTIALS', 'storage/app/firebase/firebase-credentials.json'),
+        'timeout' => (int) env('FCM_TIMEOUT', 5),
+    ],
+
 ];

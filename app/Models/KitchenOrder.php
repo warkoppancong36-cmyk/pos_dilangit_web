@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Contracts\KitchenPushNotifier;
+use App\Services\Push\KitchenPushDispatcher;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -189,9 +191,14 @@ class KitchenOrder extends Model
                 ]);
             }
 
-            // Touch updated_at so kitchen display polling detects the change
+            // Touch updated_at; perubahan item dikabarkan ke Kitchen Display lewat push (lihat bawah)
             $this->touch();
         });
+
+        $newItemsCount = count($items);
+        KitchenPushDispatcher::afterCommit(
+            fn (KitchenPushNotifier $push) => $push->itemsAdded($this, $newItemsCount)
+        );
     }
 
     /**
@@ -252,6 +259,10 @@ class KitchenOrder extends Model
                 'status' => 'pending',
             ]);
         }
+
+        KitchenPushDispatcher::afterCommit(
+            fn (KitchenPushNotifier $push) => $push->orderCreated($kitchenOrder)
+        );
 
         return $kitchenOrder;
     }
