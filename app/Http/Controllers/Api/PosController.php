@@ -759,7 +759,7 @@ class PosController extends Controller
     /**
      * Remove item from order
      */
-    public function removeItem(Order $order, OrderItem $orderItem): JsonResponse
+    public function removeItem(Request $request, Order $order, OrderItem $orderItem): JsonResponse
     {
         try {
             DB::beginTransaction();
@@ -788,7 +788,11 @@ class PosController extends Controller
             }
 
             // Check if this item exists in kitchen display and remove if still pending
-            $kitchenOrderItems = KitchenOrderItem::where('id_order_item', $orderItem->id_order_item)->get();
+            // Item yang dipindah karena split bill tetap harus dimasak — biarkan di Kitchen Display
+            // (FK id_order_item ber-onDelete('set null'), jadi barisnya selamat saat order item dihapus).
+            $kitchenOrderItems = $request->boolean('split_bill')
+                ? collect()
+                : KitchenOrderItem::where('id_order_item', $orderItem->id_order_item)->get();
 
             foreach ($kitchenOrderItems as $kitchenItem) {
                 // Get the kitchen order to check status
@@ -2319,7 +2323,11 @@ class PosController extends Controller
 
             // AUTO-CREATE KITCHEN ORDER untuk items yang available_in_kitchen
             // Ini yang membuat data muncul di Kitchen Display
-            $this->createKitchenOrderForOrder($order, $request->input('created_by_station', 'kasir'));
+            // Split bill hanya memecah tagihan: item-nya sudah dikirim ke dapur lewat order asli,
+            // jadi tidak boleh muncul (dan tercetak checker-nya) untuk kedua kali.
+            if (! $request->filled('original_order_id')) {
+                $this->createKitchenOrderForOrder($order, $request->input('created_by_station', 'kasir'));
+            }
 
             DB::commit();
 
