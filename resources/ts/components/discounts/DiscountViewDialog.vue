@@ -301,6 +301,7 @@ const getTypeColor = (type: string): string => {
   const colors = {
     percentage: 'primary',
     fixed_amount: 'success',
+    fixed_price: 'info',
     buy_x_get_y: 'warning'
   }
   return colors[type as keyof typeof colors] || 'secondary'

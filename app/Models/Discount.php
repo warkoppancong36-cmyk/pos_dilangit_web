@@ -142,7 +142,13 @@ class Discount extends Model
             case 'fixed_amount':
                 $discountAmount = $this->value;
                 break;
-                
+
+            case 'fixed_price':
+                // Final price is always this discount's value, regardless of the
+                // original price — including when the value is higher (by design).
+                $discountAmount = $orderTotal - $this->value;
+                break;
+
             case 'buy_x_get_y':
                 // Implement buy X get Y logic based on conditions
                 $discountAmount = $this->calculateBuyXGetYDiscount($products);
@@ -198,6 +204,7 @@ class Discount extends Model
             case 'percentage':
                 return $this->value . '%';
             case 'fixed_amount':
+            case 'fixed_price':
                 return 'Rp ' . number_format($this->value, 0, ',', '.');
             default:
                 return $this->value;

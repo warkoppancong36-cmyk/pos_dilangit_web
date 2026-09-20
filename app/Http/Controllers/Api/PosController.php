@@ -406,7 +406,7 @@ class PosController extends Controller
             'price' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string|max:255',
             'discount_amount' => 'nullable|numeric|min:0',
-            'discount_type' => 'nullable|in:fixed,percentage',
+            'discount_type' => 'nullable|in:fixed,percentage,fixed_price',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
             // Kitchen notification fields
             'available_kitchen' => 'nullable|boolean',
@@ -525,11 +525,20 @@ class PosController extends Controller
                     'quantity' => $request->quantity,
                     'unit_price' => $request->unit_price ?? $product->unit_price,
                     'total_price' => $request->total_price ?? $product->total_price,
-                    'discount_amount' => $request->discount_amount ?? 0,
-                    'discount_type' => $request->discount_type,
-                    'discount_percentage' => $request->discount_percentage ?? 0,
                     'notes' => $request->notes ?? null,
                 ]);
+
+                // Apply a discount the same way updateItemDiscount() does, so a
+                // fixed_price discount lands on an exact final price instead of
+                // being subtracted from it like fixed_amount would.
+                if ($request->filled('discount_type')) {
+                    $orderItem->applyDiscount(
+                        $request->discount_type === 'percentage'
+                            ? $request->discount_percentage
+                            : $request->discount_amount,
+                        $request->discount_type
+                    );
+                }
 
                 // Update inventory based on recipe consumption
                 $this->consumeRecipeItems($product, $request->quantity, $request->cashier_id, $order->id_order, $order->order_type);
@@ -616,7 +625,7 @@ class PosController extends Controller
             'quantity' => 'required|integer|min:1',
             'notes' => 'nullable|string|max:255',
             'discount_amount' => 'nullable|numeric|min:0',
-            'discount_type' => 'nullable|in:fixed,percentage',
+            'discount_type' => 'nullable|in:fixed,percentage,fixed_price',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
         ]);
 
@@ -703,7 +712,7 @@ class PosController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'discount_amount' => 'nullable|numeric|min:0',
-            'discount_type' => 'nullable|in:fixed,percentage',
+            'discount_type' => 'nullable|in:fixed,percentage,fixed_price',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
         ]);
 
@@ -717,6 +726,8 @@ class PosController extends Controller
             // Apply discount using the model method
             if ($request->discount_type === 'percentage') {
                 $orderItem->applyDiscount($request->discount_percentage, 'percentage');
+            } else if ($request->discount_type === 'fixed_price') {
+                $orderItem->applyDiscount($request->discount_amount, 'fixed_price');
             } else if ($request->discount_type === 'fixed') {
                 $orderItem->applyDiscount($request->discount_amount, 'fixed');
             } else {

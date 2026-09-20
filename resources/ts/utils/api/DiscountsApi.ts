@@ -6,7 +6,7 @@ export interface Discount {
   code: string
   name: string
   description?: string
-  type: 'percentage' | 'fixed_amount' | 'buy_x_get_y'
+  type: 'percentage' | 'fixed_amount' | 'fixed_price' | 'buy_x_get_y'
   value: number
   minimum_amount?: number
   maximum_discount?: number
@@ -74,7 +74,7 @@ export interface CreateDiscountRequest {
   code: string
   name: string
   description?: string
-  type: 'percentage' | 'fixed_amount' | 'buy_x_get_y'
+  type: 'percentage' | 'fixed_amount' | 'fixed_price' | 'buy_x_get_y'
   value: number
   minimum_amount?: number
   maximum_discount?: number
@@ -194,6 +194,7 @@ class DiscountsApi {
       case 'percentage':
         return `${discount.value}%`
       case 'fixed_amount':
+      case 'fixed_price':
         return `Rp ${this.formatCurrency(discount.value)}`
       default:
         return discount.value.toString()
@@ -211,6 +212,7 @@ class DiscountsApi {
     const types = {
       percentage: 'Persentase',
       fixed_amount: 'Jumlah Tetap',
+      fixed_price: 'Harga Tetap',
       buy_x_get_y: 'Beli X Dapat Y'
     }
     return types[type as keyof typeof types] || type
@@ -269,6 +271,12 @@ class DiscountsApi {
         break
       case 'fixed_amount':
         discountAmount = discount.value
+        break
+      case 'fixed_price':
+        // Final price is always discount.value, regardless of orderTotal —
+        // including when it's higher (by design). May be negative here,
+        // which is what makes orderTotal - discountAmount land on value.
+        discountAmount = orderTotal - discount.value
         break
       case 'buy_x_get_y':
         // Complex logic would be implemented here

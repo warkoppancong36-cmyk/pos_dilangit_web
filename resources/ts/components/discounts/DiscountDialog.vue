@@ -124,7 +124,7 @@
                 :rules="valueRules"
                 variant="outlined"
                 type="number"
-                :prefix="formData.type === 'fixed_amount' ? 'Rp' : undefined"
+                :prefix="['fixed_amount', 'fixed_price'].includes(formData.type) ? 'Rp' : undefined"
                 :suffix="formData.type === 'percentage' ? '%' : undefined"
                 min="0"
                 required
@@ -350,6 +350,7 @@ const onMaximumDiscountInput = (value: string) => {
 const discountTypes = [
   { title: 'Persentase (%)', value: 'percentage' },
   { title: 'Jumlah Tetap (Rp)', value: 'fixed_amount' },
+  { title: 'Harga Tetap (Rp)', value: 'fixed_price' },
   { title: 'Beli X Dapat Y', value: 'buy_x_get_y' }
 ]
 
@@ -439,6 +440,8 @@ const getValueLabel = () => {
       return 'Persentase Diskon'
     case 'fixed_amount':
       return 'Jumlah Diskon'
+    case 'fixed_price':
+      return 'Harga Akhir (harga produk langsung jadi segini)'
     case 'buy_x_get_y':
       return 'Persentase/Jumlah Diskon'
     default:

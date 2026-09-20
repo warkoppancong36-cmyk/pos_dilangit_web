@@ -106,11 +106,18 @@ class OrderItem extends Model
     public function applyDiscount($amount, $type = 'fixed')
     {
         $this->discount_type = $type;
-        
+
         if ($type === 'percentage') {
             $this->discount_percentage = $amount;
             $subtotal = $this->quantity * $this->unit_price;
             $this->discount_amount = ($subtotal * $amount) / 100;
+        } elseif ($type === 'fixed_price') {
+            // $amount is the target final line total — always applies, even
+            // when higher than the line's own subtotal (by design), same as
+            // Discount::calculateDiscount() on the discounts/voucher side.
+            $subtotal = $this->quantity * $this->unit_price;
+            $this->discount_amount = $subtotal - $amount;
+            $this->discount_percentage = null;
         } else {
             $this->discount_amount = $amount;
             $this->discount_percentage = null;
