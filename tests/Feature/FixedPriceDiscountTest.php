@@ -101,4 +101,29 @@ class FixedPriceDiscountTest extends TestCase
 
         $this->assertSame('Rp 20.000', $discount->formatted_value);
     }
+
+    /**
+     * Regression: maximum_discount is a knob for percentage/fixed_amount
+     * discounts ("don't discount more than Rp X"). It must NOT apply to
+     * fixed_price, or the final price stops being exactly the discount's
+     * value whenever an admin also sets a maximum_discount.
+     */
+    public function test_maximum_discount_cap_does_not_affect_fixed_price(): void
+    {
+        $discount = Discount::create([
+            'code' => 'HARGA20K',
+            'name' => 'Harga Tetap 20rb',
+            'type' => 'fixed_price',
+            'value' => 20000,
+            'maximum_discount' => 10000, // Should be ignored for fixed_price
+            'valid_from' => now()->subDay(),
+            'valid_until' => now()->addMonth(),
+            'active' => true,
+        ]);
+
+        $discountAmount = $discount->calculateDiscount(50000);
+        $finalPrice = 50000 - $discountAmount;
+
+        $this->assertSame(20000.0, $finalPrice);
+    }
 }

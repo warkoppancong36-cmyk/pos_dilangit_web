@@ -405,7 +405,10 @@ class PosController extends Controller
             'quantity' => 'required|integer|min:1',
             'price' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string|max:255',
-            'discount_amount' => 'nullable|numeric|min:0',
+            // fixed_price MUST carry a value — applyDiscount() would otherwise
+            // treat a missing amount as 0, making the item's price become
+            // Rp 0 (subtotal - 0 target = "discount" the entire subtotal away).
+            'discount_amount' => 'nullable|required_if:discount_type,fixed_price|numeric|min:0',
             'discount_type' => 'nullable|in:fixed,percentage,fixed_price',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
             // Kitchen notification fields
@@ -467,12 +470,21 @@ class PosController extends Controller
                     'quantity' => $request->quantity,
                     'unit_price' => $package->package_price,
                     'total_price' => $package->package_price * $request->quantity,
-                    'discount_amount' => $request->discount_amount ?? 0,
-                    'discount_type' => $request->discount_type,
-                    'discount_percentage' => $request->discount_percentage ?? 0,
                     'notes' => $request->notes ?? null,
                 ]);
-                
+
+                // Same as the product branch below: delegate to applyDiscount()
+                // so fixed_price lands on an exact final price instead of being
+                // subtracted like fixed_amount would.
+                if ($request->filled('discount_type')) {
+                    $orderItem->applyDiscount(
+                        $request->discount_type === 'percentage'
+                            ? $request->discount_percentage
+                            : $request->discount_amount,
+                        $request->discount_type
+                    );
+                }
+
                 // Consume items for each product in package and check for kitchen items
                 foreach ($package->items as $packageItem) {
                     $product = $packageItem->product;
@@ -624,7 +636,7 @@ class PosController extends Controller
         $validator = Validator::make($request->all(), [
             'quantity' => 'required|integer|min:1',
             'notes' => 'nullable|string|max:255',
-            'discount_amount' => 'nullable|numeric|min:0',
+            'discount_amount' => 'nullable|required_if:discount_type,fixed_price|numeric|min:0',
             'discount_type' => 'nullable|in:fixed,percentage,fixed_price',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
         ]);
@@ -673,13 +685,47 @@ class PosController extends Controller
                 }
             }
 
-            // Update order item
+            // Capture the discount as it stood BEFORE the quantity changes,
+            // so a percentage/fixed_price discount can be correctly
+            // re-derived against the new subtotal below.
+            $oldSubtotalForDiscount = $oldQuantity * $orderItem->unit_price;
+            $existingDiscountType = $orderItem->discount_type;
+            $existingDiscountAmount = $orderItem->discount_amount;
+            $existingDiscountPercentage = $orderItem->discount_percentage;
+
+            // Update order item quantity (this alone would leave a stale
+            // discount_amount from the OLD subtotal — see applyDiscount() below).
             $orderItem->updateQuantity($newQuantity);
             $orderItem->notes = $request->notes;
-            $orderItem->discount_amount = $request->discount_amount ?? $orderItem->discount_amount;
-            $orderItem->discount_type = $request->discount_type ?? $orderItem->discount_type;
-            $orderItem->discount_percentage = $request->discount_percentage ?? $orderItem->discount_percentage;
-            $orderItem->save();
+
+            $discountType = $request->discount_type ?? $existingDiscountType;
+
+            if ($discountType === 'percentage') {
+                // Re-apply against the NEW subtotal so the % actually reflects it.
+                $percentage = $request->filled('discount_percentage')
+                    ? $request->discount_percentage
+                    : $existingDiscountPercentage;
+                $orderItem->applyDiscount($percentage, 'percentage');
+            } elseif ($discountType === 'fixed_price') {
+                // Re-apply so the line still pins at its ORIGINAL target price,
+                // even though quantity (and therefore the subtotal) changed.
+                $targetPrice = $request->filled('discount_amount')
+                    ? $request->discount_amount
+                    : ($oldSubtotalForDiscount - $existingDiscountAmount);
+                $orderItem->applyDiscount($targetPrice, 'fixed_price');
+            } elseif ($discountType === 'fixed') {
+                // A flat subtract amount is quantity-independent by definition,
+                // so re-applying it verbatim is correct (and keeps this branch
+                // consistent with the other two instead of a bare assignment).
+                $amount = $request->filled('discount_amount')
+                    ? $request->discount_amount
+                    : $existingDiscountAmount;
+                $orderItem->applyDiscount($amount, 'fixed');
+            } else {
+                // No discount on this item — just persist the quantity/notes
+                // change (calculateTotalPrice() already ran via updateQuantity()).
+                $orderItem->save();
+            }
 
             // Manually recalculate order totals since calculateTotals() is disabled
             $orderItems = $order->orderItems;
@@ -711,7 +757,7 @@ class PosController extends Controller
     public function updateItemDiscount(Request $request, Order $order, OrderItem $orderItem): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'discount_amount' => 'nullable|numeric|min:0',
+            'discount_amount' => 'nullable|required_if:discount_type,fixed_price|numeric|min:0',
             'discount_type' => 'nullable|in:fixed,percentage,fixed_price',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
         ]);

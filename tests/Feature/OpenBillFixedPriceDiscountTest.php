@@ -158,4 +158,111 @@ class OpenBillFixedPriceDiscountTest extends TestCase
         $this->assertSame('fixed_price', $orderItem->discount_type);
         $this->assertEquals(20000, $orderItem->total_price);
     }
+
+    /**
+     * Regression: changing an item's QUANTITY (without resending discount
+     * fields — e.g. the cashier only touches the quantity stepper) must not
+     * silently break an already-applied fixed_price guarantee.
+     */
+    public function test_changing_quantity_keeps_fixed_price_discount_intact(): void
+    {
+        $orderItem = OrderItem::create([
+            'id_order' => $this->order->id_order,
+            'id_product' => $this->product->id_product,
+            'item_type' => 'product',
+            'item_name' => $this->product->name,
+            'item_sku' => 'SKU-EKS',
+            'quantity' => 1,
+            'unit_price' => 50000,
+            'total_price' => 50000,
+        ]);
+        $orderItem->applyDiscount(20000, 'fixed_price');
+        $this->assertEquals(20000, $orderItem->fresh()->total_price);
+
+        // Cashier bumps quantity to 2 via the quantity endpoint only — no
+        // discount fields resent, matching how the mobile app's quantity
+        // stepper calls this endpoint.
+        $response = $this->putJson(
+            "/api/pos/orders/{$this->order->id_order}/items/{$orderItem->id_order_item}",
+            ['quantity' => 2]
+        );
+
+        $response->assertSuccessful();
+
+        $orderItem->refresh();
+        $this->assertSame('fixed_price', $orderItem->discount_type);
+        $this->assertEquals(
+            20000,
+            $orderItem->total_price,
+            'A fixed_price discount must still pin the line at exactly its value after a quantity change, not silently fall back to (new subtotal - stale discount_amount).'
+        );
+    }
+
+    /**
+     * A plain 'fixed' (subtract) discount is a FLAT amount by definition — it
+     * must stay 10000 regardless of quantity, so the total scales with the
+     * new subtotal minus that same flat amount.
+     */
+    public function test_changing_quantity_keeps_fixed_amount_discount_flat(): void
+    {
+        $orderItem = OrderItem::create([
+            'id_order' => $this->order->id_order,
+            'id_product' => $this->product->id_product,
+            'item_type' => 'product',
+            'item_name' => $this->product->name,
+            'item_sku' => 'SKU-EKS',
+            'quantity' => 1,
+            'unit_price' => 50000,
+            'total_price' => 50000,
+        ]);
+        $orderItem->applyDiscount(10000, 'fixed');
+        $this->assertEquals(40000, $orderItem->fresh()->total_price);
+
+        $response = $this->putJson(
+            "/api/pos/orders/{$this->order->id_order}/items/{$orderItem->id_order_item}",
+            ['quantity' => 3]
+        );
+
+        $response->assertSuccessful();
+
+        $orderItem->refresh();
+        $this->assertEquals(10000, $orderItem->discount_amount);
+        $this->assertEquals(
+            140000, // (3 * 50000) - 10000 — the 10000 stays flat
+            $orderItem->total_price
+        );
+    }
+
+    /**
+     * A 'percentage' discount must be recomputed against the NEW subtotal
+     * after a quantity change, not left as a stale amount from the old one.
+     */
+    public function test_changing_quantity_recomputes_percentage_discount(): void
+    {
+        $orderItem = OrderItem::create([
+            'id_order' => $this->order->id_order,
+            'id_product' => $this->product->id_product,
+            'item_type' => 'product',
+            'item_name' => $this->product->name,
+            'item_sku' => 'SKU-EKS',
+            'quantity' => 1,
+            'unit_price' => 50000,
+            'total_price' => 50000,
+        ]);
+        $orderItem->applyDiscount(10, 'percentage'); // 10% off
+        $this->assertEquals(45000, $orderItem->fresh()->total_price);
+
+        $response = $this->putJson(
+            "/api/pos/orders/{$this->order->id_order}/items/{$orderItem->id_order_item}",
+            ['quantity' => 2]
+        );
+
+        $response->assertSuccessful();
+
+        $orderItem->refresh();
+        $this->assertEquals(
+            90000, // (2 * 50000) * (1 - 10%)
+            $orderItem->total_price
+        );
+    }
 }

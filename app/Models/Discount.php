@@ -155,8 +155,11 @@ class Discount extends Model
                 break;
         }
 
-        // Apply maximum discount limit
-        if ($this->maximum_discount && $discountAmount > $this->maximum_discount) {
+        // Apply maximum discount limit — doesn't apply to fixed_price, whose
+        // whole point is that the final price is always exactly its value.
+        if ($this->type !== 'fixed_price'
+            && $this->maximum_discount
+            && $discountAmount > $this->maximum_discount) {
             $discountAmount = $this->maximum_discount;
         }
 
