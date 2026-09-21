@@ -1196,6 +1196,11 @@ class PosController extends Controller
                     'available_kitchen' => $item->product ? $item->product->available_in_kitchen : null,
                     'available_bar' => $item->product ? $item->product->available_in_bar : null,
                     'image_url' => $item->product ? $item->product->image_url : null,
+                    // Per-item discount — needed so reprints from history show
+                    // which product it belongs to, not just an order total.
+                    'discount_amount' => $item->discount_amount,
+                    'discount_type' => $item->discount_type,
+                    'discount_percentage' => $item->discount_percentage,
                     'created_at' => $item->created_at,
                     'updated_at' => $item->updated_at
                 ];
@@ -2416,8 +2421,10 @@ class PosController extends Controller
                 'created_at' => $order->created_at,
                 'items' => $order->orderItems->map(function ($item) {
                     return [
-                        'product_name' => $item->item_type === 'package' 
-                            ? ($item->package_name ?? $item->item_name) 
+                        'id' => $item->id_order_item,
+                        'product_id' => $item->id_product,
+                        'product_name' => $item->item_type === 'package'
+                            ? ($item->package_name ?? $item->item_name)
                             : ($item->product ? $item->product->name : $item->item_name),
                         'quantity' => $item->quantity,
                         'unit_price' => $item->unit_price,
@@ -2426,6 +2433,12 @@ class PosController extends Controller
                         'item_type' => $item->item_type ?? 'product',
                         'available_kitchen' => $item->product ? $item->product->available_in_kitchen : null,
                         'available_bar' => $item->product ? $item->product->available_in_bar : null,
+                        // Per-item discount — without these, the app can only
+                        // ever show ONE combined "Diskon" line on the receipt,
+                        // never which specific product it belongs to.
+                        'discount_amount' => $item->discount_amount,
+                        'discount_type' => $item->discount_type,
+                        'discount_percentage' => $item->discount_percentage,
                     ];
                 }),
                 'cashier' => $order->user ? [
@@ -3226,6 +3239,9 @@ class PosController extends Controller
                         'unit_price' => $item->unit_price,
                         'total_price' => $item->total_price,
                         'notes' => $item->notes,
+                        'discount_amount' => $item->discount_amount,
+                        'discount_type' => $item->discount_type,
+                        'discount_percentage' => $item->discount_percentage,
                     ];
                     
                     if ($item->item_type === 'package') {

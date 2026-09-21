@@ -132,5 +132,23 @@ class DirectPaymentPerItemDiscountTest extends TestCase
         $this->assertNull($normalItem->discount_type);
         $this->assertEquals(0, $normalItem->discount_amount);
         $this->assertEquals(8000, $normalItem->total_price);
+
+        // Regression: the response's hand-built 'items' array must actually
+        // include the per-item discount fields — persisting them to the DB
+        // is not enough if the API response the app reads back never sends
+        // them. This is what was silently missing before.
+        $responseItems = $response->json('data.items');
+        $discountedResponseItem = collect($responseItems)->firstWhere(
+            'product_name',
+            $this->discountedProduct->name
+        );
+        $normalResponseItem = collect($responseItems)->firstWhere(
+            'product_name',
+            $this->normalProduct->name
+        );
+
+        $this->assertSame('fixed_price', $discountedResponseItem['discount_type']);
+        $this->assertEquals(16000, $discountedResponseItem['discount_amount']);
+        $this->assertNull($normalResponseItem['discount_type']);
     }
 }
