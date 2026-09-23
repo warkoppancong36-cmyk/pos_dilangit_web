@@ -192,7 +192,11 @@ class Order extends Model
 
     public function getTotalPaidAttribute(): float
     {
-        return (float) $this->payments()->sum('amount');
+        // Only count payments that actually succeeded — an unfiltered sum
+        // would double-count if a failed/duplicate/retried payment attempt
+        // ever left more than one row for this order (matches the status
+        // filter PosController::getOrderDetails() already applies).
+        return (float) $this->payments()->where('status', 'paid')->sum('amount');
     }
 
     public function getRemainingAmountAttribute(): float

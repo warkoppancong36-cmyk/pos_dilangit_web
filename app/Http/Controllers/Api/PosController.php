@@ -570,9 +570,12 @@ class PosController extends Controller
                 }
             }
 
-            // Manually recalculate order totals since calculateTotals() is disabled
-            $orderItems = $order->orderItems;
-            $subtotal = $orderItems->sum('total_price');
+            // Manually recalculate order totals since calculateTotals() is disabled.
+            // subtotal = GROSS line total (qty × unit price). Each item's
+            // total_price is already net of its own discount, so summing that
+            // and subtracting the discounts again would count them twice.
+            $orderItems = $order->orderItems()->get();
+            $subtotal = $orderItems->sum(fn ($i) => $i->quantity * $i->unit_price);
             $totalDiscount = $orderItems->sum('discount_amount');
             $totalAmount = $subtotal - $totalDiscount;
 
@@ -727,9 +730,12 @@ class PosController extends Controller
                 $orderItem->save();
             }
 
-            // Manually recalculate order totals since calculateTotals() is disabled
-            $orderItems = $order->orderItems;
-            $subtotal = $orderItems->sum('total_price');
+            // Manually recalculate order totals since calculateTotals() is disabled.
+            // subtotal = GROSS line total (qty × unit price). Each item's
+            // total_price is already net of its own discount, so summing that
+            // and subtracting the discounts again would count them twice.
+            $orderItems = $order->orderItems()->get();
+            $subtotal = $orderItems->sum(fn ($i) => $i->quantity * $i->unit_price);
             $totalDiscount = $orderItems->sum('discount_amount');
             $totalAmount = $subtotal - $totalDiscount;
 
@@ -786,9 +792,12 @@ class PosController extends Controller
                 // $orderItem->order->calculateTotals(); // DISABLED - tax system not used yet
             }
 
-            // Manually recalculate order totals since calculateTotals() is disabled
-            $orderItems = $order->orderItems;
-            $subtotal = $orderItems->sum('total_price');
+            // Manually recalculate order totals since calculateTotals() is disabled.
+            // subtotal = GROSS line total (qty × unit price). Each item's
+            // total_price is already net of its own discount, so summing that
+            // and subtracting the discounts again would count them twice.
+            $orderItems = $order->orderItems()->get();
+            $subtotal = $orderItems->sum(fn ($i) => $i->quantity * $i->unit_price);
             $totalDiscount = $orderItems->sum('discount_amount');
             $totalAmount = $subtotal - $totalDiscount;
 
@@ -873,9 +882,12 @@ class PosController extends Controller
             // Recalculate order totals
             // $order->calculateTotals(); // DISABLED - tax system not used yet
 
-            // Manually recalculate order totals since calculateTotals() is disabled
-            $orderItems = $order->orderItems;
-            $subtotal = $orderItems->sum('total_price');
+            // Manually recalculate order totals since calculateTotals() is disabled.
+            // subtotal = GROSS line total (qty × unit price). Each item's
+            // total_price is already net of its own discount, so summing that
+            // and subtracting the discounts again would count them twice.
+            $orderItems = $order->orderItems()->get();
+            $subtotal = $orderItems->sum(fn ($i) => $i->quantity * $i->unit_price);
             $totalDiscount = $orderItems->sum('discount_amount');
             $totalAmount = $subtotal - $totalDiscount;
 
@@ -1394,7 +1406,16 @@ class PosController extends Controller
             if (!empty($updateData)) {
                 $order->update($updateData);
                 
-                // Manually recalculate total_amount without using calculateTotals()
+                // Manually recalculate total_amount without using calculateTotals().
+                // The request's discount_amount is the ORDER-level discount; any
+                // discounts already stored on individual items must still count,
+                // so the order's discount_amount column keeps meaning "total discount".
+                if ($request->has('discount_amount')) {
+                    $itemDiscounts = (float) $order->orderItems()->sum('discount_amount');
+                    $order->update([
+                        'discount_amount' => $itemDiscounts + (float) $request->discount_amount,
+                    ]);
+                }
                 $subtotal = $order->subtotal;
                 $discountAmount = $order->discount_amount;
                 $taxAmount = $order->tax_amount ?? 0;
