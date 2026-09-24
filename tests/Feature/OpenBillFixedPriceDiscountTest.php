@@ -192,18 +192,44 @@ class OpenBillFixedPriceDiscountTest extends TestCase
         $orderItem->refresh();
         $this->assertSame('fixed_price', $orderItem->discount_type);
         $this->assertEquals(
-            20000,
+            40000, // Harga Tetap PER PORSI: 2 x 20000 (keputusan user 2026-09-25)
             $orderItem->total_price,
-            'A fixed_price discount must still pin the line at exactly its value after a quantity change, not silently fall back to (new subtotal - stale discount_amount).'
+            'A fixed_price discount is per portion: after a quantity change every portion must still cost exactly the fixed price.'
         );
     }
 
     /**
-     * A plain 'fixed' (subtract) discount is a FLAT amount by definition — it
-     * must stay 10000 regardless of quantity, so the total scales with the
-     * new subtotal minus that same flat amount.
+     * Quantity going DOWN keeps the per-portion fixed price too.
      */
-    public function test_changing_quantity_keeps_fixed_amount_discount_flat(): void
+    public function test_decreasing_quantity_keeps_fixed_price_per_portion(): void
+    {
+        $orderItem = OrderItem::create([
+            'id_order' => $this->order->id_order,
+            'id_product' => $this->product->id_product,
+            'item_type' => 'product',
+            'item_name' => $this->product->name,
+            'item_sku' => 'SKU-EKS',
+            'quantity' => 3,
+            'unit_price' => 50000,
+            'total_price' => 150000,
+        ]);
+        // Line target for 3 portions at Harga Tetap 20000.
+        $orderItem->applyDiscount(60000, 'fixed_price');
+        $this->assertEquals(60000, $orderItem->fresh()->total_price);
+
+        $this->putJson(
+            "/api/pos/orders/{$this->order->id_order}/items/{$orderItem->id_order_item}",
+            ['quantity' => 1]
+        )->assertSuccessful();
+
+        $this->assertEquals(20000, $orderItem->fresh()->total_price);
+    }
+
+    /**
+     * A per-product 'fixed' (Jumlah Tetap) discount is PER PORTION: 10000 off
+     * each portion, so it scales with the quantity.
+     */
+    public function test_changing_quantity_scales_fixed_amount_discount_per_portion(): void
     {
         $orderItem = OrderItem::create([
             'id_order' => $this->order->id_order,
@@ -226,9 +252,9 @@ class OpenBillFixedPriceDiscountTest extends TestCase
         $response->assertSuccessful();
 
         $orderItem->refresh();
-        $this->assertEquals(10000, $orderItem->discount_amount);
+        $this->assertEquals(30000, $orderItem->discount_amount);
         $this->assertEquals(
-            140000, // (3 * 50000) - 10000 — the 10000 stays flat
+            120000, // (3 * 50000) - (3 * 10000)
             $orderItem->total_price
         );
     }

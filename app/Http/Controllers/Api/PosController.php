@@ -710,19 +710,27 @@ class PosController extends Controller
                     : $existingDiscountPercentage;
                 $orderItem->applyDiscount($percentage, 'percentage');
             } elseif ($discountType === 'fixed_price') {
-                // Re-apply so the line still pins at its ORIGINAL target price,
-                // even though quantity (and therefore the subtotal) changed.
+                // Harga Tetap berlaku PER PORSI: pertahankan harga per porsi
+                // lama, lalu kalikan jumlah baru (1 -> 2 porsi @20rb = 40rb).
+                // discount_amount di request (kalau ada) tetap berarti TARGET
+                // total baris, sama seperti addItem/updateItemDiscount.
+                $perPortionPrice = $oldQuantity > 0
+                    ? ($oldSubtotalForDiscount - $existingDiscountAmount) / $oldQuantity
+                    : 0;
                 $targetPrice = $request->filled('discount_amount')
                     ? $request->discount_amount
-                    : ($oldSubtotalForDiscount - $existingDiscountAmount);
+                    : $perPortionPrice * $newQuantity;
                 $orderItem->applyDiscount($targetPrice, 'fixed_price');
             } elseif ($discountType === 'fixed') {
-                // A flat subtract amount is quantity-independent by definition,
-                // so re-applying it verbatim is correct (and keeps this branch
-                // consistent with the other two instead of a bare assignment).
+                // Jumlah Tetap per produk berlaku PER PORSI: potongan per porsi
+                // lama x jumlah baru. discount_amount di request (kalau ada)
+                // tetap berarti potongan total baris.
+                $perPortionDiscount = $oldQuantity > 0
+                    ? $existingDiscountAmount / $oldQuantity
+                    : 0;
                 $amount = $request->filled('discount_amount')
                     ? $request->discount_amount
-                    : $existingDiscountAmount;
+                    : $perPortionDiscount * $newQuantity;
                 $orderItem->applyDiscount($amount, 'fixed');
             } else {
                 // No discount on this item — just persist the quantity/notes
