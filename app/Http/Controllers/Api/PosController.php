@@ -699,7 +699,12 @@ class PosController extends Controller
             // Update order item quantity (this alone would leave a stale
             // discount_amount from the OLD subtotal — see applyDiscount() below).
             $orderItem->updateQuantity($newQuantity);
-            $orderItem->notes = $request->notes;
+            // Catatan hanya diubah kalau klien memang mengirimnya. Aplikasi
+            // mengubah jumlah tanpa field notes — dulu itu menghapus catatan
+            // item (mis. "tidak pedas") setiap kali jumlah diubah.
+            if ($request->has('notes')) {
+                $orderItem->notes = $request->notes;
+            }
 
             $discountType = $request->discount_type ?? $existingDiscountType;
 
@@ -753,6 +758,21 @@ class PosController extends Controller
                 'discount_amount' => $totalDiscount,
                 'total_amount' => $totalAmount
             ]);
+
+            // Porsi TAMBAHAN harus sampai ke dapur (Kitchen Display + push
+            // FCM), sama seperti item baru lewat addItem. Tanpa ini, customer
+            // yang pesan satu porsi lagi lewat ubah jumlah tidak pernah
+            // diketahui dapur. Pengurangan jumlah tidak dikirim.
+            if ($quantityDiff > 0 && \Illuminate\Support\Facades\Schema::hasTable('kitchen_orders')) {
+                $kitchenItems = \App\Models\KitchenOrder::itemsForOrderItem($orderItem, $quantityDiff);
+                if (! empty($kitchenItems)) {
+                    \App\Models\KitchenOrder::findOrCreateForOrder(
+                        $order,
+                        $kitchenItems,
+                        $request->input('station', 'kasir')
+                    );
+                }
+            }
 
             DB::commit();
 

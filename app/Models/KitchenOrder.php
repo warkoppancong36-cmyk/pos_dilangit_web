@@ -234,6 +234,56 @@ class KitchenOrder extends Model
         return $kitchenOrder;
     }
 
+    /**
+     * Baris dapur untuk $portions porsi dari satu item order: produk yang
+     * tersedia di dapur, atau produk-produk dapur di dalam paket (jumlahnya
+     * dikali isi paket). Kosong kalau item ini tidak perlu ke dapur.
+     * Aturannya sama dengan PosController::createKitchenOrderForOrder().
+     */
+    public static function itemsForOrderItem(OrderItem $orderItem, int $portions): array
+    {
+        if ($portions <= 0) {
+            return [];
+        }
+
+        if ($orderItem->item_type === 'package' && $orderItem->id_package) {
+            $package = Package::with(['items.product'])->find($orderItem->id_package);
+            if (! $package) {
+                return [];
+            }
+
+            $items = [];
+            foreach ($package->items as $packageItem) {
+                if ($packageItem->product && $packageItem->product->available_in_kitchen) {
+                    $items[] = [
+                        'id_order_item' => $orderItem->id_order_item,
+                        'product_name' => $packageItem->product->name . ' (dari ' . $package->name . ')',
+                        // Kolom quantity di kitchen_order_items bilangan bulat;
+                        // isi paket tersimpan desimal (mis. 1.00).
+                        'quantity' => (int) round($packageItem->quantity * $portions),
+                        'variant_name' => null,
+                        'notes' => $orderItem->notes,
+                    ];
+                }
+            }
+
+            return $items;
+        }
+
+        $product = $orderItem->product;
+        if (! $product || ! $product->available_in_kitchen) {
+            return [];
+        }
+
+        return [[
+            'id_order_item' => $orderItem->id_order_item,
+            'product_name' => $orderItem->item_name ?? $product->name,
+            'quantity' => $portions,
+            'variant_name' => null,
+            'notes' => $orderItem->notes,
+        ]];
+    }
+
     public static function createFromOrderItems(Order $order, array $items, string $station = 'kasir'): self
     {
         $kitchenOrder = self::create([
