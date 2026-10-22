@@ -219,8 +219,18 @@ const loadReport = async () => {
   errorMessage.value = ''
   try {
     const response = await axios.get('/api/reports/online-sales', { params })
+    const data = response.data?.data
 
-    report.value = response.data?.data ?? null
+    // Server lama (rute belum ada) mengembalikan halaman HTML dengan status
+    // 200, bukan data laporan. Tampilkan pesan, jangan halaman kosong.
+    if (!data || typeof data !== 'object' || !data.summary) {
+      report.value = null
+      errorMessage.value = 'Server belum menyediakan laporan penjualan online. Pastikan backend terbaru sudah di-deploy dan cache rute diperbarui (php artisan optimize).'
+
+      return
+    }
+
+    report.value = data
     await renderDailyChart()
   }
   catch (error: any) {
