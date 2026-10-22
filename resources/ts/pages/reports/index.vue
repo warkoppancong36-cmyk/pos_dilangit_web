@@ -92,6 +92,43 @@ meta:
           </VCardText>
         </VCard>
       </VCol>
+
+      <VCol cols="12" md="6">
+        <VCard
+          class="report-menu-card h-100"
+          hover
+          @click="navigateToOnlineReport"
+        >
+          <VCardText class="d-flex align-center pa-6">
+            <div class="flex-grow-1">
+              <div class="d-flex align-center mb-3">
+                <VIcon icon="mdi-moped" size="32" class="text-warning me-3" />
+                <div>
+                  <h3 class="text-h6 font-weight-bold">Laporan Penjualan Online</h3>
+                  <p class="text-body-2 text-medium-emphasis ma-0">
+                    GoFood, GrabFood, dan ShopeeFood: omzet, tren harian, menu terlaris
+                  </p>
+                </div>
+              </div>
+              <div class="d-flex flex-wrap gap-2">
+                <VChip size="small" color="warning" variant="tonal">
+                  <VIcon start icon="mdi-calendar-month" />
+                  Filter Bulan
+                </VChip>
+                <VChip size="small" color="warning" variant="tonal">
+                  <VIcon start icon="mdi-calendar-range" />
+                  Custom Range
+                </VChip>
+                <VChip size="small" color="warning" variant="tonal">
+                  <VIcon start icon="mdi-file-export" />
+                  Export Excel
+                </VChip>
+              </div>
+            </div>
+            <VIcon icon="mdi-chevron-right" size="24" class="text-medium-emphasis" />
+          </VCardText>
+        </VCard>
+      </VCol>
     </VRow>
 
     <!-- Quick Stats Row -->
@@ -176,6 +213,10 @@ const navigateToSalesReport = () => {
 
 const navigateToPurchaseReport = () => {
   router.push('/reports/purchases')
+}
+
+const navigateToOnlineReport = () => {
+  router.push('/reports/online')
 }
 
 // Load monthly statistics

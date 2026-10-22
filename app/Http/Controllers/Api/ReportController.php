@@ -1163,6 +1163,144 @@ class ReportController extends Controller
     }
 
     /**
+     * Platform penjualan online dan nama tampilannya. Order dianggap online
+     * kalau dibayar lewat salah satu metode ini.
+     */
+    private const ONLINE_PLATFORMS = [
+        'gofood' => 'GoFood',
+        'grabfood' => 'GrabFood',
+        'shopeefood' => 'ShopeeFood',
+    ];
+
+    /**
+     * Laporan penjualan online (GoFood, GrabFood, ShopeeFood): ringkasan,
+     * per platform, tren harian, dan menu terlaris per platform.
+     *
+     * Saringan sama dengan laporan metode pembayaran: order tidak batal,
+     * tidak pending, tidak dihapus, dan pembayarannya lunas. Omzet memakai
+     * orders.total_amount (bukan payments.amount yang bisa memuat kembalian).
+     */
+    public function onlineSales(Request $request): JsonResponse
+    {
+        try {
+            $startDate = $this->getStartDate($request);
+            $endDate = $this->getEndDate($request);
+            $platformKeys = array_keys(self::ONLINE_PLATFORMS);
+
+            $applyOnlineFilters = function ($query) use ($startDate, $endDate, $platformKeys) {
+                return $query
+                    ->join('payments', 'payments.id_order', '=', 'orders.id_order')
+                    ->where('payments.status', 'paid')
+                    ->whereIn('payments.payment_method', $platformKeys)
+                    ->where('orders.status', '!=', 'cancelled')
+                    ->where('orders.status', '!=', 'pending')
+                    ->whereNull('orders.deleted_at')
+                    ->whereBetween('orders.order_date', [$startDate, $endDate]);
+            };
+
+            // Satu baris per order, walau order punya lebih dari satu baris pembayaran.
+            $orders = $applyOnlineFilters(DB::table('orders'))
+                ->select('orders.id_order', 'orders.order_date', 'orders.total_amount', 'payments.payment_method')
+                ->orderBy('orders.order_date')
+                ->get()
+                ->unique('id_order')
+                ->values();
+
+            $totalRevenue = (float) $orders->sum('total_amount');
+            $totalOrders = $orders->count();
+
+            // Semua penjualan lunas di periode yang sama, untuk porsi online.
+            $allSalesRevenue = (float) DB::table('orders')
+                ->where('orders.status', '!=', 'cancelled')
+                ->where('orders.status', '!=', 'pending')
+                ->whereNull('orders.deleted_at')
+                ->whereBetween('orders.order_date', [$startDate, $endDate])
+                ->whereExists(function ($query) {
+                    $query->select(DB::raw(1))
+                        ->from('payments')
+                        ->whereColumn('payments.id_order', 'orders.id_order')
+                        ->where('payments.status', 'paid');
+                })
+                ->sum('orders.total_amount');
+
+            $platforms = collect(self::ONLINE_PLATFORMS)->map(function ($label, $key) use ($orders, $totalRevenue) {
+                $platformOrders = $orders->where('payment_method', $key);
+                $revenue = (float) $platformOrders->sum('total_amount');
+                $count = $platformOrders->count();
+
+                return [
+                    'platform' => $key,
+                    'label' => $label,
+                    'order_count' => $count,
+                    'total_revenue' => $revenue,
+                    'total_revenue_formatted' => $this->formatRupiah($revenue),
+                    'average_order_value' => $count > 0 ? round($revenue / $count, 2) : 0,
+                    'revenue_percentage' => $totalRevenue > 0 ? round($revenue / $totalRevenue * 100, 2) : 0,
+                ];
+            })->values();
+
+            // Tren harian: setiap tanggal di periode ikut tampil, termasuk yang kosong.
+            $ordersByDate = $orders->groupBy(fn ($order) => Carbon::parse($order->order_date)->toDateString());
+            $daily = [];
+            for ($day = $startDate->copy()->startOfDay(); $day->lte($endDate); $day->addDay()) {
+                $date = $day->toDateString();
+                $dayOrders = $ordersByDate->get($date, collect());
+                $row = ['date' => $date, 'label' => $day->format('d/m')];
+                foreach ($platformKeys as $key) {
+                    $row[$key] = (float) $dayOrders->where('payment_method', $key)->sum('total_amount');
+                }
+                $row['total'] = (float) $dayOrders->sum('total_amount');
+                $row['order_count'] = $dayOrders->count();
+                $daily[] = $row;
+            }
+
+            // Menu terlaris per platform (berdasarkan jumlah porsi terjual).
+            $platformByOrder = $orders->pluck('payment_method', 'id_order');
+            $items = $applyOnlineFilters(
+                DB::table('order_items')->join('orders', 'order_items.id_order', '=', 'orders.id_order')
+            )
+                ->select('order_items.id_order_item', 'order_items.id_order', 'order_items.item_name', 'order_items.quantity', 'order_items.total_price')
+                ->get()
+                ->unique('id_order_item');
+
+            $topProducts = [];
+            foreach ($platformKeys as $key) {
+                $topProducts[$key] = $items
+                    ->filter(fn ($item) => $platformByOrder->get($item->id_order) === $key)
+                    ->groupBy('item_name')
+                    ->map(fn ($rows, $name) => [
+                        'name' => $name,
+                        'quantity' => (int) $rows->sum('quantity'),
+                        'revenue' => (float) $rows->sum('total_price'),
+                    ])
+                    ->sortByDesc('quantity')
+                    ->take(10)
+                    ->values()
+                    ->all();
+            }
+
+            return $this->successResponse([
+                'summary' => [
+                    'total_orders' => $totalOrders,
+                    'total_revenue' => $totalRevenue,
+                    'total_revenue_formatted' => $this->formatRupiah($totalRevenue),
+                    'average_order_value' => $totalOrders > 0 ? round($totalRevenue / $totalOrders, 2) : 0,
+                    'all_sales_revenue' => $allSalesRevenue,
+                    'online_share_percentage' => $allSalesRevenue > 0 ? round($totalRevenue / $allSalesRevenue * 100, 2) : 0,
+                ],
+                'platforms' => $platforms,
+                'daily' => $daily,
+                'top_products' => $topProducts,
+                'start_date' => $startDate->toDateString(),
+                'end_date' => $endDate->toDateString(),
+                'period_formatted' => $startDate->format('d M Y') . ' - ' . $endDate->format('d M Y'),
+            ], 'Online sales report retrieved successfully');
+        } catch (\Exception $e) {
+            return $this->serverErrorResponse('Failed to retrieve online sales report: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Get order types analytics with filter support
      */
     public function orderTypes(Request $request): JsonResponse

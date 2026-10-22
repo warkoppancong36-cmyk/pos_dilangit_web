@@ -61,6 +61,7 @@ declare module 'vue-router/auto-routes' {
     'purchases-management': RouteRecordInfo<'purchases-management', '/purchases-management', Record<never, never>, Record<never, never>>,
     'register': RouteRecordInfo<'register', '/register', Record<never, never>, Record<never, never>>,
     'reports': RouteRecordInfo<'reports', '/reports', Record<never, never>, Record<never, never>>,
+    'reports-online': RouteRecordInfo<'reports-online', '/reports/online', Record<never, never>, Record<never, never>>,
     'reports-purchases': RouteRecordInfo<'reports-purchases', '/reports/purchases', Record<never, never>, Record<never, never>>,
     'reports-sales': RouteRecordInfo<'reports-sales', '/reports/sales', Record<never, never>, Record<never, never>>,
     'roles': RouteRecordInfo<'roles', '/roles', Record<never, never>, Record<never, never>>,

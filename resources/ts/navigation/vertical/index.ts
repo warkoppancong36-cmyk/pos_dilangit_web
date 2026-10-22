@@ -28,6 +28,12 @@ export default [
         icon: { icon: 'tabler-shopping-cart' },
         role: ['admin', 'manager'],
       },
+      {
+        title: 'Laporan Online',
+        to: { name: 'reports-online' },
+        icon: { icon: 'tabler-motorbike' },
+        role: ['admin', 'manager'],
+      },
     ],
   },
   {

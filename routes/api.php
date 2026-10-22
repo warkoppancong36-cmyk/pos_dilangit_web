@@ -58,6 +58,7 @@ Route::middleware(['auth:sanctum', 'check.token.expiration'])->group(function ()
         Route::get('today-sales', [ReportController::class, 'todaySales']);
         Route::get('payment-methods', [ReportController::class, 'paymentMethods']);
         Route::get('order-types', [ReportController::class, 'orderTypes']);
+        Route::get('online-sales', [ReportController::class, 'onlineSales']);
     });
 
     Route::prefix('logs')->group(function () {
