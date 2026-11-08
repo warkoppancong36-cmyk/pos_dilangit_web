@@ -313,16 +313,14 @@ class DashboardController extends Controller
         $yesterdayOrders = 0;
         
         try {
+            // Semua angka penjualan di bawah ini memakai paidSalesOrders():
+            // order gratis/owner (diskon 100%) tidak dihitung (tetap ada di
+            // transaksi), dan satu order dihitung SATU kali walau dibayar
+            // lebih dari sekali.
+
             // Today sales - only count orders that have been paid
-            // Semua angka penjualan di bawah ini tidak menghitung order
-            // gratis/owner (diskon 100%) — order itu tetap ada di transaksi.
-            $todayQuery = Order::excludeFreeOrders(DB::table('orders'))
-                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
-                ->where('orders.status', '!=', 'cancelled')
-                ->where('orders.status', '!=', 'pending')
-                ->where('payments.status', 'paid')
-                ->whereDate('orders.order_date', $today)
-                ->whereNull('orders.deleted_at');
+            $todayQuery = $this->paidSalesOrders()
+                ->whereDate('orders.order_date', $today);
 
             if ($hourStart && $hourEnd) {
                 $todayQuery->whereRaw('TIME(orders.order_date) >= ?', [$hourStart])
@@ -332,13 +330,8 @@ class DashboardController extends Controller
             $todaySales = $todayQuery->sum('orders.total_amount') ?: 0;
                 
             // Yesterday sales - only count orders that have been paid
-            $yesterdayQuery = Order::excludeFreeOrders(DB::table('orders'))
-                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
-                ->where('orders.status', '!=', 'cancelled')
-                ->where('orders.status', '!=', 'pending')
-                ->where('payments.status', 'paid')
-                ->whereDate('orders.order_date', $yesterday)
-                ->whereNull('orders.deleted_at');
+            $yesterdayQuery = $this->paidSalesOrders()
+                ->whereDate('orders.order_date', $yesterday);
 
             if ($hourStart && $hourEnd) {
                 $yesterdayQuery->whereRaw('TIME(orders.order_date) >= ?', [$hourStart])
@@ -348,13 +341,8 @@ class DashboardController extends Controller
             $yesterdaySales = $yesterdayQuery->sum('orders.total_amount') ?: 0;
 
             // Today orders count - only count orders that have been paid
-            $todayOrdersQuery = Order::excludeFreeOrders(DB::table('orders'))
-                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
-                ->where('orders.status', '!=', 'cancelled')
-                ->where('orders.status', '!=', 'pending')
-                ->where('payments.status', 'paid')
-                ->whereDate('orders.order_date', $today)
-                ->whereNull('orders.deleted_at');
+            $todayOrdersQuery = $this->paidSalesOrders()
+                ->whereDate('orders.order_date', $today);
 
             if ($hourStart && $hourEnd) {
                 $todayOrdersQuery->whereRaw('TIME(orders.order_date) >= ?', [$hourStart])
@@ -364,53 +352,28 @@ class DashboardController extends Controller
             $todayOrders = $todayOrdersQuery->count() ?: 0;
                 
             // Yesterday orders count - only count orders that have been paid
-            $yesterdayOrders = Order::excludeFreeOrders(DB::table('orders'))
-                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
-                ->where('orders.status', '!=', 'cancelled')
-                ->where('orders.status', '!=', 'pending')
-                ->where('payments.status', 'paid')
+            $yesterdayOrders = $this->paidSalesOrders()
                 ->whereDate('orders.order_date', $yesterday)
-                ->whereNull('orders.deleted_at')
                 ->count() ?: 0;
 
             // Last week same day sales (7 days ago) - for weekly comparison
             $lastWeekSameDay = $today->copy()->subDays(7);
-            $lastWeekSales = Order::excludeFreeOrders(DB::table('orders'))
-                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
-                ->where('orders.status', '!=', 'cancelled')
-                ->where('orders.status', '!=', 'pending')
-                ->where('payments.status', 'paid')
+            $lastWeekSales = $this->paidSalesOrders()
                 ->whereDate('orders.order_date', $lastWeekSameDay)
-                ->whereNull('orders.deleted_at')
                 ->sum('orders.total_amount') ?: 0;
 
             // Last week same day orders count
-            $lastWeekOrders = Order::excludeFreeOrders(DB::table('orders'))
-                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
-                ->where('orders.status', '!=', 'cancelled')
-                ->where('orders.status', '!=', 'pending')
-                ->where('payments.status', 'paid')
+            $lastWeekOrders = $this->paidSalesOrders()
                 ->whereDate('orders.order_date', $lastWeekSameDay)
-                ->whereNull('orders.deleted_at')
                 ->count() ?: 0;
                 
             // Period totals for summary - only count orders that have been paid
-            $periodSales = Order::excludeFreeOrders(DB::table('orders'))
-                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
-                ->where('orders.status', '!=', 'cancelled')
-                ->where('orders.status', '!=', 'pending')
-                ->where('payments.status', 'paid')
+            $periodSales = $this->paidSalesOrders()
                 ->whereBetween('orders.order_date', [$startDate, $endDate])
-                ->whereNull('orders.deleted_at')
                 ->sum('orders.total_amount') ?: 0;
                 
-            $periodOrders = Order::excludeFreeOrders(DB::table('orders'))
-                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
-                ->where('orders.status', '!=', 'cancelled')
-                ->where('orders.status', '!=', 'pending')
-                ->where('payments.status', 'paid')
+            $periodOrders = $this->paidSalesOrders()
                 ->whereBetween('orders.order_date', [$startDate, $endDate])
-                ->whereNull('orders.deleted_at')
                 ->count() ?: 0;
                 
             $periodPurchases = Purchase::where('status', '!=', 'cancelled')
@@ -423,34 +386,26 @@ class DashboardController extends Controller
             $prevStartDate = $startDate->copy()->subDays($periodLength + 1);
             $prevEndDate = $startDate->copy()->subDay();
             
-            $prevPeriodSales = Order::excludeFreeOrders(DB::table('orders'))
-                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
-                ->where('orders.status', '!=', 'cancelled')
-                ->where('orders.status', '!=', 'pending')
-                ->where('payments.status', 'paid')
+            $prevPeriodSales = $this->paidSalesOrders()
                 ->whereBetween('orders.order_date', [$prevStartDate, $prevEndDate])
-                ->whereNull('orders.deleted_at')
                 ->sum('orders.total_amount') ?: 0;
                 
         } catch (\Exception $e) {
-            // Error handling for queries
+            // Jangan telan error diam-diam: tanpa log, angka 0 di dashboard terlihat
+            // seperti "tidak ada penjualan" padahal querynya yang gagal.
+            \Log::error('getSummaryCards: gagal menghitung ringkasan penjualan: ' . $e->getMessage());
         }
 
-        // Set default values if no real data exists
-        if ($todaySales == 0 && $yesterdaySales == 0 && $lastWeekSales == 0) {
-            $todaySales = 2500000; // Rp 2.5 juta
-            $yesterdaySales = 2200000; // Rp 2.2 juta
-            $lastWeekSales = 2100000; // Rp 2.1 juta (minggu lalu)
-        }
+        // Tidak ada angka contoh/pura-pura: kalau belum ada data, tampilkan 0.
 
-        if ($todayOrders == 0 && $yesterdayOrders == 0 && $lastWeekOrders == 0) {
-            $todayOrders = 45;
-            $yesterdayOrders = 38;
-            $lastWeekOrders = 35; // minggu lalu
-        }
-
-        $salesGrowth = $yesterdaySales > 0 ? (($todaySales - $yesterdaySales) / $yesterdaySales * 100) : 13.64;
-        $ordersGrowth = $yesterdayOrders > 0 ? (($todayOrders - $yesterdayOrders) / $yesterdayOrders * 100) : 18.42;
+        // Pertumbuhan vs kemarin. Kemarin kosong: 100% kalau hari ini ada penjualan,
+        // selain itu 0 (sama dengan perbandingan minggu lalu di bawah).
+        $salesGrowth = $yesterdaySales > 0
+            ? (($todaySales - $yesterdaySales) / $yesterdaySales * 100)
+            : ($todaySales > 0 ? 100 : 0);
+        $ordersGrowth = $yesterdayOrders > 0
+            ? (($todayOrders - $yesterdayOrders) / $yesterdayOrders * 100)
+            : ($todayOrders > 0 ? 100 : 0);
         
         // Calculate weekly growth (vs same day last week)
         $weeklySalesGrowth = 0;
@@ -543,18 +498,15 @@ class DashboardController extends Controller
         $totalOrdersAmountToday = 0;
         
         try {
-            $orderTypesData = Order::excludeFreeOrders(DB::table('orders'))
-                ->join('payments', 'orders.id_order', '=', 'payments.id_order')
+            // paidSalesOrders(): bukan batal/pending/dihapus, sudah dibayar, bukan
+            // order gratis, dan satu order = satu baris (omzetnya tidak berlipat)
+            $orderTypesData = $this->paidSalesOrders()
                 ->select(
                     'orders.order_type',
                     DB::raw('COUNT(DISTINCT orders.id_order) as order_count'),
                     DB::raw('SUM(orders.total_amount) as total_amount')
                 )
-                ->where('orders.status', '!=', 'cancelled')  // Order tidak dibatalkan
-                ->where('orders.status', '!=', 'pending')    // Order tidak pending
-                ->where('payments.status', 'paid')           // Payment sudah dibayar
                 ->whereDate('orders.order_date', $today)     // Hanya hari ini
-                ->whereNull('orders.deleted_at')             // Order tidak dihapus
                 ->groupBy('orders.order_type')
                 ->orderBy('total_amount', 'desc')
                 ->get();
@@ -635,6 +587,29 @@ class DashboardController extends Controller
         return $result;
     }
     
+    /**
+     * Order yang dihitung sebagai PENJUALAN di kartu dashboard: bukan batal,
+     * bukan pending, belum dihapus, sudah punya pembayaran lunas, dan BUKAN
+     * order gratis/owner (diskon 100%, lihat Order::excludeFreeOrders()).
+     *
+     * Pembayaran dicek lewat EXISTS, bukan JOIN, supaya satu order tetap SATU
+     * baris walau dibayar lebih dari sekali. Dengan JOIN, jumlah order dan
+     * omzetnya ikut berlipat sebanyak baris pembayarannya.
+     */
+    private function paidSalesOrders()
+    {
+        return Order::excludeFreeOrders(DB::table('orders'))
+            ->where('orders.status', '!=', 'cancelled')
+            ->where('orders.status', '!=', 'pending')
+            ->whereNull('orders.deleted_at')
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('payments')
+                    ->whereColumn('payments.id_order', 'orders.id_order')
+                    ->where('payments.status', 'paid');
+            });
+    }
+
     /**
      * Get order types breakdown for pie chart
      */
