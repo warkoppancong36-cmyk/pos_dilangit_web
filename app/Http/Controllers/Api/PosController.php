@@ -1912,13 +1912,16 @@ class PosController extends Controller
             $today = today();
             
             $stats = [
-                'today_orders' => Order::today()->count(),
-                'today_sales' => (float) Order::today()->sum('total_amount'),
+                // Angka penjualan tidak menghitung order gratis/owner (diskon
+                // 100%); order itu tetap ada di daftar transaksi.
+                'today_orders' => Order::today()->excludingFreeOrders()->count(),
+                'today_sales' => (float) Order::today()->excludingFreeOrders()->sum('total_amount'),
                 'active_orders' => Order::active()->count(),
                 'pending_orders' => Order::byStatus('pending')->count(),
-                'completed_orders_today' => Order::today()->completed()->count(),
+                'completed_orders_today' => Order::today()->completed()->excludingFreeOrders()->count(),
                 'payment_methods_today' => Payment::today()
                     ->completed()
+                    ->whereHas('order', fn ($order) => $order->excludingFreeOrders())
                     ->select('payment_method')
                     ->selectRaw('COUNT(*) as count, SUM(amount) as total')
                     ->groupBy('payment_method')
@@ -1926,6 +1929,7 @@ class PosController extends Controller
                     ->keyBy('payment_method'),
                 'hourly_sales_today' => Order::today()
                     ->completed()
+                    ->excludingFreeOrders()
                     ->selectRaw('HOUR(completed_at) as hour, COUNT(*) as orders, SUM(total_amount) as sales')
                     ->groupBy('hour')
                     ->orderBy('hour')

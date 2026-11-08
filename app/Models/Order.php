@@ -260,6 +260,34 @@ class Order extends Model
         return $query->where('status', 'completed');
     }
 
+    /**
+     * Keluarkan order GRATIS dari hitungan penjualan (owner ambil minum,
+     * komplimen, dll). Order gratis = ada diskon DAN total bersihnya jadi
+     * Rp 0. Order tetap ada di riwayat transaksi; hanya laporan penjualan
+     * (omzet, jumlah order, rata-rata, item terjual) yang tidak menghitungnya.
+     *
+     * Diskon sebagian (mis. Diskon Mahasiswa 25%) TIDAK ikut dikeluarkan:
+     * customer tetap membayar, jadi uangnya harus tetap tercatat sebagai
+     * penjualan. Order Rp 0 tanpa diskon (draft/pending) juga tidak tersentuh.
+     */
+    public function scopeExcludingFreeOrders($query)
+    {
+        return static::excludeFreeOrders($query, $this->getTable());
+    }
+
+    /**
+     * Versi yang bisa dipakai di query builder biasa (DB::table('orders') dan
+     * query ber-join). $table = nama/alias tabel orders di query tersebut.
+     */
+    public static function excludeFreeOrders($query, string $table = 'orders')
+    {
+        return $query->where(function ($q) use ($table) {
+            $q->whereNull("{$table}.discount_amount")
+                ->orWhere("{$table}.discount_amount", '<=', 0)
+                ->orWhere("{$table}.total_amount", '>', 0);
+        });
+    }
+
     public function scopeActive($query)
     {
         return $query->whereIn('status', ['pending', 'preparing', 'ready']);

@@ -78,7 +78,11 @@ class ReportCacheService
         try {
             $date = Carbon::parse($date);
 
-            $summary = DB::table('orders')
+            // Ringkasan PENJUALAN harian: order gratis/owner (diskon 100%)
+            // tidak ikut dihitung. Order itu tetap ada di
+            // report_transaction_cache (riwayat transaksi), jadi tidak
+            // disentuh oleh updateReportCache().
+            $summary = Order::excludeFreeOrders(DB::table('orders'))
                 ->whereDate('created_at', $date)
                 ->selectRaw("
                     COUNT(*) as total_orders,

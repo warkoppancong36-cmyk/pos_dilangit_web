@@ -67,7 +67,9 @@ class ReportController extends Controller
                             ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
             }
 
-            $salesSummary = $summaryQuery->first();
+            // Order gratis/owner (diskon 100%) tetap ada di transaksi, tapi
+            // tidak dihitung sebagai penjualan di semua agregat di bawah ini.
+            $salesSummary = $summaryQuery->excludingFreeOrders()->first();
 
             // Total items sold (separate query to avoid JOIN issues)
             $totalItemsQuery = DB::table('order_items')
@@ -80,7 +82,7 @@ class ReportController extends Controller
                                ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
             }
 
-            $totalItems = $totalItemsQuery->sum('order_items.quantity');
+            $totalItems = Order::excludeFreeOrders($totalItemsQuery)->sum('order_items.quantity');
 
             // Daily sales trend (+ order count & AOV per day for the export)
             $dailySalesQuery = Order::select(
@@ -101,7 +103,7 @@ class ReportController extends Controller
                                ->whereRaw('TIME(order_date) <= ?', [$hourEnd]);
             }
 
-            $dailySales = $dailySalesQuery->groupBy(DB::raw('DATE(order_date)'))
+            $dailySales = $dailySalesQuery->excludingFreeOrders()->groupBy(DB::raw('DATE(order_date)'))
                 ->orderBy('date')
                 ->get();
 
@@ -119,7 +121,7 @@ class ReportController extends Controller
                                 ->whereRaw('TIME(order_date) <= ?', [$hourEnd]);
             }
 
-            $salesByType = $salesByTypeQuery->groupBy('order_type')->get();
+            $salesByType = $salesByTypeQuery->excludingFreeOrders()->groupBy('order_type')->get();
 
             // Top selling products
             $topProductsQuery = DB::table('order_items')
@@ -140,7 +142,7 @@ class ReportController extends Controller
                                 ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
             }
 
-            $topProducts = $topProductsQuery->groupBy('products.id_product', 'products.name')
+            $topProducts = Order::excludeFreeOrders($topProductsQuery)->groupBy('products.id_product', 'products.name')
                 ->orderBy('total_revenue', 'desc')
                 ->limit(20)
                 ->get();
@@ -164,7 +166,7 @@ class ReportController extends Controller
                                 ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
             }
 
-            $allProducts = $allProductsQuery->groupBy('products.id_product', 'products.name')
+            $allProducts = Order::excludeFreeOrders($allProductsQuery)->groupBy('products.id_product', 'products.name')
                 ->orderBy('total_revenue', 'desc')
                 ->get();
 
@@ -187,7 +189,7 @@ class ReportController extends Controller
                                     ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
             }
 
-            $salesByCustomer = $salesByCustomerQuery->groupBy('customers.id_customer', 'customers.name')
+            $salesByCustomer = $salesByCustomerQuery->excludingFreeOrders()->groupBy('customers.id_customer', 'customers.name')
                 ->orderBy('total_spent', 'desc')
                 ->limit(10)
                 ->get();
@@ -207,7 +209,7 @@ class ReportController extends Controller
                                 ->whereRaw('TIME(order_date) <= ?', [$hourEnd]);
             }
 
-            $salesByHour = $salesByHourQuery->groupBy(DB::raw('HOUR(order_date)'))
+            $salesByHour = $salesByHourQuery->excludingFreeOrders()->groupBy(DB::raw('HOUR(order_date)'))
                 ->orderBy('hour')
                 ->get();
 
@@ -235,7 +237,7 @@ class ReportController extends Controller
                                      ->whereRaw('TIME(order_date) <= ?', [$hourEnd]);
             }
 
-            $salesByDayOfWeek = $salesByDayOfWeekQuery->groupBy(DB::raw('DAYOFWEEK(order_date)'), DB::raw('CASE DAYOFWEEK(order_date)
+            $salesByDayOfWeek = $salesByDayOfWeekQuery->excludingFreeOrders()->groupBy(DB::raw('DAYOFWEEK(order_date)'), DB::raw('CASE DAYOFWEEK(order_date)
                         WHEN 1 THEN "Minggu"
                         WHEN 2 THEN "Senin" 
                         WHEN 3 THEN "Selasa"
@@ -256,7 +258,7 @@ class ReportController extends Controller
                                               ->whereRaw('TIME(order_date) <= ?', [$hourEnd]);
             }
 
-            $totalOrdersForPercentage = $totalOrdersForPercentageQuery->count();
+            $totalOrdersForPercentage = $totalOrdersForPercentageQuery->excludingFreeOrders()->count();
 
             $paymentMethodsQuery = DB::table('payments')
                 ->join('orders', 'payments.id_order', '=', 'orders.id_order')
@@ -277,7 +279,7 @@ class ReportController extends Controller
                                    ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
             }
 
-            $paymentMethods = $paymentMethodsQuery->groupBy('payments.payment_method')
+            $paymentMethods = Order::excludeFreeOrders($paymentMethodsQuery)->groupBy('payments.payment_method')
                 ->orderBy('total_revenue', 'desc')
                 ->get();
 
@@ -297,6 +299,7 @@ class ReportController extends Controller
                 ->where('orders.status', '!=', 'cancelled')
                 ->whereBetween('orders.order_date', [$startDate, $endDate])
                 ->whereNull('orders.deleted_at')
+                ->tap(fn ($query) => Order::excludeFreeOrders($query))
                 ->groupBy('categories.id_category', 'categories.name')
                 ->orderBy('total_revenue', 'desc')
                 ->get();
@@ -305,12 +308,14 @@ class ReportController extends Controller
             $customerBehavior = [
                 'new_customers' => Customer::whereBetween('created_at', [$startDate, $endDate])->count(),
                 'returning_customers' => Order::select('id_customer')
+                    ->excludingFreeOrders()
                     ->where('status', '!=', 'cancelled')
                     ->whereBetween('order_date', [$startDate, $endDate])
                     ->groupBy('id_customer')
                     ->havingRaw('COUNT(*) > 1')
                     ->get()->count(),
                 'one_time_customers' => Order::select('id_customer')
+                    ->excludingFreeOrders()
                     ->where('status', '!=', 'cancelled')
                     ->whereBetween('order_date', [$startDate, $endDate])
                     ->groupBy('id_customer')
@@ -323,7 +328,8 @@ class ReportController extends Controller
             $previousStartDate = Carbon::parse($startDate)->subDays($periodLength)->format('Y-m-d');
             $previousEndDate = Carbon::parse($startDate)->subDay()->format('Y-m-d');
 
-            $previousPeriodSales = Order::where('status', '!=', 'cancelled')
+            $previousPeriodSales = Order::excludingFreeOrders()
+                ->where('status', '!=', 'cancelled')
                 ->whereBetween('order_date', [$previousStartDate, $previousEndDate])
                 ->sum('total_amount');
 
@@ -498,7 +504,7 @@ class ReportController extends Controller
                       ->whereRaw('TIME(orders.order_date) <= ?', [$hourEnd]);
             }
 
-            $rows = $query->orderBy('orders.order_date', 'desc')->get();
+            $rows = Order::excludeFreeOrders($query)->orderBy('orders.order_date', 'desc')->get();
 
             $totalRevenue = $rows->sum('total_price');
 
@@ -1062,7 +1068,7 @@ class ReportController extends Controller
             $today = Carbon::today();
             
             // Get today's sales summary - only paid orders
-            $todaySummary = DB::table('orders')
+            $todaySummary = Order::excludeFreeOrders(DB::table('orders'))
                 ->join('payments', 'orders.id_order', '=', 'payments.id_order')
                 ->select(
                     DB::raw('COUNT(DISTINCT orders.id_order) as total_orders'),
@@ -1113,7 +1119,7 @@ class ReportController extends Controller
                 ->count();
 
             // Get payment methods breakdown for selected period - paid orders
-            $paymentMethods = DB::table('orders')
+            $paymentMethods = Order::excludeFreeOrders(DB::table('orders'))
                 ->join('payments', 'orders.id_order', '=', 'payments.id_order')
                 ->select(
                     'payments.payment_method',
@@ -1188,7 +1194,7 @@ class ReportController extends Controller
             $platformKeys = array_keys(self::ONLINE_PLATFORMS);
 
             $applyOnlineFilters = function ($query) use ($startDate, $endDate, $platformKeys) {
-                return $query
+                return Order::excludeFreeOrders($query)
                     ->join('payments', 'payments.id_order', '=', 'orders.id_order')
                     ->where('payments.status', 'paid')
                     ->whereIn('payments.payment_method', $platformKeys)
@@ -1210,7 +1216,7 @@ class ReportController extends Controller
             $totalOrders = $orders->count();
 
             // Semua penjualan lunas di periode yang sama, untuk porsi online.
-            $allSalesRevenue = (float) DB::table('orders')
+            $allSalesRevenue = (float) Order::excludeFreeOrders(DB::table('orders'))
                 ->where('orders.status', '!=', 'cancelled')
                 ->where('orders.status', '!=', 'pending')
                 ->whereNull('orders.deleted_at')
@@ -1310,7 +1316,7 @@ class ReportController extends Controller
             $endDate = $this->getEndDate($request);
 
             // Get order types breakdown for selected period - paid orders
-            $orderTypes = DB::table('orders')
+            $orderTypes = Order::excludeFreeOrders(DB::table('orders'))
                 ->join('payments', 'orders.id_order', '=', 'payments.id_order')
                 ->select(
                     'orders.order_type',
